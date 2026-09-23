@@ -1,0 +1,16 @@
+// Sidebar à largeur fixe : par défaut, sur grands écrans le thème élargit
+// la sidebar avec calc((100% - nav - contenu) / 2 + nav) — elle absorbe la
+// marge de centrage et peut occuper jusqu'à un tiers de la page. On la
+// fixe à $nav-width et le contenu démarre juste après.
+
+.side-bar {
+  @include mq(lg) {
+    width: $nav-width;
+  }
+}
+
+.side-bar + .main {
+  @include mq(lg) {
+    margin-left: $nav-width;
+  }
+}
