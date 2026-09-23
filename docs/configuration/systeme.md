@@ -15,21 +15,78 @@ nav_order: 11
 ## 📖 En résumé
 
 La configuration de Vigil est centralisée : une **entité statique unique**
-(organisme) et des **utilisateurs** rattachés, plus un **logo** affiché sur
-les rapports.
-
-Avant d'analyser un périphérique, on configure une fois l'**entité** (nom de
-l'organisme, établissement, adresse, téléphone, email, logo) et on crée au
-moins un **utilisateur** (obligatoire pour logger les actions via la chaîne
-de custody).
+(organisme) et des **utilisateurs** rattachés, plus un **logo** affiché
+sur les rapports. Avant d'analyser un périphérique, on configure une fois
+l'entité et on crée au moins un utilisateur (obligatoire pour logger les
+actions via la chaîne de custody).
 
 ---
 
-## 🗂️ Champs de l'entité
+## 🏢 Entité (page principale)
+
+Le formulaire **« Configuration du système »** rassemble les champs de
+l'entité, utilisés sur la **page de garde de tous les rapports PDF** :
 
 | Champ | Usage |
 |---|---|
-| Nom de l'entité | Page de garde des rapports PDF |
-| Établissement | Page de garde des rapports PDF |
+| Nom de l'entité | En-tête des rapports |
+| Établissement | En-tête des rapports |
 | Adresse / téléphone / email | Coordonnées sur les rapports |
-| Logo | Miniatures sur la GUI et la page de garde des rapports |
+| Logo | Miniature GUI + page de garde des rapports |
+
+- **Choisir un logo** : boîte de dialogue de sélection d'image ; une
+  **prévisualisation** s'affiche dans la page (miniature générée par
+  PIL).
+- **Retirer** : supprime le logo (le champ redevient « (aucun logo) »).
+- **Enregistrer** : persiste la configuration statique (le logo est
+  copié dans `data/config/logo/`).
+- Le bouton **Utilisateurs** ouvre la gestion des utilisateurs
+  (page fille).
+
+---
+
+## 👤 Utilisateurs (page fille)
+
+Liste des profils créés, avec boutons **Ajouter** / **Modifier** /
+**Supprimer**. Le **dialogue de création/modification** demande :
+
+| Champ | Détail |
+|---|---|
+| Nom * | Oblligatoire, unique (création) ; non modifiable ensuite |
+| Rôle | `admin`, `analyst` (défaut), `expert`, `guest` |
+
+Les **permissions** sont déduites du rôle et stockées dans le profil
+(`data/users/<nom>/profile.json`) :
+
+| Rôle | can_mount | can_scan | can_export |
+|---|---|---|---|
+| admin | ✅ | ✅ | ✅ |
+| expert | ✅ | ✅ | ✅ |
+| analyst | ✅ | ✅ | ❌ |
+| guest | ✅ | ✅ | ❌ |
+
+L'utilisateur actif (`data/active_user`) est utilisé par tous les scripts
+pour la chaîne de custody — c'est lui qui apparaît dans les rapports.
+
+---
+
+## 🎬 Workflow type
+
+```text
+[Bouton GUI] Configuration du système
+    └─ saisie de l'entité (nom, établissement, adresse, tel, email)
+    └─ choix du logo (preview)
+    └─ [Enregistrer]
+    └─ [Utilisateurs]
+         └─ [Ajouter] → nom + rôle (admin/analyst/expert/guest)
+         └─ permissions déduites du rôle
+         └─ l'utilisateur apparaît dans la barre de sélection des pages
+            d'analyse (obligatoire pour la custody)
+```
+
+---
+
+## 🔗 Voir aussi
+
+- [Projets](projets.md) — le projet actif, obligatoire pour l'analyse
+- [Rapports](../rapports-pdf/README.md) — où l'entité et le logo sont utilisés

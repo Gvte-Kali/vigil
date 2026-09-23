@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Antivirus"
 nav_order: 265
 ---
 
@@ -142,160 +143,13 @@ interactif (stdin fermé), l'utilisateur actif est repris s'il existe, sinon
 le premier utilisateur configuré est sélectionné automatiquement.
 
 Ce script n'est pas branché sur un bouton de la GUI : l'action antivirus
-de la page d'accueil est la **recherche de menaces** (`vigil_malware_hunt.sh`,
-voir ci-dessous). `vigil_clamav_full_scan.sh` se lance en CLI.
+de la page d'accueil est la **recherche de menaces**
+(`vigil_malware_hunt.sh` — voir [Recherche de menaces](menaces.md)).
+`vigil_clamav_full_scan.sh` se lance en CLI.
+
 
 ## 🔗 Voir aussi
 
+- [Recherche de menaces](menaces.md) — le bouton de l'accueil
 - [Scan complet](orchestrateur.md)
 - [Mise à jour ClamAV](../configuration/clamav.md)
-
----
-
-## 🧭 Orchestrateur « Recherche de menaces » — `vigil_malware_hunt.sh`
-
-> `scripts/clamav/vigil_malware_hunt.sh` (bouton **« Recherche de menaces »**
-> de la page d'accueil) enchaîne en un seul terminal, en **5 étapes** :
->
-> 1. **Montage** du périphérique en lecture seule (interactif, triage USB inclus) ;
-> 2. **Recensement** autonome (`vigil_census.sh --no-project --no-pdf` :
->    index SQLite + audit extension/MIME, sans PDF propre — les résultats
->    alimentent le rapport consolidé final) ;
-> 3. **Audit de format ciblé** (`vigil_format_audit.py`) : binwalk/signatures
->    sur les fichiers dont l'extension ment (extension trompeuse) et les
->    octet-stream à forte entropie ;
-> 4. **Scan antivirus ClamAV** sur tous les dossiers montés (`--all --yes`) ;
-> 5. **Démontage** puis **un seul PDF consolidé** (`vigil_pdf.py --kind multi`).
->
-> Le triage USB du montage (`rapport_usbhid` en montage autonome) est
-> **consolidé dans ce rapport unique** pendant la chasse : aucun
-> `rapport_usbhid_*.pdf` autonome n'est généré, la section « triage
-> USB » (détection Rubber Ducky) ouvre le rapport consolidé. Si le montage
-> s'arrête au triage (seul périphérique = clavier suspect bloqué), la
-> chasse s'arrête proprement et le rapport consolidé est quand même
-> généré avec cette seule section.
-
-### Côté GUI
-
-Depuis la page d'accueil (`vigil_main_gui.py`), le bouton **« Recherche de
-menaces »** (icône `shield`, barre d'accent verte) affiche d'abord une
-**boîte de confirmation** récapitulant les 5 étapes, puis lance le script
-dans un terminal **Konsole**. La chasse est autonome : la GUI n'exige ni
-utilisateur actif ni projet — l'opérateur est sélectionné **dans le
-terminal** (voir ci-dessous).
-
-Le scan ClamAV y est appelé avec `--no-pdf --json-out` : les journaux
-clamscan sont copiés dans un dossier de collecte temporaire pour alimenter
-la section antivirus du rapport consolidé, puis supprimés (comportement
-identique à `--no-log`). L'option `--json-out DIR` est disponible sur
-`vigil_clamav_scan.sh` pour tout autre usage d'assemblage.
-
-### Utilisateur et opérateur
-
-La chasse exige un **opérateur** (journal de custody) mais **pas de
-projet**. Si un utilisateur est passé en argument (`--user NOM` ou
-`--user=NOM`) ou qu'un utilisateur actif existe (`data/active_user`),
-il est repris tel quel. Sinon, les utilisateurs configurés
-(`data/users/`) sont listés et l'opérateur en choisit un par numéro
-(environnement non interactif : le premier utilisateur configuré).
-L'opérateur est propagé à toute la chaîne : `--user` pour le
-recensement et le scan, `VIGIL_ACTIVE_USER` pour le montage/démontage —
-même sans `data/active_user`.
-
-### Overrides ClamAV
-
-Le hunt propage les overrides au scan ClamAV : `--pdf`/`--no-pdf`,
-`--log`/`--no-log`, `--no-archives`, `--size-limit`,
-`--no-alert-encrypted`. En leur absence, les valeurs **forcées par
-défaut** s'appliquent (contenu des archives scanné, taille illimitée
-au plafond réel ClamAV, archives chiffrées signalées — voir les
-sections dédiées ci-dessus).
-
-### Ordre du rapport consolidé
-
-Le PDF unique assemble les sections dans cet ordre : **triage USB**
-(usbhid), puis les **menaces** d'abord — **ClamAV**, puis **audit de
-format** —, ensuite le **recensement** (purement informatif), et la
-**chaîne de custody** en toute dernière section. Seules les anomalies sont
-mises en avant (menaces, extensions trompeuses, forte entropie,
-archives chiffrées).
-
-### Mode autonome (sans projet)
-
-La chasse n'est **pas liée à un projet** : aucun projet n'est requis, aucun
-projet n'est modifié (`data/active_project` n'est ni lu ni écrit), et le
-rapport consolidé n'est pas copié dans un dossier de projet. La page de
-garde du rapport note « Recherche de menaces » comme projet.
-
-Tout le temporaire de la chasse vit dans un dossier unique :
-`$VIGIL_BASE/hunt/` (`/opt/vigil/hunt/` par défaut — index SQLite du
-recensement autonome, JSON de collecte, journaux clamscan, triage USB).
-Ce dossier est **purgé au début de chaque chasse** : chaque exécution
-repart d'un état propre, sans accumulation.
-L'index du recensement y est écrit via `vigil_census.sh --no-project`
-(sans écriture dans le `chain_of_custody.log` d'un projet : ce n'est pas
-un livrable forensique projet mais un temporaire de chasse).
-
-### Chaîne de custody de la chasse
-
-La chasse tient **son propre journal de custody** :
-`hunt/chain_of_custody.json` (JSONL, une entrée par action). Chaque
-étape y est enregistrée avec horodatage, opérateur, action, statut et
-détail : démarrage, montage, triage (périphérique suspect bloqué),
-recensement, audit de format, scan ClamAV, démontage, clôure — en
-succès comme en erreur.
-
-Le journal est **alimenté par toute la chaîne** : la chasse exporte
-`VIGIL_HUNT_CUSTODY` et `VIGIL_ACTIVE_USER`, et les sous-scripts
-(montage, démontage, recensement) y écrivent leurs événements
-détaillés — création du hash d’arbre SHA-256 (avec sa valeur),
-passage du block device en lecture seule, montages partition par
-partition, vérification d’intégrité au démontage (hash initial vs
-recalculé), remise en lecture/écriture, suppression des points de
-montage. L’opérateur choisi au démarrage de la chasse est propagé à
-tous les sous-scripts (`--user` pour le recensement et le scan,
-`VIGIL_ACTIVE_USER` pour le montage/démontage), même sans
-`data/active_user`. Ce journal alimente la section « Chaîne de
-custody » du rapport consolidé : **tableau chronologique**
-(horodatage, opérateur, action, statut coloré, détail), répertoriée
-dans le sommaire. Comme tout le contenu de `hunt/`, il est purgé au
-début de chaque nouvelle chasse.
-
-En fin de chasse, une fois le rapport PDF généré, l'opérateur peut
-**exporter une archive des preuves** avant la purge, puis **tout le
-contenu de `hunt/` est supprimé** (le dossier `hunt/` reste, vide, pour
-la chasse suivante) — aucune trace résiduelle ne reste sur la machine
-d'analyse. Le déroulé :
-
-1. question `Exporter une archive des preuves avant suppression ? [o/N]`
-   (proposée uniquement si un PDF a été généré) ;
-2. si accepté : **boîte de dialogue système** de choix du dossier de
-   destination (`kdialog --getexistingdirectory`, sinon
-   `zenity --file-selection --directory`, sinon saisie terminal) ;
-3. archive `export_menaces_<jj-mm-aaaa>_<hh>h<mm>m<ss>s.tar.gz` dans le
-   dossier choisi, contenant **tout `hunt/` + le rapport PDF** de la
-   chasse ;
-4. fichier `.sha256` adjacent : checksum SHA-256 de l'archive au format
-   `sha256sum` (vérifiable avec `sha256sum -c`) ;
-5. purge complète du contenu de `hunt/`.
-
-Si l'export échoue (destination annulée ou invalide, erreur d'archive ou
-de checksum), la purge est **annulée** : les preuves restent sur place
-plutôt que d'être perdues. La question et la purge ont lieu sur les
-trois chemins de sortie (chasse complète, arrêt au triage avec le PDF
-de triage, échec du montage — dans ce dernier cas sans PDF, la purge
-directe). En mode non interactif (sans terminal), la purge a lieu sans
-question.
-
-### Nom du rapport
-
-Après la sélection de l'utilisateur, l'opérateur peut donner un **nom** au
-rapport (Entrée = nomenclature par défaut). Le fichier produit :
-
-- sans nom : `rapport_menaces_<jj-mm-aaaa>_<hh>h<mm>m<ss>s.pdf` ;
-- avec un nom : `<nom>_rapport_menaces_<jj-mm-aaaa>_<hh>h<mm>m<ss>s.pdf`.
-
-Le nom est nettoyé automatiquement (minuscules, accents et caractères
-spéciaux supprimés, espaces remplacées par des tirets) pour rester un nom
-de fichier portable. Ce préfixe est transmis à `vigil_pdf.py` via
-`--fname-prefix` (mode multi uniquement).

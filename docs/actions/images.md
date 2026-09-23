@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Images"
 nav_order: 266
 ---
 

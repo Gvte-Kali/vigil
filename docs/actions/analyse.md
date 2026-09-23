@@ -111,3 +111,50 @@ La page **« Analyse du périphérique USB »** (`vigil_tools_gui.py`) permet :
 - de **lancer plusieurs scans** (cases à cocher) en une fois.
 
 Voir [interface-graphique](../interface-graphique/README.md).
+
+---
+
+## 🎬 Workflow type d'une analyse
+
+```text
+[Bouton GUI] Analyser un périphérique
+    └─ page « Analyse du périphérique USB » (vigil_tools_gui.py)
+         │
+         ├─ 1. Utilisateur + projet actifs requis
+         │     (chaîne de custody — voir « Projet obligatoire »)
+         │
+         ├─ 2. MONTAGE (bouton Monter)
+         │     └─ vigil_usb_mount.sh
+         │         ├─ triage USB anti-Rubber Ducky (baseline + 10 s)
+         │         ├─ sélection du périphérique (lsblk)
+         │         ├─ blockdev --setro (disque entier)
+         │         ├─ montage RO partition par partition
+         │         │   dans /investigation/<point>
+         │         └─ hash d'arbre SHA-256 → chain_of_custody.log
+         │
+         ├─ 3. ANALYSES (une ou plusieurs, cases à cocher)
+         │     ├─ vigil_census.sh        (recensement, index SQLite)
+         │     ├─ vigil_images.sh       (EXIF)
+         │     ├─ vigil_videos.sh       (ffprobe)
+         │     ├─ vigil_audio.sh        (ffprobe)
+         │     ├─ vigil_office.sh       (bureautique)
+         │     ├─ vigil_archives.sh     (7za)
+         │     ├─ vigil_crypto.sh       (archives chiffrées)
+         │     ├─ vigil_entropy.sh     (forte entropie)
+         │     ├─ vigil_bigfiles.sh     (fichiers volumineux)
+         │     ├─ vigil_faces_detection.sh (visages)
+         │     └─ ou vigil_scan_all.sh  (orchestrateur multi-scans)
+         │         └─ chaque script : détection → SHA-256 →
+         │            statistiques → rapport PDF normalisé
+         │
+         └─ 4. DÉMONTAGE (bouton Démonter)
+               └─ vigil_usb_umount.sh
+                   ├─ vérification d'intégrité (hash recalculé)
+                   ├─ démontage partition par partition
+                   ├─ remise du disque en lecture/écriture
+                   └─ suppression des points de montage
+```
+
+Chaque analyse est **indépendante** : on peut n'en lancer qu'une (ex.
+uniquement les images) ou toutes via l'orchestrateur. Les rapports PDF
+sont rangés dans `/opt/vigil/rapports/`.

@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Interface"
+title: "Navigation"
 nav_order: 41
 ---
 

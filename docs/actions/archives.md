@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Archives"
 nav_order: 270
 ---
 

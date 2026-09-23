@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Interface"
+title: "Thème"
 nav_order: 42
 ---
 

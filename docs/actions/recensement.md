@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Recensement"
 nav_order: 264
 ---
 

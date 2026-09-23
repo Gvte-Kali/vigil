@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Entropie"
 nav_order: 272
 ---
 

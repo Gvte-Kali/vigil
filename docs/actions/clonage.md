@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Actions"
+title: "Clonage"
 nav_order: 25
 ---
 

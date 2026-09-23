@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Fichiers chiffrés"
 nav_order: 271
 ---
 

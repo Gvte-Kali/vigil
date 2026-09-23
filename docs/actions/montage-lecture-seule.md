@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Montage lecture seule"
 nav_order: 261
 ---
 

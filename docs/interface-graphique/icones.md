@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Interface"
+title: "Icônes"
 nav_order: 43
 ---
 

@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Vidéos"
 nav_order: 267
 ---
 

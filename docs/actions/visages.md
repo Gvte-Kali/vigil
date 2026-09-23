@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Détection visages"
 nav_order: 274
 ---
 

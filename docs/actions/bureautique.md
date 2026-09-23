@@ -1,6 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
+title: "Bureautique"
 nav_order: 269
 ---
 
