@@ -1,7 +1,7 @@
 ---
 layout: default
 parent: "Interface"
-nav_order: 102
+nav_order: 42
 ---
 
 # 🎨 Thème et charte graphique

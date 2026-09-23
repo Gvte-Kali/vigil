@@ -33,17 +33,16 @@ Vigil propose aussi :
 
 ## 🗺️ Cartographie de la documentation
 
-La documentation est organisée en **catégories** (parents) et **sous-pages**
-(enfants). Chaque dossier contient son propre `README.md`.
+La documentation est organisée **comme la page d'accueil de la GUI** :
+deux grandes catégories — **Configuration** et **Actions** — avec une
+fiche par bouton, plus les pages transverses.
 
 | Catégorie | Description |
 |---|---|
-| 🖥️ [Interface graphique](interface-graphique/README.md) | La GUI Tkinter : pages, navigation, thème, icônes |
-| 🔍 [Analyse forensique](analyse-forensique/README.md) | Montage lecture seule + toutes les analyses de fichiers + orchestrateur |
-| 💾 [Imagerie forensique](imagerie-forensique/README.md) | Copie forensique (RAW/E01/AFF) et clonage bit-à-bit de disques |
-| 📁 [Stockage](stockage/README.md) | Montage en lecture/écriture pour les fichiers de travail |
+| ⚙️ [Configuration](configuration/README.md) | Section **Configuration** de l'accueil : système, projets, périphériques USB, ClamAV |
+| ⚡ [Actions](actions/README.md) | Section **Actions** de l'accueil : menaces, analyse, stockage, copie forensique, clonage |
 | 📄 [Rapports PDF](rapports-pdf/README.md) | Le générateur PDF commun à toutes les analyses |
-| ⚙️ [Configuration](configuration/README.md) | Entité, utilisateurs, projets, logo |
+| 🖥️ [Interface graphique](interface-graphique/README.md) | La GUI Tkinter : pages, navigation, thème, icônes |
 | 📦 [Installation](installation/README.md) | Post-installation, dépendances, commande `vigil` |
 
 ---

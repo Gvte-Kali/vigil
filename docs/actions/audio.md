@@ -1,7 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
-nav_order: 208
+nav_order: 268
 ---
 
 # 🎵 Analyse des fichiers audio — `vigil_audio.sh`

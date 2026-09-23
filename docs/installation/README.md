@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "Installation"
-nav_order: 70
+nav_order: 50
 has_children: True
 ---
 
@@ -79,6 +79,6 @@ Principales :
 
 ## 🔗 Voir aussi
 
-- [Démarrage rapide](../README.md#-démarrage-rapide)
+- [Démarrage rapide](../index.md#-démarrage-rapide)
 - `post-install-checked.txt` (à la racine) — étapes manuelles KDE restantes
   (bords d'écran, pop-up USB, barre des tâches).

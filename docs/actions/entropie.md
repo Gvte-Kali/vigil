@@ -1,7 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
-nav_order: 212
+nav_order: 272
 ---
 
 # 🎲 Forte entropie — `vigil_entropy.sh`

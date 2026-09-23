@@ -1,7 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
-nav_order: 210
+nav_order: 270
 ---
 
 # 🗄️ Analyse des archives — `vigil_archives.sh`

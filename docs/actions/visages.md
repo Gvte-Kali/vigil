@@ -1,7 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
-nav_order: 214
+nav_order: 274
 ---
 
 # 🧑 Détection des visages — `vigil_faces_detection.sh`

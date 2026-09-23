@@ -1,7 +1,7 @@
 ---
 layout: default
-parent: "Imagerie"
-nav_order: 302
+parent: "Actions"
+nav_order: 25
 ---
 
 # 📋 Clonage bit-à-bit — `vigil_disk_clone.sh`

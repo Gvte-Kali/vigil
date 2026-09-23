@@ -1,8 +1,8 @@
 ---
 layout: default
+parent: "Actions"
 title: "Stockage"
-nav_order: 40
-has_children: True
+nav_order: 23
 ---
 
 # 📁 Stockage
@@ -59,4 +59,4 @@ périphérique à monter :
 
 ## 🔗 Voir aussi
 
-- [Analyse forensique](../analyse-forensique/README.md) — montage lecture seule pour l'analyse
+- [Analyse forensique](analyse.md) — montage lecture seule pour l'analyse

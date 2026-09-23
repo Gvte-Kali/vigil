@@ -1,7 +1,7 @@
 ---
 layout: default
 parent: "Analyse"
-nav_order: 205
+nav_order: 265
 ---
 
 # 🧪 Antivirus ClamAV — `vigil_clamav_scan.sh`
@@ -148,7 +148,7 @@ voir ci-dessous). `vigil_clamav_full_scan.sh` se lance en CLI.
 ## 🔗 Voir aussi
 
 - [Scan complet](orchestrateur.md)
-- [Mise à jour ClamAV](../configuration/README.md#-clamav--mise-à-jour-des-signatures)
+- [Mise à jour ClamAV](../configuration/clamav.md)
 
 ---
 

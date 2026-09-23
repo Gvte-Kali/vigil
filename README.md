@@ -113,13 +113,13 @@ Voir [docs/installation/README.md](docs/installation/README.md) et
 
 ## 📚 Documentation
 
-La documentation complète est dans [docs/](docs/index.md) :
-[interface graphique](docs/interface-graphique/README.md),
-[analyse forensique](docs/analyse-forensique/README.md),
-[imagerie](docs/imagerie-forensique/README.md),
-[stockage](docs/stockage/README.md),
+La documentation complète est dans [docs/](docs/index.md), organisée comme
+la page d'accueil de la GUI :
+[configuration](docs/configuration/README.md) (système, projets, USB, ClamAV),
+[actions](docs/actions/README.md) (menaces, analyse, stockage, copie forensique,
+clonage),
 [rapports PDF](docs/rapports-pdf/README.md),
-[configuration](docs/configuration/README.md).
+[interface graphique](docs/interface-graphique/README.md).
 
 ---
 

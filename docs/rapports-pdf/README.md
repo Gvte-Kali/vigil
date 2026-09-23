@@ -1,7 +1,7 @@
 ---
 layout: default
 title: "Rapports"
-nav_order: 50
+nav_order: 30
 has_children: True
 ---
 
@@ -74,4 +74,4 @@ Table, Paragraph, Image…).
 
 ## 🔗 Voir aussi
 
-- [Analyse forensique](../analyse-forensique/README.md)
+- [Analyse](../actions/analyse.md)

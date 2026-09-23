@@ -1,7 +1,8 @@
 ---
 layout: default
 title: "Analyse"
-nav_order: 20
+parent: "Actions"
+nav_order: 22
 has_children: True
 ---
 

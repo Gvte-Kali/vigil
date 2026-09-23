@@ -1,7 +1,7 @@
 ---
 layout: default
-parent: "Imagerie"
-nav_order: 301
+parent: "Actions"
+nav_order: 24
 ---
 
 # 📋 Copie forensique d'un disque — `vigil_disk_imager.sh`
