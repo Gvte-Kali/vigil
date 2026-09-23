@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 215
+---
+
 # 📦 Export du projet — `vigil_export_project.sh`
 
 > `scripts/export/vigil_export_project.sh` exporte proprement le dossier d'un

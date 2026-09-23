@@ -1,3 +1,10 @@
+---
+layout: default
+title: "📄 Rapports PDF"
+nav_order: 50
+has_children: True
+---
+
 # 📄 Rapports PDF
 
 > Tous les rapports d'analyse Vigil sont générés par un **générateur PDF commun**,

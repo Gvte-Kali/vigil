@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 212
+---
+
 # 🎲 Forte entropie — `vigil_entropy.sh`
 
 > `scripts/analyse/vigil_entropy.sh` détecte les fichiers à **forte

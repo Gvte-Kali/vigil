@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🖥️ Interface graphique"
+nav_order: 103
+---
+
 # 🎯 Icônes (Lucide)
 
 > Les icônes de la GUI proviennent de **Lucide** (fork open-source de Feather Icons),

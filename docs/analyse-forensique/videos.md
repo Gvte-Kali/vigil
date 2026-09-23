@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 207
+---
+
 # 🎬 Analyse des vidéos — `vigil_videos.sh`
 
 > `scripts/analyse/vigil_videos.sh` détecte et catalogue tous les

@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 206
+---
+
 # 🖼️ Analyse des images — `vigil_images.sh`
 
 > `scripts/analyse/vigil_images.sh` détecte et catalogue tous les

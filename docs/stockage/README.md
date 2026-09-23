@@ -1,3 +1,10 @@
+---
+layout: default
+title: "📁 Stockage"
+nav_order: 40
+has_children: True
+---
+
 # 📁 Stockage
 
 > Le **stockage** est un montage en **lecture/écriture** d'un périphérique dans

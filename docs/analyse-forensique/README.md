@@ -1,3 +1,10 @@
+---
+layout: default
+title: "🔍 Analyse forensique"
+nav_order: 20
+has_children: True
+---
+
 # 🔍 Analyse forensique
 
 > Une fois un périphérique monté **en lecture seule** dans `/investigation`,

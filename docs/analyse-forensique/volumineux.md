@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 213
+---
+
 # 🗃️ Fichiers volumineux — `vigil_bigfiles.sh`
 
 > `scripts/analyse/vigil_bigfiles.sh` détecte les fichiers de **grande

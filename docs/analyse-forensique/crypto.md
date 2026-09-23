@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 211
+---
+
 # 🔐 Fichiers verrouillés (crypto) — `vigil_crypto.sh`
 
 > `scripts/analyse/vigil_crypto.sh` détecte les fichiers **protégés par

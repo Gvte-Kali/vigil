@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 210
+---
+
 # 🗄️ Analyse des archives — `vigil_archives.sh`
 
 > `scripts/analyse/vigil_archives.sh` détecte et catalogue les fichiers

@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 202
+---
+
 # 📌 Démontage — `vigil_usb_umount.sh`
 
 > `scripts/analyse/vigil_usb_umount.sh` démonte proprement les périphériques montés

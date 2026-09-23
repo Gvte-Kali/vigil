@@ -1,3 +1,10 @@
+---
+layout: default
+title: "⚙️ Configuration"
+nav_order: 60
+has_children: True
+---
+
 # ⚙️ Configuration
 
 > La **configuration** de Vigil est centralisée : une **entité statique unique**

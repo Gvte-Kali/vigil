@@ -1,3 +1,10 @@
+---
+layout: default
+title: "📦 Installation"
+nav_order: 70
+has_children: True
+---
+
 # 📦 Installation
 > L'installation se fait via le **script de post-installation**
 > `scripts/post-install/post_install_vigil.sh`, qui crée les répertoires,

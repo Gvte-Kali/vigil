@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "💾 Imagerie forensique"
+nav_order: 302
+---
+
 # 📋 Clonage bit-à-bit — `vigil_disk_clone.sh`
 
 > `scripts/imager/vigil_disk_clone.sh` copie le **contenu intégral** d'un disque

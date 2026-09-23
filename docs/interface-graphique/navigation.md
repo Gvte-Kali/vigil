@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🖥️ Interface graphique"
+nav_order: 101
+---
+
 # 🧭 Navigation parent/enfant
 
 > Toutes les pages Vigil partagent une **fenêtre racine unique invisible**.

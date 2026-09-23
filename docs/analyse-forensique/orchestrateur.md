@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 203
+---
+
 # 🎼 Orchestrateur de scans — `vigil_scan_all.sh`
 
 > `scripts/vigil_scan_all.sh` lance **l'intégralité des analyses forensiques** en

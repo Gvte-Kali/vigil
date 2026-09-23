@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🖥️ Interface graphique"
+nav_order: 102
+---
+
 # 🎨 Thème et charte graphique
 
 > La GUI Vigil est en **mode sombre** avec une charte sobre et professionnelle.

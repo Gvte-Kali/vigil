@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "💾 Imagerie forensique"
+nav_order: 301
+---
+
 # 📋 Copie forensique d'un disque — `vigil_disk_imager.sh`
 
 > `scripts/imager/vigil_disk_imager.sh` réalise une **image forensique** d'un

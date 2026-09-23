@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 208
+---
+
 # 🎵 Analyse des fichiers audio — `vigil_audio.sh`
 
 > `scripts/analyse/vigil_audio.sh` détecte et catalogue tous les

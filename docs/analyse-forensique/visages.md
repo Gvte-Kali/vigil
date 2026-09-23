@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 214
+---
+
 # 🧑 Détection des visages — `vigil_faces_detection.sh`
 
 > `scripts/analyse/vigil_faces_detection.sh` recherche les **visages dégagés et

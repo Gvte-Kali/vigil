@@ -1,3 +1,9 @@
+---
+layout: default
+title: "Vigil — Documentation technique"
+nav_order: 1
+---
+
 # 🛡️ Vigil — Documentation technique
 
 > **Vigil** est une application d'analyse forensique de périphériques USB et de disques,
@@ -21,7 +27,7 @@ Vigil propose aussi :
 - 📋 une **copie forensique** d'un disque (image RAW / E01 / AFF) ;
 - 📋 un **clonage bit-à-bit** d'un disque vers un autre ;
 - 📋 une **interface graphique** (mode sombre) pensée pour des utilisateurs
-  non techniciens, avec un accès CLI pour les experts.
+  non techniciens. Une interface CLI (Vigil-CLI) dédiée aux experts est **à venir**.
 
 ---
 
@@ -84,7 +90,7 @@ Une fois la GUI ouverte :
 │   ├── stockage/   # Montage lecture/écriture
 │   ├── pdf/        # Générateur PDF commun
 │   ├── post-install/
-│   └── Vigil-CLI/  # Wrappers CLI (à venir — en suspens)
+│   └── Vigil-CLI/  # Wrappers CLI experts — **à venir** (en cours de développement)
 ├── data/icons/    # Icônes Lucide (SVG)
 └── rapports/       # Rapports PDF générés
 ```

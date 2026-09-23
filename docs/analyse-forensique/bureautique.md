@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 209
+---
+
 # 📑 Analyse des fichiers bureautiques — `vigil_office.sh`
 
 > `scripts/analyse/vigil_office.sh` détecte et catalogue les fichiers

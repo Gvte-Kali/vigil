@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 205
+---
+
 # 🧪 Antivirus ClamAV — `vigil_clamav_scan.sh`
 
 > `scripts/clamav/vigil_clamav_scan.sh` scanne les dossiers montés dans

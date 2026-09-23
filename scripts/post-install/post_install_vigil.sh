@@ -133,8 +133,11 @@ if [ -f /opt/vigil/data/icons/vigil.svg ]; then
     sudo mkdir -p /usr/share/icons/hicolor/scalable/apps
     sudo install -m 0644 /opt/vigil/data/icons/vigil.svg /usr/share/icons/hicolor/scalable/apps/vigil.svg
     sudo gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+    # Forcer le cache d'icônes GTK au cas ou la commande est absente (KDE).
+    sudo touch /usr/share/icons/hicolor
     VIGIL_ICON="vigil"
 else
+    echo "⚠️  /opt/vigil/data/icons/vigil.svg introuvable — icône générique utilisée."
     VIGIL_ICON="utilities-terminal"
 fi
 sudo tee /usr/share/applications/vigil.desktop >/dev/null <<DESKTOP_EOF
@@ -145,10 +148,18 @@ Exec=python3 /opt/vigil/gui/vigil_main_gui.py
 Icon=$VIGIL_ICON
 Terminal=false
 Type=Application
-Categories=Utility;Forensics;
+Categories=Utility;System;
+Keywords=forensique;USB;analyse;investigation;
 DESKTOP_EOF
 sudo update-desktop-database 2>/dev/null || true
-echo "✅ Raccourci créé : /usr/share/applications/vigil.desktop"
+# Rafraîchir le menu KDE : sans kbuildsycoca, la nouvelle entrée (et son icône)
+# n'apparaît dans le lanceur qu'après la prochaine reconnexion.
+if command -v kbuildsycoca6 >/dev/null 2>&1; then
+    kbuildsycoca6 --noincremental 2>/dev/null || true
+elif command -v kbuildsycoca5 >/dev/null 2>&1; then
+    kbuildsycoca5 --noincremental 2>/dev/null || true
+fi
+echo "✅ Raccourci créé : /usr/share/applications/vigil.desktop (icône : $VIGIL_ICON)"
 
 # --- 9. Ajouter les emplacements Dolphin (item 4 du checklist) ---
 # Dolphin (KDE) stocke les emplacements dans ~/.local/share/user-places.xbel

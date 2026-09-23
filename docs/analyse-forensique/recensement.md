@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 204
+---
+
 # 📋 Recensement des fichiers — `vigil_census.sh`
 
 > `scripts/analyse/vigil_census.sh` réalise l'inventaire intégral et neutre des

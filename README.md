@@ -30,7 +30,8 @@ branchement), désactivation du montage automatique (udisks2), règles sudo rest
 ✅ **Modularité** : chaque analyse est un script indépendant, lançable seul ou via
 l'orchestrateur de scans complets.
 
-✅ **GUI** : interface tkinter sombre, avec un accès CLI pour les experts.
+✅ **GUI** : interface tkinter sombre. Une interface CLI (Vigil-CLI) dédiée aux
+experts est **à venir**.
 
 ✅ **Analyses** : recensement (base SQLite), antivirus ClamAV, images (EXIF),
 vidéos/audio (ffprobe), bureautique, archives, fichiers chiffrés, forte entropie,
@@ -103,9 +104,16 @@ Voir [docs/installation/README.md](docs/installation/README.md) et
 
 ---
 
+## 🗓️ À venir
+
+- **Vigil-CLI** : les wrappers CLI experts (`scripts/Vigil-CLI/`) sont en cours de
+  développement et **non garantis fonctionnels** pour l'instant.
+
+---
+
 ## 📚 Documentation
 
-La documentation complète est dans [docs/](docs/README.md) :
+La documentation complète est dans [docs/](docs/index.md) :
 [interface graphique](docs/interface-graphique/README.md),
 [analyse forensique](docs/analyse-forensique/README.md),
 [imagerie](docs/imagerie-forensique/README.md),

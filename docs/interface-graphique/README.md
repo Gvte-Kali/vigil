@@ -1,3 +1,10 @@
+---
+layout: default
+title: "🖥️ Interface graphique"
+nav_order: 10
+has_children: True
+---
+
 # 🖥️ Interface graphique
 > Vigil est piloté par une **interface graphique** (GUI) écrite en **Python / Tkinter**,
 > organisée en pages parent/enfant. La hiérarchie courante s'affiche toujours dans

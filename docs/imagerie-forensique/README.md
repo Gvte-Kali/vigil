@@ -1,3 +1,10 @@
+---
+layout: default
+title: "💾 Imagerie forensique"
+nav_order: 30
+has_children: True
+---
+
 # 💾 Imagerie forensique
 
 > Vigil permet de réaliser une **copie forensique** (image disque RAW/E01/AFF)

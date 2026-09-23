@@ -1,3 +1,9 @@
+---
+layout: default
+parent: "🔍 Analyse forensique"
+nav_order: 201
+---
+
 # 📌 Montage en lecture seule — `vigil_usb_mount.sh`
 
 > `scripts/analyse/vigil_usb_mount.sh` monte un périphérique USB / disque / smartphone
