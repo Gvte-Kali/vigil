@@ -1,0 +1,20 @@
+#!/bin/bash
+# NOT WORKING
+
+# --- Couleurs ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# --- Chemins ---
+ENTITIES_DIR="/opt/vigil/data/entities"
+PROJECTS_DIR="/opt/vigil/data/projects"
+SCRIPT_DIR="/opt/vigil/scripts"
+ACTIVE_PROJECT_FILE="/opt/vigil/data/active_project"
+ACTIVE_ENTITY_FILE="/opt/vigil/data/active_entity"
+ACTIVE_USER_FILE="/opt/vigil/data/active_user"

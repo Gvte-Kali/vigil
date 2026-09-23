@@ -1,0 +1,711 @@
+================================================================================
+VIGIL — TESTS À PASSER AVANT DE PASSER À L'ÉTAPE SUIVANTE
+================================================================================
+
+Un axe / une étape du todo.txt n'est cochée [x] que si TOUS ses tests
+passent. Chaque livraison ajoute ses tests ici, groupés par étape du todo.
+
+Légende : [ ] à passer / [x] passé. Environnement de test : PC de dev
+(Parrot OS, /opt/vigil), support USB de test monté RO dans /investigation,
+avec projet + utilisateur actifs.
+
+================================================================================
+TESTS TRANSVERSES (à repasser à chaque livraison qui touche la GUI ou un
+script référencé par l'orchestrateur)
+================================================================================
+
+[ ] `bash -n <script.sh>` sur chaque script modifié (syntaxe).
+[ ] `python3 -m py_compile gui/<module>.py` sur chaque module Python modifié.
+[ ] GUI : ouvrir la page d'analyse, aucune erreur dans la console au
+    démarrage, au changement de filtre, au changement de script.
+[ ] Lancer un scan quelconque depuis la GUI (konsole s'ouvre, custody
+    journalisée, PDF généré, copie dans le dossier du projet).
+[ ] `vigil_scan_all.sh` : s'exécute de bout en bout sans référence cassée
+    (aucun « Script introuvable »), PDF consolidé généré.
+[ ] Scan antivirus depuis la page d'accueil : fonctionne toujours
+    (montage → scan → démontage).
+
+================================================================================
+ÉTAPE 1.1 — FILTRES PÉRIPHÉRIQUE (Windows / XBOX 360)
+================================================================================
+
+Tests manuels GUI (page « Analyse du périphérique USB ») :
+[x] Filtre « Tout afficher » : tous les scripts visibles (génériques +
+    taggés), rien n'a changé par rapport à avant.
+[x] Filtre « Générique » : uniquement les scripts sans tag périphérique.
+[x] Filtre « Windows » : scripts GÉNÉRIQUES + scripts taggés windows —
+    les scripts génériques (recensement, images, vidéos, audio,
+    bureautique, archives, crypto, entropie, bigfiles) DOIVENT apparaître
+    (c'était le bug : ils disparaissaient).
+[x] Filtre « XBOX 360 » : génériques + taggés xbox360 (aucun script taggé
+    xbox360 aujourd'hui — ne doit PAS être vide pour autant grâce aux
+    génériques).
+[x] La section « Lancer plusieurs scans » suit le même filtre que le menu
+    déroulant individuel (mêmes scripts affichés dans les deux endroits).
+[x] Changer de filtre conserve l'état coché/décoché des scripts multi-scan
+    déjà vus (l'état du tableau persiste entre les changements de filtre).
+[x] Sélection d'un script sous un filtre, changement de filtre : le script
+    sélectionné se réinitialise proprement s'il n'est plus visible (retour
+    au premier script visible, paramètres reconstruits).
+[x] Filtre « Windows » + « Lancer les analyses sélectionnées » : lance
+    uniquement les scripts visibles ET cochés (pas les scripts cachés par
+    le filtre).
+
+Tests automatiques (journaliers, sans GUI) :
+[x] `python3 -c` sur la fonction de filtrage avec un SCRIPTS factice :
+    windows → contient un script générique ET un script taggé windows ;
+    xbox360 → contient le générique ; all → tout ; generic → sans tag
+    uniquement. (fonction pure, testable hors Tk.)
+
+================================================================================
+ÉTAPE 1.2 — PRESETS PERSONNALISÉS
+================================================================================
+
+Tests automatiques (données, sans Tk — PASSÉS au commit de l'étape 1.2) :
+[x] system_presets() : Windows/XBOX = génériques + taggés, clés "system:"
+    (testé avec catalogue factice).
+[x] load_presets() : fichier absent -> {} ; JSON corrompu -> {} sans crash ;
+    structure non-dict -> {} ; entrée "system:*" injectée -> ignorée.
+[x] create_preset() : nom vide et préfixe "system:" refusés ; chemins
+    dédoublonnés/triés ; persistance disque vérifiée (presets.json).
+[x] delete_preset() : preset système refusé ; personnalisé supprimé ;
+    suppression double -> refus propre.
+
+Stockage / données (GUI) :
+[x] Sans presets.json : la GUI démarre sans erreur, menu presets vide ou
+    presets système uniquement.
+[x] presets.json corrompu (JSON invalide) : la GUI démarre sans crash,
+    message d'avertissement, presets système toujours disponibles.
+[x] presets.json contenant un preset référençant un script supprimé :
+    sélection du preset → le script inconnu est ignoré avec avertissement,
+    pas de crash.
+[x] Presets système (« Windows », « XBOX 360 ») : non modifiables, non
+    supprimables (bouton supprimer refusé avec message).
+
+Création / édition (via la fenêtre « Gérer les presets… », voir 1.4) :
+[x] Création d'un preset sans nom → erreur claire.
+[x] Création avec un nom déjà pris par un preset système → refusé avec
+    message.
+[x] Créer un preset avec les analyses cochées dans la fenêtre dédiée →
+    sauvegardé dans data/presets.json, visible après redémarrage de la GUI.
+[x] État coché des scripts sauvegardé/restauré : cocher 3 analyses, créer
+    le preset, tout décocher, appliquer le preset → les 3 analyses
+    reviennent cochées et les autres non.
+[x] Supprimer un preset personnalisé → retiré de presets.json, plus dans le
+    menu après redémarrage.
+
+Exécution :
+[x] Appliquer un preset depuis la fenêtre « Gérer les presets » : le
+    tableau principal bascule sur « Tout afficher » et coche EXACTEMENT
+    les analyses du preset (les autres décochées).
+[x] « Lancer les analyses sélectionnées » après application d'un preset :
+    seuls les scripts du preset sont exécutés (vérifier dans konsole et
+    dans chain_of_custody.log — détail « preset=<nom> »).
+[x] Décocher une ligne à la main après application d'un preset : le nom
+    du preset n'est plus journalisé dans la custody (sélection modifiée).
+[x] Custody : chaque lancement de preset journalise l'action
+    (lancement_multi_scans avec le nom du preset dans le détail).
+[x] PDF consolidé généré pour les scripts du preset uniquement.
+
+================================================================================
+ÉTAPE 1.4 — TABLEAU DES SCANS + FENÊTRE PRESETS (refonte ergonomique)
+================================================================================
+
+Tableau principal (section « Lancer plusieurs scans ») :
+[x] Le tableau affiche une ligne par analyse visible sous le filtre
+    courant, colonnes « ✓ / Analyse / Périphérique ».
+[x] Clic sur une ligne : bascule la coche (✔ apparaît/disparaît) ;
+    plusieurs clics rapides fiables, pas de décalage de ligne (les lignes
+    ont une hauteur fixe).
+[x] « Tout cocher » / « Tout décocher » : n'affectent que les lignes
+    visibles sous le filtre courant ; l'état des lignes filtrées est
+    conservé.
+[x] Défilement du tableau correct quand le nombre de scripts dépasse
+    la hauteur visible (les prochains modules de l'AXE 2 vont l'agrandir).
+[x] L'état coché/décoché persiste entre changements de filtre.
+
+Paramètres des analyses cochées (panneau sous le tableau) :
+[x] Cocher des analyses : le panneau « Paramètres des analyses cochées »
+    se reconstruit et liste les paramètres des seules analyses cochées.
+[x] Tout décocher : le panneau se vide (aucune ligne).
+[x] Paramètre partagé (même libellé, ex : une option commune à plusieurs
+    analyses) : une seule ligne, suffixe « (N analyses) » — la coche
+    s'applique à toutes les analyses concernées.
+[x] Paramètre de type dossier : case + champ + bouton Parcourir ; le
+    dossier choisi est bien passé au script concerné (vérifier dans le
+    konsole : --copy-to <dossier>).
+[x] L'option « Générer un rapport PDF » n'apparaît PAS dans le panneau
+    (le multi-scans génère déjà le PDF consolidé).
+[x] Décocher une analyse : ses paramètres disparaissent du panneau, les
+    valeurs saisies des autres lignes sont conservées.
+[x] Lancement : chaque argument coché est bien passé à son script (pas
+    d'argument d'une analyse non cochée).
+
+Menu déroulant « Preset » (page d'analyse, au-dessus du tableau) :
+[x] Le menu déroulant liste les presets système + personnalisés.
+[x] Sélection d'un preset + « Appliquer » : le tableau bascule sur
+    « Tout afficher » et coche exactement les analyses du preset, sans
+    ouvrir de fenêtre.
+[x] Après création/suppression dans la fenêtre de gestion, le menu
+    déroulant est mis à jour (nouveau preset listé / disparu).
+[x] Aucun preset disponible : « Appliquer » affiche un avertissement
+    clair, pas de crash.
+
+Fenêtre « Gérer les presets… » (créer / modifier / supprimer uniquement) :
+[x] Ouverture depuis le bouton « Gérer… » ; fenêtre modale.
+[x] La fenêtre s'ouvre ENTIEREMENT visible à l'écran, sans
+    redimensionnement nécessaire (quel que soit l'écran).
+[x] Molette de la souris : fait défiler tout le contenu de la fenêtre
+    (présélectionné : survol des cadres/labels/champs). Les deux Treeview
+    (presets existants, création) gardent leur défilement interne quand
+    le pointeur est dessus.
+[x] Barre de défilement verticale visible à droite de la fenêtre,
+    fonctionnelle au glisser-déposer.
+[x] Tableau des presets existants : nom, type (Système/Personnalisé),
+    nombre d'analyses.
+[ ] Barre de défilement verticale à droite de la liste des presets
+    existants : visible et fonctionnelle (molette + glisser-déposer)
+    quand le nombre de presets dépasse la hauteur du tableau.
+[x] Sélection d'un preset dans le tableau : charge automatiquement son
+    nom et ses analyses dans le formulaire du bas (prêt à modifier).
+[x] Supprimer un preset système : refusé avec message.
+[x] Supprimer un preset personnalisé : retiré de presets.json, plus
+    listé après réouverture de la fenêtre, et disparu du menu déroulant.
+[x] Modification : charger un preset, décocher/cocher des analyses,
+    « Enregistrer » → confirmation de remplacement, preset mis à jour
+    dans presets.json et dans le menu déroulant de la page d'analyse.
+[x] Édition d'un preset système : chargé dans le formulaire, mais
+    l'enregistrement sous le même nom est refusé (choisir un autre nom
+    crée une variante).
+[x] Création : le tableau du bas liste TOUTES les analyses (tous
+    filtres confondus) ; clic pour cocher.
+[x] Création sans nom / sans aucune analyse cochée / nom préfixé
+    « system: » / nom d'un preset système : refusés avec message clair.
+[x] « Vider le formulaire » : décoche tout, efface le nom, désélectionne.
+[x] Preset enregistré : visible dans le tableau des presets existants
+    (sélectionné) et dans data/presets.json.
+
+Fenêtres (toutes) :
+[x] Chaque fenêtre/assistant de l'application (page d'analyse, presets,
+    projets, utilisateurs, stockage, imagerie, ClamAV, accueil) s'ouvre
+    ENTIEREMENT dans l'écran, sans redimensionnement nécessaire.
+[x] Molette de la souris sur la page d'analyse : fait défiler TOUTE la
+    page (barre de défilement de la page), y compris quand le pointeur
+    survole des widgets enfants (labels, cadres, champs, boutons) — le
+    défilement ne doit plus se couper au survol d'un widget.
+[x] Molette au-dessus du tableau multi-scans (Treeview) : le tableau
+    garde son propre défilement interne (pas de double défilement de la
+    page en arrière-plan).
+[x] Molette sur la fenêtre « Gérer les presets » : elle continue de
+    défiler normalement (le nouveau bind de la page d'analyse ne doit
+    pas interférer avec les fenêtres séparées).
+[x] Défilement de la page d'analyse par la barre verticale
+    (glisser-déposer) : toujours fonctionnel.
+[x] Le tableau multi-scans n'est pas plus large que la fenêtre (colonnes
+    ✓/Analyse/Périphérique resserrées).
+
+Rapport de recensement (vigil_census.sh + vigil_pdf.py kind=census) :
+[x] Section « Fichiers par dossier » présente dans le PDF : tableau
+    reprenant toute l'arborescence, uniquement les dossiers, avec le
+    nombre de fichiers de chaque dossier (comptage direct, pas
+    récursif).
+[x] Chaque dossier est affiché avec son CHEMIN COMPLET (arborescence
+    dans le nom, ex : sdb1/d1/d2) et la liste est classée par ordre
+    alphabétique.
+
+Rapport bureautique (vigil_office.sh + vigil_pdf.py kind=office) :
+[x] Le tableau « Liste des fichiers bureautiques » affiche l'EXTENSION
+    (docx, odt, xlsx, pptx...) dans la dernière colonne, et non plus le
+    type MIME.
+[x] La colonne Extension est assez large pour que l'extension tienne
+    sur UNE seule ligne (pas de retour à la ligne).
+[x] Fichiers cachés comptés : un fichier .hiddenfile à la racine et
+    un fichier dans .hiddendir apparaissent dans les comptages
+    (find -type f ne filtre pas les fichiers point).
+[x] Ligne Total = nombre total de fichiers recensés.
+[x] Doublons : section « Doublons (résumé) » concise — groupes,
+    fichiers impliqués, copies redondantes, volume redondant — et
+    PLUS aucune énumération de groupes/emplacements (sur un gros
+    disque, le rapport ne doit pas exploser en pages).
+[x] Le détail des doublons reste consultable dans la base SQLite et
+    l'export TSV du dossier du projet.
+
+================================================================================
+ÉTAPE 1.3 — NORMALISATION DES NOMS DE SCRIPTS
+================================================================================
+
+Convention : vigil_<catégorie>_<action>.sh.
+
+[x] Renommage effectif dans le dépôt (git mv) :
+    mount_usb_ro.sh       → vigil_usb_mount.sh (scripts/analyse/)
+    umount_usb_ro.sh      → vigil_usb_umount.sh (scripts/analyse/)
+    mount_stockage.sh     → vigil_stockage_mount.sh (scripts/stockage/)
+    umount_stockage.sh    → vigil_stockage_umount.sh (scripts/stockage/)
+    vigil_images_analysis.sh → vigil_images.sh
+    vigil_videos_analysis.sh  → vigil_videos.sh
+    vigil_audio_analysis.sh   → vigil_audio.sh
+    vigil_office_analysis.sh  → vigil_office.sh
+    vigil_archives_analysis.sh→ vigil_archives.sh
+    vigil_crypto_analysis.sh  → vigil_crypto.sh
+    vigil_entropy_analysis.sh → vigil_entropy.sh
+    vigil_bigfiles_analysis.sh→ vigil_bigfiles.sh
+    (vigil_census.sh, vigil_clamav_*.sh, vigil_disk_imager.sh,
+    vigil_disk_clone.sh, vigil_export_project.sh déjà conformes)
+[x] `grep -rn "mount_usb_ro\|umount_usb_ro\|_analysis\.sh"` ne retourne
+    plus AUCUNE référence aux anciens noms dans tout le dépôt (scripts,
+    GUI, docs, post-install, Vigil-CLI).
+    (vérifié le 2026-09-21 : aucune occurrence hors todo_tests.txt ;
+    les libellés custody post_mount_analysis de Vigil-CLI sont des
+    étiquettes d'action, pas des chemins)
+[x] Docstring « Usage : » de chaque script renommé mise à jour avec le
+    nouveau nom.
+    (aucun des 12 scripts renommés n'a de ligne Usage statique ; les
+    usages affichés utilisent $0 — rien à corriger)
+[x] vigil_scan_all.sh : chemins mis à jour, `bash -n` OK (exécution
+    complète = test transverse ci-dessus, à passer sur le PC de dev).
+[x] GUI : chaque script se lance depuis la page d'analyse (bouton Lancer
+    individuel) avec le nouveau nom.
+[x] Multi-scan + PDF consolidé : le mapping _SCRIPT_KIND (et le JSON de
+    chaque script) est cohérent avec les nouveaux noms.
+[x] Scan antivirus (page d'accueil, vigil_clamav_full_scan.sh) : montage
+    et démontage utilisent les nouveaux noms — test complet OK.
+[x] Page stockage (vigil_stockage_gui.py) : monter/démonter fonctionnent
+    avec les nouveaux noms.
+[x] Imagerie (vigil_imager_gui.py + vigil_disk_imager.sh /
+    vigil_disk_clone.sh) : non renommés, aucune référence aux anciens
+    noms (vérifié par grep).
+[x] Docs : chaque .md référençant un ancien nom mis à jour
+    (montage-lecture-seule.md, demontage.md, orchestrateur.md, README...).
+[x] Syntaxe auto : `bash -n` sur les 12 scripts renommés + scan_all +
+    clamav_full_scan + faces_detection + stockage, et
+    `python3 -m py_compile` sur les 2 GUI : OK.
+[x] Catalogue GUI : tous les chemins de SCRIPTS existent sur disque
+    (test auto rejoué avec les nouveaux noms).
+[x] Post-install : si post_install_vigil.sh copie/référence les scripts,
+    chemins mis à jour ; installation fraîche testée (AXE 6).
+    (grep OK : post_install_vigil.sh ne référence aucun ancien nom ;
+    l'installation fraîche reste à tester)
+[x] Installation de prod (/opt/vigil) : après git pull, ancien et nouveau
+    nom coexistent (l'ancien n'est pas supprimé par git pull) → vérifier
+    qu'aucun fichier orphelin .sh ancien nommé n'est encore appelé
+    (le post-install ou un script de migration doit nettoyer).
+
+================================================================================
+SÉLECTION UTILISATEUR AU MONTAGE (stockage uniquement — analyse : GUI) :
+[ ] vigil_usb_mount.sh ne demande PAS l'utilisateur (pré-sélection GUI,
+    data/active_user) — aucun prompt utilisateur au démarrage.
+[ ] vigil_stockage_mount.sh affiche « === Utilisateur === » avec la liste
+    des profils GUI + « [q] Quitter », sans jamais montrer (no-user).
+[ ] Choix valide : data/active_user mis à jour, custody journalisée sous
+    l'utilisateur choisi.
+[ ] Choix invalide : « ✗ Choix invalide », redemande (pas de sortie).
+[ ] 'q' : sortie propre immédiate du script.
+[ ] Aucun utilisateur configuré : « ❌ Aucun utilisateur configuré » +
+    indication GUI, sortie du script.
+[ ] « q » dispo aussi aux prompts de démontage/relance (o/n, q pour
+    quitter) dans les deux scripts de montage.
+
+TRIAGE USB ANTI-RUBBER DUCKY (intégré à vigil_usb_mount.sh) — 2.0
+================================================================================
+Procédure guidée :
+[ ] Lancement de vigil_usb_mount.sh : après le nettoyage initial, la
+    console demande de DÉBRANCHER les périphériques USB et attend une
+    validation par Entrée.
+[ ] Après la validation : « Baseline USB enregistrée : N périphérique(s)
+    présents » s'affiche (les périphériques internes — hubs racines,
+    contrôleurs — restent présents, c'est normal).
+[ ] La console demande ensuite de BRANCHER les périphériques à analyser
+    et attend une validation par Entrée.
+[ ] Après la validation : attente de 10 s avec barre de progression
+    [##########] (une case par seconde) puis « N périphérique(s) USB
+    détecté(s) au total ».
+[ ] Des Entrées tapées PENDANT le décompte 10 s sont purgées (tampon
+    clavier vidé à chaque seconde) : elles ne sont jamais réutilisées
+    comme réponse au prompt suivant (bug des doubles Entrées).
+[ ] Clear + bannière ASCII après le décompte avant l'affichage des
+    périphériques détectés.
+Rapport PDF :
+[ ] Un rapport PDF de triage (rapport_usbhid_*) est généré à CHAQUE
+    montage dans /opt/vigil/rapports, même sans clavier détecté (trace
+    de procédure), et copié dans le dossier du projet.
+[ ] Le PDF contient : comptages baseline/après/nouveaux/HID, le tableau
+    des périphériques apparus (fabricant, produit, VID:PID, n° série,
+    interface clavier OUI/Non) et la section « Procédure de triage ».
+Protection du clavier/souris de travail (CRITIQUE) :
+[ ] Clavier/souris restés branchés pendant la baseline : ils apparaissent
+    dans la baseline, puis ne sont JAMAIS proposés au blocage — aucune
+    frappe n'est bloquée, ils restent fonctionnels pendant tout le triage.
+[ ] Clavier/souris débranchés pendant la baseline puis rebranchés :
+    BLOCAGE AUTOMATIQUE par défaut (pas de question interactive) —
+    l'alerte rouge encadrée « PÉRIPHÉRIQUE SUSPECT DÉTECTÉ » s'affiche
+    et les frappes sont bloquées sans confirmation.
+[ ] Pour garder fonctionnel un clavier/souris de travail débranché/
+    rebranché : l'ajouter à la whitelist via la GUI
+    (Accueil > Configuration > Périphériques USB), relancer le montage
+    → « Clavier HID whitelisté — frappes actives (whitelist) », le
+    clavier reste utilisable immédiatement.
+[ ] Un clavier de test suspect (ex. BadKB) NON whitelisté : frappes
+    bloquées automatiquement, le clavier de travail reste fonctionnel.
+[ ] Écran suivant : clear + ASCII art — bannière ROUGE avec résumé
+    « N périphérique(s) suspect(s) détecté(s) » si blocage, bannière
+    VERTE « périphérique(s) protégé(s) » si whitelist(s), bannière
+    bleue « aucun périphérique suspect » sinon.
+[ ] Liste des périphériques : section rouge « PÉRIPHÉRIQUE(S)
+    SUSPECT(S) — interdits de montage » (vocabulaire simple, pas de
+    « HID » ni « Rubber Ducky » dans l'affichage).
+[ ] Rapport PDF : ligne « Protégés par l'utilisateur (frappes actives) »
+    + ligne « Périphériques blacklistés bloqués » + colonne « Statut »
+    (Blacklisté — bloqué / protégé / bloqué / stockage) + paragraphe
+    explicatif si protected_count > 0.
+[ ] Custody : les protections sont journalisées (usb_triage_hid,
+    statut warning, « protégé par l'utilisateur »).
+
+Détection Rubber Ducky (si périphérique HID de test disponible) :
+[ ] Un périphérique avec interface clavier détecté entre les deux scans
+    provoque l'alerte rouge « Clavier HID détecté » (fabricant, produit,
+    VID:PID) dans la console.
+[ ] Les frappes du périphérique sont bloquées (unbind usbhid) : taper
+    sur ce clavier n'envoie RIEN au poste d'analyse.
+[ ] Le périphérique HID apparaît dans la liste des périphériques en
+    section dédiée « NON MONTABLE(S) » avec ses descripteurs.
+[ ] Le rapport PDF contient l'alerte ALERTE en rouge et la ligne du
+    périphérique sur fond rouge.
+[ ] Aucun périphérique HID n'est proposé au montage (pas de numéro
+    associé, pas de montage possible).
+Touche « r » (écran de sélection) :
+[ ] « r » à l'écran « Entrez le numéro du périphérique » rafraîchit la
+    liste lsblk et réaffiche toute la liste (montables + HID non
+    montables) sans quitter le script.
+[ ] Périphérique branché lentement (non vu au premier affichage) :
+    brancher, « r », il apparaît — pas besoin de relancer le script.
+[ ] « r » sans aucun périphérique : message d'erreur clair, on peut
+    réessayer après branchement.
+[ ] « q » quitte toujours proprement (custody journalisée).
+Option « q » et fin automatique (ducky seul) :
+[ ] Écran « Sélection du type de périphérique » : l'option [q] Quitter est
+    affichée ; « q » ou « Q » quitte proprement (custody journalisée,
+    final_pause, code 0).
+[ ] Choix invalide (ex. 4) : message d'erreur inchangé.
+[ ] Scénario ducky seul : ne brancher QUE le clavier suspect au triage,
+    choisir [2] → le rapport PDF de triage est généré puis le script
+    AFFICHE « Le seul périphérique détecté est un clavier suspect
+    (bloqué) » et se termine proprement — pas d'écran de sélection de
+    type ni de liste de montage.
+[ ] Scénario ducky + clé stockage : les deux branchés, ducky bloqué →
+    le script CONTINUE normalement vers la sélection du type et la clé
+    reste montable.
+[ ] Scénario ducky + clé restée branchée à la baseline (whitelistée) :
+    le script CONTINUE (la clé whiteliste ne déclenche pas la fin).
+[ ] Custody : « usb_triage_end » journalisé en statut alert lors de la
+    fin automatique.
+
+Non-régression montage :
+[ ] Le montage normal (clé USB sans HID) fonctionne de bout en bout
+    comme avant : détection, sélection, blockdev --setro, montage RO,
+    hash SHA-256.
+[ ] Mode smartphone (MTP) et CD-ROM : non affectés par le triage.
+
+TRIAGE USB STOCKAGE (vigil_stockage_mount.sh) — même procédure que 2.0 :
+[ ] Le triage démarre automatiquement après le nettoyage des montages
+    /stockage existants (avant la recherche des périphériques).
+[ ] Baseline → branchement → barre 10 s : un ducky branché pendant la
+    fenêtre de branchement est détecté et bloqué (frappes coupées).
+[ ] Le clavier/souris de travail (restés branchés à la baseline) ne sont
+    jamais bloqués.
+[ ] Clé de stockage seule : le triage passe (« Aucun clavier HID
+    détecté ») et la sélection/montage se fait normalement.
+[ ] Rapport PDF de triage généré (rapport_usbhid_*, nouveau format
+    rapport_usbhid_jj-mm-aaaa_hh"h"mm"m"ss"s.pdf).
+[ ] Seul périphérique = ducky bloqué ou blacklisté : fin propre du
+    script après le PDF (« Le seul périphérique détecté... »),
+    custody usb_triage_end_stockage journalisée.
+[ ] Périphérique blacklisté (authorized=0) présent dès le départ : le
+    retry « Réparation des périphériques USB bloqués » ne le ré-autorise
+    PAS (il reste invisible dans lsblk).
+[ ] La liste des périphériques HID bloqués apparaît en rouge dans la
+    section « Périphériques disponibles » (interdits de montage).
+
+GUI PÉRIPHÉRIQUES USB (Accueil > Configuration > Périphériques USB) :
+[ ] La fenêtre s'ouvre depuis l'accueil (bouton « Périphériques USB »
+    de la section Configuration) sans redimensionnement manuel, taille
+    par défaut suffisante.
+[ ] Inventaire : les périphériques USB connectés apparaissent (port,
+    fabricant/produit, VID:PID, n° de série, colonne Clavier OUI/non,
+    statut : Whitelisté / Blacklisté / Non listé).
+[ ] Bouton « Rafraîîchir » : re-liste les périphériques (brancher une
+    clé puis rafraîchir → elle apparaît).
+[ ] Sélection d'un périphérique + « Whitelister (confiance) » : entrée
+    VID:PID (et n° de série si présent) ajoutée à data/usb/whitelist.txt,
+    statut mis à jour dans le tableau.
+[ ] Sélection + « Blacklister (suspect) » (confirmation demandée) :
+    entrées ajoutées à data/usb/blacklist.txt, statut Blacklisté.
+[ ] Tableaux whitelist/blacklist : « Ajouter » (invite VID:PID ou n° de
+    série) et « Retirer » (suppression de l'entrée sélectionnée)
+    mettent à jour les tableaux ; « Enregistrer les listes » persiste
+    les deux fichiers (data/usb/whitelist.txt, data/usb/blacklist.txt,
+    une entrée par ligne).
+[ ] La liste des périphériques s'affiche DÈS le premier affichage après
+    le choix du mode (sans taper « r ») — « ✅ N périphérique(s)
+    détecté(s) » puis le tableau des périphériques disponibles.
+[ ] Effet au montage suivant : un périphérique blacklisté (même clé
+    stockage non-HID) est bloqué d'office (authorized=0, non visible
+    dans lsblk), message rouge « Périphérique blacklisté bloqué »,
+    ligne « Blacklisté — bloqué » dans le PDF de triage.
+[ ] Effet au montage suivant : un clavier whitelisté débranché puis
+    rebranché n'est PAS bloqué (« Clavier HID whitelisté », frappes
+    actives).
+[ ] Cas « seul périphérique = blacklisté » : le script se termine
+    proprement après le PDF de triage (« Le seul périphérique détecté
+    est BLACKLISTÉ (bloqué) »), custody usb_triage_end journalisée.
+[ ] Retirer le périphérique des listes via la GUI le rend à nouveau
+    analysable au montage suivant.
+[ ] Icône USB : la fenêtre affiche l'icône Lucide `usb` (fichier
+    data/icons/usb.svg) sur le bouton d'accueil et les sections — pas
+    seulement le symbole Unicode de repli.
+[ ] Lancement de la GUI USB : la fenêtre s'ouvre SANS erreur silencieuse ;
+    en cas de crash d'une fenêtre enfant, la traceback est journalisée
+    dans data/gui_child.log (plus de DEVNULL silencieux).
+
+================================================================================
+RECENSEMENT — UN SEUL JEU DE LIVRABLES PAR PROJET (purge avant écriture)
+================================================================================
+[ ] Premier recensement sur un projet : livrables créés dans le dossier du
+    projet (census_<horodatage>.sqlite/.tsv/.sqlite.sha256, .sains.*,
+    .doublons.*, copie rapport_census_*.pdf).
+[ ] Second recensement (même projet, après remontage ou relance) : le
+    message « Nettoyage de N fichier(s) de recensement précédent(s) »
+    s'affiche, les anciens census_*.sqlite/.tsv/.sha256, .sains.*,
+    .doublons.* et rapport_census_*.pdf du projet sont supprimés, les
+    nouveaux les remplacent — il ne reste QU'UN seul jeu de fichiers de
+    recensement, quel que soit le nombre d'exécutions.
+[ ] Les autres livrables du projet (rapports des autres analyses PDF,
+    chain_of_custody.log, export projet, vigil_census.json) ne sont PAS
+    touchés par la purge.
+[ ] La purge ne s'applique qu'au projet ACTIF : les recensements des
+    autres projets restent intacts.
+[ ] Mode --no-project (chasse) : l'index SQLite + TSV + signature sont
+    écrits dans hunt/ (à la racine du projet), la purge supprime les
+    census_* de hunt/ avant réécriture, aucun événement de chaîne de
+    custody n'est tracé, le dossier du projet actif n'est PAS touché.
+[ ] Les fichiers signalés .sha256 du recensement courant correspondent
+    bien à la nouvelle base (hash recalculé après réécriture).
+
+================================================================================
+ÉTAPE 2.x — MODULES FORENSIQUES (à compléter à chaque module livré)
+================================================================================
+
+Patron commun (pour CHAQUE nouveau module vigil_<module>.sh) :
+[ ] `bash -n` + lancement avec `--help`/usage sans erreur.
+[ ] Sans support monté : message clair, pas de crash.
+[ ] Support de test monté RO : exécution complète, rapport PDF généré,
+    copie dans le dossier du projet.
+[ ] Custody : événements start/success (ou error) dans chain_of_custody.log
+    avec le format unifié (User/Entity/Project/Action/Status/Message).
+[ ] Lecture seule : aucun fichier écrit dans /investigation (vérifier
+    avant/après : `find /investigation -newer <marqueur>` ne rien donner).
+[ ] Entrée GUI : le script apparaît dans la page d'analyse avec ses
+    paramètres, se lance, le filtre périphérique adéquat l'affiche
+    (générique ou taggé windows).
+[ ] Orchestrateur : ajouté à vigil_scan_all.sh (lecture seule uniquement)
+    et le PDF consolidé l'inclut.
+[ ] Doc : docs/analyse-forensique/<module>.md + entrée README de catégorie.
+
+Module par module (à cocher avec le nom du module une fois livré) :
+[ ] vigil_registry.sh (2.3)
+[ ] vigil_usb_history.sh (2.1)
+[ ] vigil_timeline.sh (2.2)
+[ ] vigil_evtx.sh (2.4)
+[ ] vigil_ntfs_mft.sh (2.5)
+[ ] vigil_ntfs_usn.sh (2.6)
+[ ] vigil_lnk.sh (2.7)
+[ ] vigil_thumbs.sh (2.8)
+[ ] vigil_pe.sh (2.9)
+[ ] vigil_productkey.sh (2.10)
+
+================================================================================
+ÉTAPES 3.x / 4.x / 5.x — à compléter quand livrées (même patron que 2.x)
+================================================================================
+
+[ ] (réservé)
+
+================================================================================
+
+================================================================================
+PHASE 4 — RECHERCHE DE MENACES (extensions trompeuses + audit ciblé + PDF
+consolidé unique)
+================================================================================
+ÉTAPE 4.1 — CENSUS : AUDIT EXTENSION/MIME
+--------------------------------------------------------------------------------
+[ ] `bash -n scripts/analyse/vigil_census.sh` passe.
+[ ] Recensement d'une clé de test avec un fichier `photo.jpg` renommé depuis
+    un exécutable (copier /bin/ls vers photo.jpg sur la clé) :
+    - la sortie affiche « Extensions trompeuses : N » (N >= 1) ;
+    - la base SQLite du projet contient extension_mismatch=1 pour ce
+      fichier (sqlite3 ou requête via vigil_census_query.py --mismatched) ;
+    - l'export TSV contient les nouvelles colonnes extension_mismatch /
+      expected_format ;
+    - le rapport PDF census contient la section « Extensions trompeuses »
+      avec le fichier listé.
+[ ] Recensement SANS fichier trompeur : section présente avec « Aucune
+    extension trompeuse détectée » (pas d'erreur, pas de tableau vide).
+[ ] Fichiers sans extension / extension inconnue (.xyz, fichiers système
+    Windows) : jamais flagués.
+
+ÉTAPE 4.2/4.3 — AUDIT DE FORMAT + REQUÊTES INDEX
+--------------------------------------------------------------------------------
+[ ] `python3 scripts/analyse/vigil_format_audit.py --index <census.sqlite>
+    --out /tmp/audit.json` s'exécute sans erreur sur l'index du projet.
+[ ] Cible extension trompeuse : le JSON liste le fichier avec sa signature
+    locale (ex. « Executable Windows (PE/COFF) » pour un exe renommé .jpg).
+[ ] Cible forte entropie : un fichier de données aléatoires/chiffrées
+    (ex. sortie de /dev/urandom > 1 Mo, extension .bin) est flaggé
+    high_entropy=true.
+[ ] `python3 scripts/analyse/vigil_census_query.py --index <census.sqlite>
+    --mismatched` : ne retourne QUE les fichiers trompeurs (TSV).
+[ ] Même requête avec --octet-stream, --mime image/, --extension jpg :
+    résultats cohérents, chemins absolus sous /investigation.
+[ ] binwalk absent : l'audit fonctionne quand même (signatures locales,
+    binwalk_available=false dans le JSON, aucune erreur).
+
+ÉTAPE 4.4/4.5 — RECHERCHE DE MENACES (ORCHESTRATEUR)
+--------------------------------------------------------------------------------
+[ ] `bash -n scripts/clamav/vigil_malware_hunt.sh` passe.
+[ ] Bouton « Recherche de menaces » : confirmation affichée (5 étapes),
+    konsole s'ouvre, utilisateur demandé (sélection numérotée + q).
+[ ] Sans projet actif : arrêt propre avec message explicite (l'index est un
+    livrable signé, il exige un projet).
+[ ] Chaîne complète sur clé de test (avec un exe renommé .jpg + un fichier
+    urandom .bin + un fichier sain) :
+    - étape 1 : montage RO (triage USB habituel) OK ;
+    - étape 2 : recensement SANS PDF census individuel (aucun
+      rapport_census_*.pdf généré pendant la chaîne) ;
+    - étape 3 : audit ciblé — les 2 fichiers suspects ressortent ;
+    - étape 4 : ClamAV --all (barre de progression habituelle) ;
+    - étape 5 : démontage PUIS un SEUL PDF consolidé
+      (rapport_multi_*.pdf) avec sommaire : census / formataudit / clamav ;
+    - le PDF consolidé liste l'exe déguisé et le fichier à forte entropie ;
+    - une copie du PDF est dans le dossier du projet.
+[ ] Rapport consolidé : aucune section « erreur » si tout s'est bien passé.
+[ ] Après la chaîne : /investigation vide (démontage complet).
+
+ÉTAPE 4.6 — GUI
+--------------------------------------------------------------------------------
+[ ] Page d'accueil : le bouton s'appelle « Recherche de menaces » (plus
+    « Faire un scan antivirus »), sous-titre explicite, icône bouclier.
+[ ] `python3 -m py_compile gui/vigil_main_gui.py` passe.
+[ ] Aucune erreur console au démarrage de la GUI.
+
+NOTES PHASE 4
+--------------------------------------------------------------------------------
+- L'ancien bouton « Faire un scan antivirus » (vigil_clamav_full_scan.sh)
+  n'est plus référencé par la GUI ; le script reste présent en CLI.
+- Le PDF consolidé de la recherche de menaces ne contient PAS de PDF census
+  individuel : les résultats du recensement sont une section du multi.
+
+--------------------------------------------------------------------------------
+ÉTAPE 4.7 — FAUX POSITIFS EXTENSIONS TROMPEUSES (CORRECTION)
+--------------------------------------------------------------------------------
+[ ] `bash -n scripts/analyse/vigil_census.sh` passe.
+[ ] Recensement sur clé contenant : un fichier .txt VIDE (0 octet), un .doc
+    créé par LibreOffice, un .jpg sain, un exécutable renommé .jpg :
+    - « Extensions trompeuses : 1 » (seul le faux .jpg ressort) ;
+    - dans le TSV/SQLite : vide.txt extension_mismatch=0, libre .doc
+      extension_mismatch=0 (mime windows/cdfv2 toléré), fake.jpg=1 ;
+    - section « Extensions trompeuses » du PDF census : uniquement le
+      faux .jpg.
+[ ] Recensement GUI (page Analyse > Recensement) : même comportement.
+[ ] Recherche de menaces complète : l'audit ciblé ne traite que le faux .jpg
+    (le .txt vide et le .doc LibreOffice n'apparaissent pas dans la section
+    formataudit du PDF consolidé).
+
+--------------------------------------------------------------------------------
+ÉTAPE 4.8 — RAPPORT UNIQUE « RECHERCHE DE MENACES » (USBHID CONSOLIDÉ + NOM)
+--------------------------------------------------------------------------------
+[ ] `bash -n scripts/clamav/vigil_malware_hunt.sh` et
+    `bash -n scripts/analyse/vigil_usb_mount.sh` passent.
+[ ] Recherche de menaces complète (clé saine) : le PDF final est un SEUL
+    rapport consolidé dont la PREMIÈRE section est le triage USB, puis
+    les menaces par ordre de gravité, le recensement (informatif) en
+    dernier (sommaire : usbhid / clamav / formataudit / census) — aucun
+    rapport_usbhid_*.pdf autonome n'apparaît dans /opt/vigil/rapports.
+[ ] Montage autonome (GUI « Monter un périphérique de stockage », hors
+    chasse) : le rapport_usbhid_*.pdf autonome est toujours généré
+    (comportement inchangé).
+[ ] Nom du rapport : après le choix de l'utilisateur, le prompt « Nom du
+    rapport » apparaît :
+    - Entrée seule → rapport_menaces_<jj-mm-aaaa>_<hh>h<mm>m<ss>s.pdf ;
+    - nom « Clé USB — Suspicion » →
+      cle-usb-suspicion_rapport_menaces_<...>.pdf (minuscules, accents
+      supprimés, espaces → tirets) ;
+    - nom invalide (que des caractères spéciaux) → message d'erreur et
+      nouvelle demande.
+[ ] Ducky seul : brancher UNIQUEMENT le clavier suspect (Lenovo BadKB) et
+    le bloquer → le montage s'arrête au triage, le rapport consolidé est
+    quand même généré (section usbhid seule, nom honoré), script termine
+    proprement.
+[ ] Mode autonome : AUCUN projet requis — la chasse part sans projet
+    actif comme avec un projet actif, sans prompt projet, sans arrêt.
+[ ] data/active_project n'est ni lu ni écrit pendant toute la chasse
+    (avant/après : contenu identique ou fichier absent).
+[ ] Page de garde du rapport : la ligne « Projet » affiche
+    « Recherche de menaces ».
+[ ] Le rapport consolidé n'est PAS copié dans un dossier de projet
+    (seul /opt/vigil/rapports/ contient le PDF).
+[ ] Dossier hunt/ : créé à la racine du projet, purgé au début de
+    chaque chasse (index census_*.sqlite/.tsv, collect/, logs), tout le
+    temporaire de la chasse y vit, rien n'est écrit dans /tmp ni dans
+    data/projects/.
+[ ] Chaîne de custody de la chasse : hunt/chain_of_custody.json
+    alimenté par TOUTE la chaîne — événements de la chasse
+    (démarrage, étapes, ClamAV, clôture) ET événements détaillés des
+    sous-scripts : triage USB (baseline, HID, blocage), set_ro,
+    hash_calculation (avec la valeur du hash), mount, integrity_check
+    (hash initial vs recalculé), umount, set_rw, cleanup, census
+    (start/fin). En succès ET en erreur (provoquer un échec volontaire
+    pour vérifier l'entrée error).
+[ ] Sans data/active_user : l'utilisateur choisi au prompt de la chasse
+    est propagé à toute la chaîne — le recensement ne s'arrête plus avec
+    « Aucun utilisateur actif sélectionné », la bannière du montage
+    affiche l'opérateur (pas « (no-user) »), et la chasse se termine
+    avec 0 erreur.
+[ ] Détail du démarrage dans le PDF : la ligne « hunt/start » ne
+    répète pas l'opérateur (déjà tracé par la colonne Opérateur).
+[ ] Rapport consolidé : le sommaire liste la section « Chaîne de
+    custody (journal des actions) » ; la section affiche le TABLEAU
+    chronologique (horodatage jj/mm/aaaa HH:MM:SS, opérateur, action,
+    statut coloré vert/rouge, détail) avec une ligne par action de la
+    chasse.
+[ ] Cas ducky seul (triage stoppé) : le rapport contient quand même
+    les sections usbhid et custody (entrée « triage/alert »
+    présente dans le tableau).
+[ ] Deux chasses successives : hunt/ ne contient qu'un seul jeu de
+    livrables (les fichiers de la chasse précédente, journal de
+    custody compris, sont purgés).
+[ ] Purge finale de hunt/ : à la toute fin de la chasse (après le PDF,
+    export refusé), hunt/ est VIDE — ni chain_of_custody.json, ni index
+    census, ni collect/ — seul le dossier hunt/ reste. Vérifier aussi
+    sur les sorties anticipées : ducky seul (triage stoppé) et échec
+    du montage.
+
+Tests export des preuves (fin de chasse, PDF généré) :
+[ ] Export accepté : répondre « o » à la question, choisir un dossier
+    via la boîte de dialogue système (kdialog/zenity) → l'archive
+    export_menaces_<jj-mm-aaaa>_<hh>h<mm>m<ss>s.tar.gz est créée dans le
+    dossier choisi et contient TOUT hunt/ + le rapport PDF de la chasse
+    (tar -tzf : hunt/..., rapport_menaces_*.pdf) ; le fichier
+    .sha256 adjacent contient le checksum de l'archive et
+    `sha256sum -c export_menaces_*.sha256` passe ; hunt/ est vidé après.
+[ ] Export refusé (Entrée) : hunt/ est vidé, aucune archive créée,
+    le PDF reste dans rapports/.
+[ ] Boîte de dialogue annulée (ou destination inexistante/non
+    inscriptible) : message « hunt/ CONSERVÉ », hunt/ intact, aucune
+    archive — la purge est annulée.
+[ ] Échec d'archive/checksum (destination en lecture seule simulée) :
+    purge annulée, hunt/ conservé.
+[ ] Cas ducky seul (triage stoppé) : la question d'export est aussi
+    proposée avec le rapport de triage ; export accepté → archive
+    contenant hunt/ + le PDF de triage, puis hunt/ vidé.
+[ ] Cas échec du montage : pas de question (pas de PDF), purge directe
+    de hunt/.
+[ ] Entrée « export » dans le tableau de custody du PDF quand la
+    chasse exporte (success) ou échoue (error) avant purge.

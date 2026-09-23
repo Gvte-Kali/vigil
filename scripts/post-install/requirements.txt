@@ -1,0 +1,100 @@
+# --- Paquets de base pour Vigil ---
+# util-linux : mount, umount, blkid, findmnt, blockdev, lsblk, dmesg, logger
+util-linux
+coreutils
+# jq : parsing JSON des peripheriques (lsblk, descripteurs USB, chantiers GUI)
+jq
+eject
+cryptsetup
+clamav
+clamav-daemon
+clamav-freshclam
+# xrdp : acces distant RDP (optionnel, active interactivement par le post-install)
+xrdp
+xorgxrdp
+udisks2
+ufw
+
+# --- Terminal et dialogues systeme ---
+# konsole : la GUI lance les scripts d'analyse dans un terminal Konsole
+konsole
+# kdialog/zenity : boites de dialogue systeme (export des preuves de la chasse)
+kdialog
+zenity
+
+# --- Montage USB avance ---
+# jmtpfs : montage MTP des smartphones
+jmtpfs
+# ntfs-3g : montage lecture seule des partitions NTFS
+ntfs-3g
+# exfat-fuse : montage lecture seule des partitions exFAT
+exfat-fuse
+
+# --- Outils forensiques ---
+# dc3dd : copie forensique RAW et clonage bit-a-bit
+dc3dd
+# ewf-tools : ewfacquire (format E01 / Expert Witness Format)
+ewf-tools
+# afflib-tools : affcat, affuse (format AFF / Advanced Forensic Format)
+afflib-tools
+
+# --- Outils forensiques complementaires (non requis par les scripts Vigil) ---
+# sleuthkit/autopsy : examen des images disque RAW/E01 produites par Vigil
+sleuthkit
+autopsy
+# yara : regles de detection de malwares (reserves, non utilises actuellement)
+yara
+# guymager : alternative GUI d'acquisition d'images disque
+guymager
+# gnupg : signature/chiffrement des livrables (reserve, non utilise actuellement)
+gnupg
+# ldmtool : disques dynamiques Windows LDM (reserve, non utilise actuellement)
+ldmtool
+
+# --- Analyse de fichiers ---
+# exiftool : metadonnees EXIF des fichiers image
+exiftool
+# ffmpeg : ffprobe (duree, resolution, debits des videos et fichiers audio)
+ffmpeg
+# p7zip-full : 7za (contenu et chiffrement des archives 7z/zip dans vigil_archives.sh et vigil_crypto.sh)
+p7zip-full
+# zstd : archives zstd (vigil_archives.sh, vigil_crypto.sh, vigil_entropy.sh)
+zstd
+# binwalk : audit de format des extensions trompeuses (recherche de menaces)
+binwalk
+# pv : barre de progression du recensement (vigil_census.sh)
+pv
+# file : identification des types MIME (toutes les analyses de fichiers)
+file
+
+# --- Imagerie / reparation de partitions ---
+# gdisk : sgdisk, reparation de la table GPT apres clonage
+gdisk
+# cloud-guest-utils : growpart, extension de partition apres clonage
+cloud-guest-utils
+# parted : fallback extension de partition (si sgdisk absent)
+parted
+
+# --- Papier peint lsblk (scripts/lsblk_wallpaper.sh) ---
+# imagemagick : convert, rendu de l'inventaire des disques en image
+imagemagick
+# feh : affichage du papier peint
+feh
+
+# --- Python (GUI tkinter, rapports PDF, audit de format) ---
+python3
+python3-tk
+# python3-pil : miniatures du logo (GUI, page de garde des rapports)
+python3-pil
+python3-pip
+# python3-reportlab : generateur de rapports PDF (scripts/pdf/vigil_pdf.py)
+python3-reportlab
+# python3-cairosvg : rendu des icones SVG de la GUI
+python3-cairosvg
+libcairo2
+
+# --- Detection des visages ---
+# facedetect : wrapper autour d'OpenCV pour detecter les visages
+# python3-opencv : bindings OpenCV pour Python (fallback detection visages)
+facedetect
+python3-opencv

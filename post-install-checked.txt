@@ -1,0 +1,39 @@
+1. Exécuter le script de post-install
+   Le script (scripts/post-install/post_install_vigil.sh) automatise :
+     - Création des répertoires, dépendances, permissions, init data/logs
+     - Dépendances installées depuis scripts/post-install/requirements.txt
+       (chaque paquet y est commenté) : base, montage USB, forensique
+       (dc3dd, ewf-tools, afflib-tools), analyses (exiftool, ffmpeg,
+       p7zip-full, zstd, binwalk, pv), réparation partitions (gdisk,
+       growpart, parted), Python (tkinter, reportlab, cairosvg), konsole,
+       kdialog/zenity, imagemagick/feh (papier peint lsblk)
+     - Symlink /usr/local/bin/vigil, sudoers NOPASSWD, màj ClamAV
+     - RDP (xrdp) : demandé interactivement (pas activé par défaut)
+     - Raccourci bureau /usr/share/applications/vigil.desktop (item 6)
+     - Emplacements Dolphin /investigation /stockage /rapports (item 4)
+     - Listes USB vides (data/usb/whitelist.txt, blacklist.txt)
+
+2. Enlever les actions sur les bords de l'écran :
+	Paramètres > Souris & pavé tactile > Bords de l'écran > Mettre 'aucune action' sur tous les bords de l'écran
+	(Manuel — non automatisable de façon fiable, dépend de la version Plasma)
+
+3. Désactiver la gestion des périphériques USB depuis KDE ( pop-up ) : 
+	Aller sur la barre des tâches, et cliquer droit sur la flèche des icônes cachées > Configurer > Entrées > Mettre "Disques et Périphériques" en "Désactivé"
+	(Manuel — non automatisable de façon fiable, dépend du layout du panel Plasma)
+
+4. Ajouter les dossiers suivants aux "Emplacements" de Dolphin : 
+	/investigation
+	/stockage
+	/rapports
+	(AUTOMATISÉ par le script de post-install)
+
+5. Mettre la barre des tâches en bas : 
+	Clic droit sur la barre des tâches > Afficher la configuration du panneau > Position > Définir une position > Cliquer sur la flèche du bas
+	(Manuel — non automatisable de façon fiable, figer dans l'image disque préconfigurée)
+
+6. Créer le fichier raccourci pour KDE vers le main_gui : 
+	(AUTOMATISÉ par le script de post-install — /usr/share/applications/vigil.desktop + update-desktop-database)
+
+7. (Optionnel) Activer l'accès RDP si usage à distance :
+	Le script de post-install demande interactivement si on active xrdp (port 3389/tcp).
+	Répondre "o" pour un serveur forensique accédé à distance, "n" pour une station locale.

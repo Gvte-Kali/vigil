@@ -1,0 +1,349 @@
+================================================================================
+VIGIL — RESTE À FAIRE
+================================================================================
+
+Déjà livré (retiré de ce fichier) : recensement SQLite + dédoublonnage +
+checksafe (vigil_census.sh), projet obligatoire sauf antivirus, chaîne de
+custody unifiée, orchestrateur vigil_scan_all.sh, export du projet
+(vigil_export_project.sh), scan ClamAV natif (--scan-archive=yes explicite,
+--alert-encrypted, plafond 2047M, PDF consolidé).
+
+Convention : [ ] à faire / [x] fait. Numérotation = ordre suggéré d'exécution.
+
+RÈGLES À RESPECTER (inchangées, pour tout nouvel axe) :
+1. Triangle des zones : /investigation (RO, jamais écrit) — /stockage (RW,
+   fichiers de travail/récupération) — /opt/vigil/rapports (sortie PDF).
+   Toute récupération/carving écrit dans /stockage, pas sur le support.
+2. Chaîne de custody : chaque nouvelle analyse logge via le mécanisme
+   existant (active_user obligatoire, active_project obligatoire sauf
+   antivirus, chain_of_custody.log + actions.log via log_action()).
+3. Rapport PDF : réutiliser scripts/pdf/vigil_pdf.py comme les autres
+   analyses (stats avant la liste, SHA-256 par fichier, chemins conservant
+   la racine de partition).
+4. Orchestrateur : les nouvelles analyses de fichiers PRÉSENTS (lecture
+   seule) s'ajoutent à vigil_scan_all.sh. Le carving / undelete est une
+   action distincte (écriture) — JAMAIS dans l'orchestrateur de scans.
+5. Chaque module = nouveau script dans scripts/analyse/ + entrée GUI
+   (vigil_tools_gui.py, SCRIPTS + tag device si spécifique) + doc
+   (docs/analyse-forensique/<module>.md + entrée README de la catégorie).
+
+================================================================================
+AXE 0 — DÉCISIONS EN SUSPENS « RECHERCHE DE MENACES » (PRIORITÉ MAXIMALE)
+================================================================================
+Contexte : phase 4 livrée (recensement + audit ext/MIME + binwalk ciblé +
+ClamAV + PDF consolidé via vigil_malware_hunt.sh). Trois décisions restent à
+trancher avant de continuer sur ces axes.
+
+--- 0.1. Recensement automatique après montage simple
+[ ] Décider puis implémenter : lancer vigil_census.sh automatiquement après
+    chaque montage d'un périphérique dans /investigation (via
+    vigil_usb_mount.sh), ou rester sur le recensement explicite uniquement
+    (recherche de menaces, GUI analyse).
+[ ] Si oui : purge des livrables précédents déjà en place, PDF census
+    généré ou pas selon le choix de l'opérateur.
+
+--- 0.2. Rebrancher les scripts d'analyse sur l'index census
+[ ] Décider puis implémenter : les scripts d'analyse (images, office,
+    audio, vidéos, archives, crypto, entropy, bigfiles, faces) lisent
+    l'index SQLite/TSV du recensement (via vigil_census_query.py) au lieu
+    de refaire leur propre find + file sur /investigation.
+[ ] Bénéfice : un seul passage file/hash sur le disque, résultats
+    cohérents entre rapports, gain de temps sur les gros volumes.
+[ ] Point d'attention : garder le comportement standalone (sans index) si
+    aucun recensement n'existe pour le projet courant.
+
+--- 0.3. Fichiers non identifiables / extension absente (cas Windows)
+[ ] Décider puis implémenter : actuellement seuls les octet-streams à forte
+    entropie et les mismatch ext/MIME sont audités. Les fichiers sans
+    extension ou au format non identifiable ne sont pas remontés.
+[ ] Pistes à évaluer : whitelist des extensions système Windows, détection
+    de contenu texte/unicode, traitement par entropie seule.
+
+================================================================================
+AXE 1 — PRESETS D'ANALYSE
+================================================================================
+
+Objectif : un preset = une sélection pré-enregistrée de scripts à exécuter
+ensemble. Corriger d'abord la logique de filtrage, puis les presets
+personnalisés, puis normaliser les noms AVANT d'ajouter les nouveaux modules
+(les modules des axes suivants hériteront du bon nommage).
+
+--- 1.1. Corriger la logique des filtres/presets Windows et XBOX 360
+[x] Le filtre GUI « Windows » doit afficher : scripts GÉNÉRIQUES (sans tag
+    device) + scripts taggés windows — livré (commit 03ec406).
+[x] Idem filtre « XBOX 360 » : génériques + taggés xbox360.
+[x] Conserver « Tout afficher » (tous) et « Générique » (sans tag) tels quels.
+
+--- 1.2. Presets personnalisés
+[x] Sauvegarde dans $VIGIL_BASE/data/presets.json
+    (format : {"nom_preset": ["analyse/script1.sh", ...]}) — livré
+    (commit c5a7162).
+[x] Interface GUI des presets (refondue en fenêtre dédiée en 1.4).
+[x] Sélection d'un preset = cocher automatiquement les analyses
+    correspondantes puis lancer le multi-scans avec ces scripts uniquement.
+[x] Pré-remplir presets système (non supprimables) : « Windows » = tous les
+    génériques + tous les taggés windows ; « XBOX 360 » = génériques + xbox360.
+
+--- 1.3. Normaliser les noms des scripts
+[x] Convention : vigil_<catégorie>_<action>.sh (ex : vigil_usb_history.sh,
+    vigil_ntfs_mft.sh, vigil_evtx.sh).
+[x] Appliquer à TOUS les scripts existants (renommer + mettre à jour tous
+    les appels : vigil_scan_all.sh, GUI SCRIPTS, docs) — livré (commit
+    24a0536) ; les docstrings Usage des scripts renommés utilisent $0,
+    rien à corriger.
+[ ] Vérifier que chaque script a une catégorie claire et un tag device
+    correct (windows / xbox360 / absent = générique) — à reprendre à
+    CHAQUE nouveau module des axes suivants.
+
+--- 1.4. Refonte ergonomique multi-scans : tableau + fenêtre presets
+[x] Section « Lancer plusieurs scans » : remplacer la liste de cases à
+    cocher par un tableau (Treeview) — colonnes ✓ / Analyse / Périphérique,
+    clic sur la ligne pour cocher/décocher, boutons Tout cocher / Tout
+    décocher, état persistant entre changements de filtre.
+[x] Corriger le bug d'application des presets : le combo était réinitialisé
+    avant lecture de la sélection (le 1er preset était toujours appliqué).
+[x] Presets dans une fenêtre dédiée « Gérer les presets… » : liste
+    (nom/type/nombre d'analyses), Appliquer, Supprimer, et création en
+    cochant les analyses un par un (tous filtres confondus) + nom.
+[x] Appliquer un preset bascule le filtre sur « Tout afficher » et coche
+    exactement ses analyses : la sélection lancée est toujours visible.
+[x] Custody : le nom du preset n'est journalisé que si la sélection
+    correspond encore au preset appliqué (décocher manuellement annule
+    la mention preset=).
+[x] Panneau « Paramètres des analyses cochées » sous le tableau :
+    reconstruit dynamiquement à chaque coche/décoche ; paramètres partagés
+    regroupés en une ligne ; dossiers avec bouton Parcourir ; les options
+    cochées sont passées aux scripts au lancement (--pdf exclu : le PDF
+    consolidé est déjà généré par le multi-scans).
+[x] Fenêtre presets agrandie (880x760, min 760x600) avec barre de
+    défilement verticale + molette (X11 Button-4/5 et MouseWheel) ; les
+    Treeview gardent leur défilement interne.
+
+================================================================================
+AXE 2 — MODULES FORENSIQUES PRIORITÉ 1 (fichiers présents, lecture seule)
+================================================================================
+
+Tous sur le patron Vigil : bannière, couleurs, final_pause, fail,
+dépendances, custody (log_action start/success/error), rapport PDF,
+options --pdf/--no-pdf. Sources = binaires scalpel (scalpel/bin/).
+L'ordre ci-dessous = ordre d'exécution suggéré.
+
+--- 2.0. Triage USB anti-Rubber Ducky (intégré au montage) — LIVRÉ[x] vigil_usb_mount.sh : baseline USB (périphériques débranchés,
+    validation Entrée) puis scan après branchement des périphériques à
+    analyser (validation Entrée + décompte 10 s avec barre).
+[x] Détection des périphériques apparus avec interface clavier HID
+    (bInterfaceClass=03, sous-classe 01) : affichés dans la liste des
+    périphériques comme NON MONTABLES, frappes bloquées (déliaison du
+    driver usbhid).
+[x] Whitelist de sécurité : un périphérique DÉJÀ VU à la baseline
+    (même port sysfs ou même n° de série) n'est JAMAIS traité comme
+    nouveau ni bloqué — le clavier/souris de travail restent
+    fonctionnels même s'ils sont restés branchés.
+[x] BLOCAGE PAR DÉFAUT de tout clavier HID non whitelisté apparu au
+    branchement (plus de confirmation interactive : les Entrées en
+    tampon pendant le décompte ne peuvent plus déclencher un mauvais
+    choix). Le clavier/souris de travail débranchés puis rebranchés
+    doivent être ajoutés à la whitelist via la GUI USB (ci-dessous)
+    pour rester fonctionnels.
+[x] Décompte d'attente noyau porté à 10 s avec barre de progression
+    ([####      ] N s) et purge du tampon clavier à chaque seconde
+    (les Entrées anticipées sont jetées, jamais réutilisées).
+[x] Whitelist/blacklist persistantes dans data/usb/whitelist.txt et
+    data/usb/blacklist.txt (une entrée VID:PID ou n° de série par
+    ligne) : un clavier whitelisté n'est jamais bloqué ; un
+    périphérique blacklisté est bloqué d'office (authorized=0,
+    non montable) et signalé dans le PDF de triage ; cas « seul
+    périphérique = blacklisté » → fin propre après le PDF.
+[x] GUI « Périphériques USB » (Accueil > Configuration) : inventaire
+    des périphériques USB connectés (port, fabricant/produit, VID:PID,
+    n° de série, interface clavier, statut), boutons
+    Whitelister/Blacklister, édition manuelle des deux listes.
+[x] Rapport PDF dédié (kind=usbhid) : descripteurs complets du
+    périphérique + alerte clavier + compteur/statut « protégés par
+    l'utilisateur », copié dans le dossier du projet.
+[x] Touche « r » à l'écran de sélection : rafraîchit la liste lsblk
+    (périphérique lent à se détecter), réaffiche la liste complète
+    (montables + HID non montables).
+
+--- 2.1. Historique USB Windows — vigil_usb_history.sh
+[ ] Sources : scalpel.usb + scalpel.usb.registry + scalpel.usb.setupapi +
+    scalpel.usb.vidpid (usb.ids pour VID/PID -> vendor/product).
+[ ] Sortie : rapport PDF tabulaire (date, périphérique, n° de série,
+    description, première/dernière connexion).
+[ ] Détection des ruches surnuméraires (conteneur/sauvegarde).
+[ ] Croiser avec vigil_evtx.sh (2.4) quand il existera : installation de
+    périphérique USB dans les journaux.
+
+--- 2.2. Frise chronologique + intégrité des dates — vigil_timeline.sh
+[ ] Sources : scalpel/bin/timeline + regtimeline.
+[ ] Histogramme mtime/ctime par période (PDF : graphique + tableau).
+[ ] Alerte dates postérieures à aujourd'hui (indicateur d'altération) :
+    liste des fichiers concernés dans une section dédiée du rapport.
+[ ] Consommer l'export TSV du recensement (vigil_census.sh) si présent pour
+    éviter un double parcours du support.
+
+--- 2.3. Registre Windows — vigil_registry.sh
+[ ] Sources : regdump/regdump.utc + reg_value + scalpel.registry.flush.
+[ ] Dump / lecture des ruches (SYSTEM, SOFTWARE, SAM, NTUSER.DAT) présentes
+    dans l'arborescence scannée.
+[ ] Extraction ciblée : USBSTOR, MountedDevices, Run/RunOnce, Shutdown,
+    récents (UserAssist si exploitable).
+[ ] Socle des autres modules (USB history, timeline registre) : livrer
+    AVANT 2.1/2.2 ou en parallèle (les scripts s'appuient sur regdump).
+
+--- 2.4. Journaux d'événements evtx — vigil_evtx.sh
+[ ] Sources : evtxfiles + evtx2tsv + scalpel.evtx.system.onoff +
+    scalpel.evtx.bits.download.
+[ ] Inventaire des .evtx présents + export TSV (evtx2tsv).
+[ ] Boot / arrêt (on/off) : tableau des démarrages/extinctions.
+[ ] Installation de périphériques USB (croisement 2.1).
+[ ] Téléchargements BITS (croisement 3.2 navigateurs si pertinent).
+
+--- 2.5. MFT NTFS — vigil_ntfs_mft.sh
+[ ] Source : scalpel.ntfs.mft (+ mftdump/mftparse si embarqués).
+[ ] Entrées MFT : fichiers présents ET supprimés, timestamps, chemins.
+[ ] Rapport PDF : stats (entrées, fichiers supprimés) + liste.
+[ ] Complément du carving (AXE 4) : les fichiers supprimés listés ici
+    orientent la récupération.
+
+--- 2.6. Journal USN — vigil_ntfs_usn.sh
+[ ] Source : scalpel.ntfs.usn (+ usnjls).
+[ ] Historique des modifications du volume (création/suppression/renommage).
+[ ] Preuve d'activité : rapport PDF tabulaire chronologique.
+
+--- 2.7. Raccourcis .lnk — vigil_lnk.sh
+[ ] Sources : lnkfiles + lnkinfo.
+[ ] Prouvent l'existence de fichiers/dossiers même supprimés : rapport
+    ciblé très probant (chemin cible, dates, volume, n° de série).
+
+--- 2.8. Thumbs.db / thumbcache — vigil_thumbs.sh
+[ ] Source : thumbs.
+[ ] Preuve d'existence d'images supprimées : extraire les vignettes,
+    rapport PDF avec vignettes incluses + option --copy-to vers /stockage.
+
+--- 2.9. Exécutables PE — vigil_pe.sh
+[ ] Sources : pefiles + pecheck.
+[ ] Métadonnées des .exe (compagnie, version, checksum, import/export) :
+    identification logiciels, détection d'exécutables suspects.
+
+--- 2.10. Clé produit Windows / BOOTSTAT — vigil_productkey.sh
+[ ] Sources : scalpel.productkey + bootstat.
+[ ] Clé produit Windows (MSDM ACPI), BOOTSTAT.DAT : identification de la
+    machine, arrêts/démarrages anormaux.
+
+================================================================================
+AXE 3 — MODULES FORENSIQUES PRIORITÉ 2
+================================================================================
+
+--- 3.1. Multi-hash + vérification ISO Windows — vigil_hashes.sh
+[ ] Sources : hashs + sha4db + hashwiniso.
+[ ] xxh64/md5/sha1/sha256 en parallèle pour croiser les bases externes
+    (NSRL-like fournies par les autorités, cf. checksafe).
+
+--- 3.2. Navigateurs / credentials — vigil_browsers.sh
+[ ] Sources : scalpel.browser.chromium / scalpel.browser.edge / ffpwd /
+    scalpel.activities.cacheparser.
+[ ] SENSIBLE : activation explicite par l'opérateur, cadré dans la custody
+    (log_action dédié « extraction credentials »).
+[ ] Historique, téléchargements, cookies/caches ; credentials Firefox
+    (ffpwd) et Chromium/Edge (login data SQLite).
+
+--- 3.3. Bases de données — vigil_databases.sh
+[ ] Source : databases (export sqlite .dump.sql + esedbexport).
+[ ] Détection des fichiers SQLite / ESEDB présents + export lisible.
+
+--- 3.4. Détection d'encodage — vigil_encoding.sh
+[ ] Sources : detect / 2utf8.
+[ ] Identifier les fichiers non-UTF8, proposer conversion vers /stockage
+    (--copy-to), jamais sur le support.
+
+--- 3.5. Indexation plein texte — vigil_index.sh (à évaluer)
+[ ] Sources : wordset + wordget, xapian/omega + quest.
+[ ] Dépendances lourdes (xapian/omega) : évaluer l'apport vs coût avant
+    d'implémenter.
+
+================================================================================
+AXE 4 — RÉCUPÉRATION DE FICHIERS SUPPRIMÉS (carving — action ÉCRITURE)
+================================================================================
+
+Action DISTINCTE des scans lecture seule : jamais dans vigil_scan_all.sh.
+Écrit TOUJOURS dans /stockage ou un dossier choisi via la GUI, jamais dans
+/investigation.
+
+--- 4.1. Identification des fichiers supprimés
+[ ] Sources : MFT (AXE 2.5) + USN (AXE 2.6) pour identifier CE qui a
+    été supprimé avant toute récupération (rapport ciblé).
+[ ] gforemost / gphotorec : carving sur le support monté RO (lecture des
+    blocs libres ; écriture des fichiers récupérés vers la destination).
+
+--- 4.2. Récupération guidée
+[ ] Sources : gforemost / gphotorec / ntfsundel.
+[ ] Destination du dossier de récupération choisie via la GUI
+    (filedialog, défaut /stockage/<projet>/recuperation/).
+[ ] Jamais de réécriture sur le support : vérifier que la destination est
+    hors /investigation avant de lancer (fail si dedans).
+[ ] Custody renforcée : log_action par fichier récupéré (source approx,
+    chemin de destination, SHA-256 du fichier récupéré).
+[ ] Rapport PDF : liste des fichiers récupérés + stats par type + hash
+    SHA-256 (le dossier de récupération devient un livrable forensique).
+
+================================================================================
+AXE 5 — MODULES SPÉCIFIQUES / NICHE (activation explicite)
+================================================================================
+
+--- 5.1. Xbox 360 — vigil_xbox360.sh
+[ ] Sources : isXbx306Hd / mount.xtaf / xbox360.
+[ ] Le filtre Xbox 360 existe déjà en GUI mais le montage XTAF n'est PAS
+    implémenté : monter un disque Xbox 360 (XTAF) en lecture seule et
+    extraire les fichiers intéressants en un seul script.
+[ ] Tag device xbox360 dans la GUI (preset AXE 1.2).
+
+--- 5.2. Mode « Smartphone » (MTP/Android) — logique à définir
+[ ] Sources : scan / mtp / jmtpfs / adbackup / adbscan.
+[ ] ATTENTION : MTP fait des allers-retours (pas de lecture seule fiable)
+    -> mode « acquisition » : copie intégrale vers /stockage PUIS analyse
+    de la copie (jamais d'analyse live du téléphone).
+[ ] Protection d'écriture maximale : montage en lecture seule quand le
+    protocole le permet, refuser sinon (explain à l'opérateur).
+[ ] Android : adbackup + adbscan couplés à la branche MTP (adb).
+
+--- 5.3. Capture de session (option de custody visuelle)
+[ ] Sources : snapshot (écran) + record (vidéo ffmpeg).
+[ ] Renforce la chaîne de custody visuelle : activation explicite par
+    l'opérateur depuis la GUI.
+
+================================================================================
+AXE 6 — DÉPENDANCES & POST-INSTALL (à tenir à jour À CHAQUE module livré)
+================================================================================
+
+[ ] scripts/post-install/requirements.txt : ajouter les outils requis par
+    chaque nouveau module au fur et à mesure (sleuthkit déjà présent pour
+    MFT/USN ; duff pour dédoublonnage ; ewfimager déjà couvert par
+    ewf-tools ; etc.). Vérifier : pspg, pv, xxd/xxh64sum, evtx2tsv,
+    esedbexport (libesedb), jmtpfs (déjà), libewf, reglookup.
+[ ] scripts/post-install/post_install_vigil.sh : intégrer l'installation
+    des nouveaux outils + copie des nouveaux scripts dans /opt/vigil/scripts/.
+[ ] Vérifier la disponibilité des binaires embarqués de scalpel (regdump,
+    lnkinfo, pecheck, eseparser, q, scalpel.usb*, mftdump, usnjls, etc.) —
+    prévoir installation via paquet ou réimplémentation légère si non
+    packagés.
+[ ] À CHAQUE module livré (AXE 2/3/4/5) : mettre à jour requirements.txt +
+    post_install + le tester sur installation fraîche.
+
+================================================================================
+ORDRE DE TRAVAIL SUGGÉRÉ
+================================================================================
+
+0. AXE 0 (décisions en suspens « recherche de menaces ») — PRIORITÉ
+   MAXIMALE : à trancher juste après la validation des tests phase 4.
+1. AXE 1 (presets + normalisation des noms) — à faire EN PREMIER pour que
+   les modules suivants héritent du bon nommage et des bons presets.
+2. AXE 2 (modules priorité 1 : registre → USB → timeline → evtx → MFT →
+   USN → lnk → thumbs → PE → productkey) — valeur probatoire immédiate.
+3. AXE 4.1 (identification des supprimés via MFT/USN déjà livrés en AXE 2)
+   puis AXE 4.2 (carving guidé) — s'appuie sur 2.5/2.6.
+4. AXE 3 (priorité 2 : hashes, navigateurs, bases de données, encodage).
+5. AXE 5 (niche : Xbox, smartphone, capture) — selon besoin.
+6. AXE 6 en continu : post-install mis à jour à chaque module livré.
+
+================================================================================

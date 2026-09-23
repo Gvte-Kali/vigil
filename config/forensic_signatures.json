@@ -1,0 +1,95 @@
+{
+  "_commentaire": "Base de signatures forensiques locales, verifiees par contenu sur les fichiers cibles de l'audit (vigil_format_audit.py). Chaque signature : motif en hex a rechercher dans les premiers octets du fichier. Elle complete ClamAV pour identifier le contenu reel d'un fichier dont l'extension ment (executable renomme, archive renommee...) independamment du nom de fichier.",
+  "signatures": [
+    {
+      "nom": "Executable Windows (PE/COFF)",
+      "description": "En-tete MZ d'un executable Windows",
+      "hex": "4d5a",
+      "offset_max": 0
+    },
+    {
+      "nom": "Archive ZIP / Office Open XML",
+      "description": "En-tete PK d'une archive ZIP (ou docx/xlsx renomme)",
+      "hex": "504b0304",
+      "offset_max": 0
+    },
+    {
+      "nom": "Archive 7-Zip",
+      "description": "En-tete 7z d'une archive 7-Zip",
+      "hex": "377abcaf271c",
+      "offset_max": 0
+    },
+    {
+      "nom": "Archive RAR",
+      "description": "En-tete RAR d'une archive RAR",
+      "hex": "526172211a07",
+      "offset_max": 0
+    },
+    {
+      "nom": "Donnees gzip",
+      "description": "En-tete gzip de donnees compressees",
+      "hex": "1f8b",
+      "offset_max": 0
+    },
+    {
+      "nom": "Document PDF",
+      "description": "En-tete PDF d'un document PDF",
+      "hex": "25504446",
+      "offset_max": 0
+    },
+    {
+      "nom": "Image JPEG",
+      "description": "En-tete JPEG",
+      "hex": "ffd8ff",
+      "offset_max": 0
+    },
+    {
+      "nom": "Image PNG",
+      "description": "En-tete PNG",
+      "hex": "89504e47",
+      "offset_max": 0
+    },
+    {
+      "nom": "Journal d'evenements Windows (EVTX)",
+      "description": "En-tete ElfFile d'un journal d'evenements Windows",
+      "hex": "456c6646696c65",
+      "offset_max": 0
+    },
+    {
+      "nom": "Base SQLite",
+      "description": "En-tete SQLite (SQLite format 3)",
+      "hex": "53514c69746520666f726d61742033",
+      "offset_max": 0
+    },
+    {
+      "nom": "Compresse LZMA seul",
+      "description": "Proprietes LZMA (donnees compressees sans conteneur)",
+      "hex": "5d0000",
+      "offset_max": 0
+    },
+    {
+      "nom": "Raccourci Windows (LNK)",
+      "description": "En-tete LNK d'un raccourci Windows",
+      "hex": "4c0000000114020000000000c0",
+      "offset_max": 0
+    },
+    {
+      "nom": "Document Office legacy (OLE2/CFBF)",
+      "description": "En-tete OLE2 d'un document doc/xls/ppt",
+      "hex": "d0cf11e0a1b11ae1",
+      "offset_max": 0
+    },
+    {
+      "nom": "Export registre Windows (REGEDIT4)",
+      "description": "En-tete REGEDIT4 d'une exportation de base de registre",
+      "hex": "524547454449543434",
+      "offset_max": 0
+    },
+    {
+      "nom": "Executable Linux (ELF)",
+      "description": "En-tete ELF d'un binaire Linux",
+      "hex": "7f454c46",
+      "offset_max": 0
+    }
+  ]
+}
