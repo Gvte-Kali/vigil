@@ -9,6 +9,10 @@ url: ""
 
 color_scheme: dark
 
+# Icône Vigil (onglet navigateur / favoris) — docs/favicon.ico,
+# servi comme /favicon.ico quand la source GitHub Pages est /docs.
+favicon_ico: "/favicon.ico"
+
 search_enabled: true
 search:
   heading_level: 3
