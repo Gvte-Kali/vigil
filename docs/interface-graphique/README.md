@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "🖥️ Interface graphique"
+title: "Interface"
 nav_order: 10
 has_children: True
 ---

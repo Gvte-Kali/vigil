@@ -1,6 +1,6 @@
 ---
 layout: default
-parent: "🖥️ Interface graphique"
+parent: "Interface"
 nav_order: 101
 ---
 

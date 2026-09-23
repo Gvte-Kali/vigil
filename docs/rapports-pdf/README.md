@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "📄 Rapports PDF"
+title: "Rapports"
 nav_order: 50
 has_children: True
 ---

@@ -1,6 +1,6 @@
 ---
 layout: default
-parent: "🔍 Analyse forensique"
+parent: "Analyse"
 nav_order: 205
 ---
 

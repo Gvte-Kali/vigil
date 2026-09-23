@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "📦 Installation"
+title: "Installation"
 nav_order: 70
 has_children: True
 ---

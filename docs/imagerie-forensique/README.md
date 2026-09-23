@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "💾 Imagerie forensique"
+title: "Imagerie"
 nav_order: 30
 has_children: True
 ---

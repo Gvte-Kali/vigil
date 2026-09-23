@@ -1,0 +1,4 @@
+// Surcharge des variables du thème (importée avant l'émission CSS) :
+// contenu plus large que les 50rem par défaut, qui laissaient une grande
+// partie de la page inutilisée sur écran large.
+$content-width: 60rem;

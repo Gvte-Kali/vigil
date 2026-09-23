@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "📁 Stockage"
+title: "Stockage"
 nav_order: 40
 has_children: True
 ---

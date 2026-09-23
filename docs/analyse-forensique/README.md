@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "🔍 Analyse forensique"
+title: "Analyse"
 nav_order: 20
 has_children: True
 ---

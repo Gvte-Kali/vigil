@@ -1,6 +1,6 @@
 ---
 layout: default
-parent: "💾 Imagerie forensique"
+parent: "Imagerie"
 nav_order: 301
 ---
 

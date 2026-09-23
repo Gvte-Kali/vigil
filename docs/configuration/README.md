@@ -1,6 +1,6 @@
 ---
 layout: default
-title: "⚙️ Configuration"
+title: "Configuration"
 nav_order: 60
 has_children: True
 ---
