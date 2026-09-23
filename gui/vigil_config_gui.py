@@ -29,7 +29,6 @@ from vigil_gui_base import (
     CategoryButton,
     ActionButton,
     LabeledField,
-    LabeledCombo,
     styled_tree,
     header_title,
     COLOR_BG,
@@ -57,7 +56,7 @@ def user_dialog(parent, user_name=None, on_saved=None):
     dialog = tk.Toplevel(parent)
     dialog.title("Nouvel utilisateur" if not user_name else "Modifier l'utilisateur")
     dialog.configure(bg=COLOR_BG)
-    fit_geometry(dialog, 460, 300)
+    fit_geometry(dialog, 460, 240)
     dialog.transient(parent)
     dialog.grab_set()
 
@@ -69,10 +68,6 @@ def user_dialog(parent, user_name=None, on_saved=None):
                               readonly=bool(user_name))
     name_field.pack(fill=tk.X, pady=(0, WIDGET_PAD))
 
-    role_combo = LabeledCombo(frame, "Rôle", values=["admin", "analyst", "expert", "guest"])
-    role_combo.var.set(existing.get("role", "analyst"))
-    role_combo.pack(fill=tk.X, pady=(0, WIDGET_PAD))
-
     def save():
         name = name_field.var.get().strip()
         if not name:
@@ -82,16 +77,10 @@ def user_dialog(parent, user_name=None, on_saved=None):
         if not user_name and name in users:
             messagebox.showerror("Erreur", "Cet utilisateur existe déjà.")
             return
-        role = role_combo.var.get()
         data = {
             "name": name,
-            "role": role,
+            "role": "analyst",
             "created_at": existing.get("created_at", datetime.now().isoformat()),
-            "permissions": {
-                "can_mount": True,
-                "can_scan": True,
-                "can_export": role in ("admin", "expert"),
-            },
         }
         vigil_data.save_user(name, data)
         messagebox.showinfo("Succès", "Utilisateur enregistré.")
@@ -123,7 +112,7 @@ def show_users_view():
 
     tree = styled_tree(
         tree_frame,
-        [("name", "Nom", 260), ("role", "Rôle", 180), ("created", "Créé le", 220)],
+        [("name", "Nom", 320), ("created", "Créé le", 220)],
     )
     tree.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
 
@@ -131,8 +120,7 @@ def show_users_view():
         for item in tree.get_children():
             tree.delete(item)
         for name, data in vigil_data.load_users().items():
-            tree.insert("", "end", values=(name, data.get("role", ""),
-                                           data.get("created_at", "")))
+            tree.insert("", "end", values=(name, data.get("created_at", "")))
 
     refresh()
 

@@ -52,18 +52,12 @@ Liste des profils créés, avec boutons **Ajouter** / **Modifier** /
 
 | Champ | Détail |
 |---|---|
-| Nom * | Oblligatoire, unique (création) ; non modifiable ensuite |
-| Rôle | `admin`, `analyst` (défaut), `expert`, `guest` |
+| Nom * | Obligatoire, unique (création) ; non modifiable ensuite |
 
-Les **permissions** sont déduites du rôle et stockées dans le profil
-(`data/users/<nom>/profile.json`) :
-
-| Rôle | can_mount | can_scan | can_export |
-|---|---|---|---|
-| admin | ✅ | ✅ | ✅ |
-| expert | ✅ | ✅ | ✅ |
-| analyst | ✅ | ✅ | ❌ |
-| guest | ✅ | ✅ | ❌ |
+Tous les utilisateurs sont enregistrés avec le rôle fixe `analyst` — Vigil ne
+gère **pas de permissions** par utilisateur. Le profil
+(`data/users/<nom>/profile.json`) contient le nom, le rôle (`analyst`)
+et la date de création.
 
 L'utilisateur actif (`data/active_user`) est utilisé par tous les scripts
 pour la chaîne de custody — c'est lui qui apparaît dans les rapports.
@@ -78,8 +72,7 @@ pour la chaîne de custody — c'est lui qui apparaît dans les rapports.
     └─ choix du logo (preview)
     └─ [Enregistrer]
     └─ [Utilisateurs]
-         └─ [Ajouter] → nom + rôle (admin/analyst/expert/guest)
-         └─ permissions déduites du rôle
+         └─ [Ajouter] → nom (rôle analyst attribué automatiquement)
          └─ l'utilisateur apparaît dans la barre de sélection des pages
             d'analyse (obligatoire pour la custody)
 ```
