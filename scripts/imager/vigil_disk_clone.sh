@@ -1,6 +1,8 @@
 #!/bin/bash
 set -uo pipefail
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # --- Clonage bit-a-bit d'un disque vers un autre peripherique ---
 #
 # Copie le contenu integral d'un disque source vers un disque cible, secteur

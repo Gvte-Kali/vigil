@@ -1,6 +1,8 @@
 #!/bin/bash
 set -uo pipefail
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # --- Couleurs ---
 RED='\e[91m'
 GREEN='\e[92m'

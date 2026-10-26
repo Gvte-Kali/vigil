@@ -1,6 +1,8 @@
 #!/bin/bash
 set -uo pipefail
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # --- Mise a jour des bases virales ClamAV depuis un peripherique USB ---
 #
 # Pour les postes isoles (hors reseau) : on recupere les fichiers de bases
