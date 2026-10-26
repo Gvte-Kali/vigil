@@ -106,10 +106,10 @@ cat > /tmp/vigil-sudoers << 'SUDOERS_EOF'
 # Vigil : permet aux scripts de monter/demonter des peripheriques USB et de
 # lancer clamscan/freshclam sans mot de passe. Limite aux commandes utilisees
 # par /opt/vigil/scripts/.
-Cmnd_Alias VIGIL_MOUNT = /bin/mount, /bin/umount, /sbin/blkid, /sbin/blockdev, /sbin/findmnt, /usr/bin/eject
-Cmnd_Alias VIGIL_FS = /bin/mkdir, /bin/rmdir, /bin/rm, /bin/chmod, /bin/chown, /usr/bin/install
+Cmnd_Alias VIGIL_MOUNT = /bin/mount, /bin/umount, /sbin/blkid, /sbin/blockdev, /sbin/findmnt, /usr/bin/eject, /usr/bin/mount, /usr/bin/umount, /usr/sbin/blkid, /usr/sbin/blockdev, /usr/sbin/findmnt
+Cmnd_Alias VIGIL_FS = /bin/mkdir, /bin/rmdir, /bin/rm, /bin/chmod, /bin/chown, /usr/bin/install, /usr/bin/mkdir, /usr/bin/rmdir, /usr/bin/rm, /usr/bin/chmod, /usr/bin/chown
 Cmnd_Alias VIGIL_CLAM = /usr/bin/clamscan, /usr/bin/freshclam, /usr/bin/clamconf
-Cmnd_Alias VIGIL_SYSTEMCTL = /bin/systemctl stop clamav-freshclam, /bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl start clamav-freshclam
+Cmnd_Alias VIGIL_SYSTEMCTL = /bin/systemctl stop clamav-freshclam, /bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl start clamav-freshclam, /usr/sbin/systemctl stop clamav-freshclam, /usr/sbin/systemctl start clamav-freshclam
 Cmnd_Alias VIGIL_LOG = /usr/bin/tee
 Cmnd_Alias VIGIL_UDEV = /usr/bin/udevadm, /bin/udevadm
 Cmnd_Alias VIGIL_MTP = /usr/bin/jmtpfs, /usr/bin/ldmtool

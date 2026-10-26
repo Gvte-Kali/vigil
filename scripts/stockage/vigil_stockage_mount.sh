@@ -1,6 +1,8 @@
 #!/bin/bash
 set -uo pipefail
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # --- Montage d'un peripherique de stockage dans /stockage (lecture/ecriture) ---
 #
 # Ce script monte un peripherique USB/Disque selectionne dans /stockage. Comme

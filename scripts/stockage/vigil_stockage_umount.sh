@@ -1,6 +1,8 @@
 #!/bin/bash
 set -uo pipefail
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
 # --- Demontage des peripheriques de stockage montes dans /stockage ---
 
 # --- Couleurs ---
