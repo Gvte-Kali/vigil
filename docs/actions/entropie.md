@@ -1,54 +1,36 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Entropie"
+parent: Analyse
+title: Entropie
 nav_order: 272
+grand_parent: Actions
 ---
 
-# 🎲 Forte entropie — `vigil_entropy.sh`
+# Forte entropie
 
-> `scripts/analyse/vigil_entropy.sh` détecte les fichiers à **forte
-> entropie** : contenu hautement aléatoire (chiffré, compressé, blob binaire),
-> non identifié par son type MIME.
+Repérer les fichiers `application/octet-stream` peu compressibles avec `zstd` et relever leur alignement sur 512 octets.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-Le script sélectionne les fichiers de type `application/octet-stream` (non
-identifiés par `file`) de taille ≥ 4 Mo, calcule leur **entropie** via le taux
-de compression `zstd` (un ratio > 98 % signale une entropie élevée), vérifie
-l'**alignement sur secteur** (taille multiple de 512 — indicateur d'image
-disque brute), calcule le **SHA-256** et génère un rapport PDF.
+Script : `scripts/analyse/vigil_entropy.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier les fichiers à forte entropie vers `DIR` |
-| `--min-size N` | taille minimale en Mo (défaut : 4) |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
+| `--min-size N` | Taille minimale en **octets** (défaut : `4194304`, soit 4 Mio) |
+| `--threshold N` | Seuil du ratio de compression, en centièmes de pourcent (défaut : `9800`, soit 98 %) |
 
-## 🔄 Déroulement
+## Résultat
 
-1. Bannière, **sélection** des candidats (`octet-stream`, ≥ `--min-size` Mo).
-2. **Calcul d'entropie** via `zstd` (ratio compression).
-3. **Vérification** de l'alignement secteur (`taille % 512 == 0`).
-4. **SHA-256** de chaque fichier retenu.
-5. **Copie** optionnelle vers un dossier.
-6. **Rapport PDF** (statistiques **avant** la liste des fichiers).
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-## 🔍 Pertinence forensique
+Ce test estime la compressibilité ; il ne démontre pas un chiffrement. Sans `zstd`, le calcul est désactivé. Attention : l’unité de `--min-size` diffère de celle de l’analyse des fichiers volumineux.
 
-- Une forte entropie signale souvent des **données chiffrées** ou des **images
-  disque brutes** non déclarées comme telles.
-- L'alignement sur secteur est un **indicateur forensique** (image disque,
-  secteur, partition cachée).
-- Si `zstd` est absent, le calcul d'entropie est désactivé.
-
-## 🔗 Voir aussi
-
-- [Fichiers volumineux](volumineux.md)
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

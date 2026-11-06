@@ -1,160 +1,45 @@
 ---
 layout: default
-title: "Analyse"
-parent: "Actions"
+title: Analyse
+parent: Actions
 nav_order: 22
-has_children: True
+has_children: true
 ---
 
-# 🔍 Analyse forensique
+# Analyser un support
 
-> Une fois un périphérique monté **en lecture seule** dans `/investigation`,
-> Vigil peut lancer une série d'**analyses de fichiers**. Chaque analyse est un
-> script Bash indépendant, lançable seul ou via l'**orchestrateur de scans**.
+Examiner les fichiers d’un support monté dans `/investigation` et rattacher les résultats à un projet.
 
----
+## Prérequis
 
-## 📖 En résumé
+- Un utilisateur et un projet créés dans la configuration.
+- Un support à examiner et de l’espace pour les résultats.
+- Konsole disponible pour les scripts interactifs.
 
-1. On **monte** le périphérique en lecture seule (`vigil_usb_mount.sh`).
-2. On **lance** une ou plusieurs analyses (images, vidéos, audio, bureautique,
-   archives, fichiers verrouillés, forte entropie, fichiers volumineux, antivirus).
-3. Chaque analyse **détecte** les fichiers concernés, calcule leur **SHA-256**,
-   agrège des **statistiques**, et génère un **rapport PDF** normalisé.
-4. On **démonte** le périphérique (`vigil_usb_umount.sh`).
+## Procédure
 
-Les rapports sont rangés dans `/opt/vigil/rapports/`. Les chemins affichés dans
-les rapports conservent le **dossier racine de la partition** (nom de partition),
-indicateur pertinent pour une enquête.
+1. Ouvrir **Analyser un périphérique**, puis sélectionner l’utilisateur et le projet.
+2. Cliquer sur **Monter** et suivre le [montage en lecture seule](montage-lecture-seule.md).
+3. Choisir le type de périphérique pour filtrer les outils disponibles.
+4. Lancer le [recensement](recensement.md), puis les analyses utiles, seules ou en multi-scan.
+5. Consulter les PDF dans `/opt/vigil/rapports/` et les données du projet dans `data/projects/<projet>/`.
+6. [Démonter](demontage.md) le support, puis [exporter](export.md) le projet.
 
----
+## Choisir une analyse
 
-## 🗺️ Sommaire
+| Besoin | Outil |
+|---|---|
+| Inventaire, doublons, extensions trompeuses | [Recensement](recensement.md) |
+| Métadonnées et repérage de visages | [Images](images.md), [visages](visages.md) |
+| Durée et caractéristiques des médias | [Vidéos](videos.md), [audio](audio.md) |
+| Documents et conteneurs | [Bureautique](bureautique.md), [archives](archives.md) |
+| Protection ou contenu peu identifiable | [Fichiers chiffrés](crypto.md), [entropie](entropie.md) |
+| Fichiers de grande taille | [Fichiers volumineux](volumineux.md) |
+| Chaîne prédéfinie avec rapport unique | [Orchestrateur](orchestrateur.md) |
 
-### 📌 Montage / démontage
-- [Montage en lecture seule](montage-lecture-seule.md) — `vigil_usb_mount.sh`
-- [Démontage](demontage.md) — `vigil_usb_umount.sh`
+## Traçabilité
 
-### 🧪 Analyses de fichiers (script `scripts/analyse/`)
-- [Recensement des fichiers](recensement.md) — `vigil_census.sh`
-- [Images](images.md) — `vigil_images.sh`
-- [Vidéos](videos.md) — `vigil_videos.sh`
-- [Audio](audio.md) — `vigil_audio.sh`
-- [Bureautique](bureautique.md) — `vigil_office.sh`
-- [Archives](archives.md) — `vigil_archives.sh`
-- [Fichiers verrouillés (crypto)](crypto.md) — `vigil_crypto.sh`
-- [Forte entropie](entropie.md) — `vigil_entropy.sh`
-- [Fichiers volumineux](volumineux.md) — `vigil_bigfiles.sh`
-- [Détection des visages](visages.md) — `vigil_faces_detection.sh`
-
-### 🛡️ Antivirus (séparé — pas de custody, pas de projet)
-- [Antivirus ClamAV](antivirus.md) — `vigil_clamav_scan.sh` / `vigil_clamav_full_scan.sh`
-  (lancé depuis la page d'accueil, hors page d'analyse)
-
-### 🎼 Orchestrateur
-- [Scan complet](orchestrateur.md) — `vigil_scan_all.sh`
-
-### 📦 Export du projet
-- [Export du projet](export.md) — `vigil_export_project.sh` (hash SHA-256 + archive + hash de l'archive)
-
----
-
-## 📝 Projet obligatoire (chaine de custody)
-
-Toutes les analyses de fichiers **exigent un projet actif** : sans projet
-(ou projet `"(no-project)"`), le script s'arrête immédiatement avec un
-message d'erreur. Le projet porte la **chaîne de custody** : chaque action
-est journalisée dans `$PROJECTS_DIR/<projet>/chain_of_custody.log`.
-
-**Exception : le scan antivirus ClamAV** (`vigil_clamav_scan.sh`) reste
-lançable **sans projet**. Le scan AV n'étant pas une analyse forensique à
-custody, il n'écrit pas dans la chaîne de custody et range ses rapports
-dans `/opt/vigil/rapports/` (opérateur + entité seulement).
-
-**Exception : la recherche de menaces** (`vigil_malware_hunt.sh`) est
-également autonome : aucun projet requis ni modifié, tout son
-temporaire (index census via `--no-project`, JSON de collecte, journaux
-clamscan, triage USB) vit dans `hunt/` à la racine du dépôt, purgé
-à chaque chasse.
-
-Dans la GUI, la case « Pas de projet » a été retirée : le projet est
-obligatoire pour lancer une analyse de fichiers. Le scan antivirus est
-**totalement séparé** de la page d'analyse : il n'apparaît pas dans le
-catalogue des scripts ni dans le multi-scan. Depuis la page d'accueil
-(`vigil_main_gui.py`), l'action **« Recherche de menaces »** lance
-`vigil_malware_hunt.sh` (montage → recensement → audit → scan → démontage),
-autonome, sans custody et sans projet. L'utilisateur est choisi directement
-dans le script (liste des utilisateurs configurés, ou `--user NOM` en
-argument) : la GUI n'exige pas d'utilisateur actif.
-`vigil_clamav_full_scan.sh` (montage → scan → démontage) et
-`vigil_clamav_scan.sh` restent lançables en CLI, sans custody ni projet.
-
----
-
-## 🧩 Points communs à toutes les analyses
-
-- **Bannière ASCII** « VIGIL » affichée au démarrage, avec `clear`+bannière entre chaque étape.
-- **Détection** via `file` (type MIME) et, selon le script, `exiftool`, `ffprobe`, `7za`, `zstd`.
-- **SHA-256** de chaque fichier retenu (affiché à côté du chemin dans le rapport).
-- **Statistiques** présentées **avant** la liste des fichiers dans le PDF.
-- **Options** communes : `--pdf`/`--no-pdf` (rapport PDF), `--copy-to DIR` (copie des fichiers).
-- **Rapport PDF** généré via le [générateur commun](../rapports-pdf/README.md) (`scripts/pdf/vigil_pdf.py`).
-
-## 🖥️ Lancement depuis la GUI
-
-La page **« Analyse du périphérique USB »** (`vigil_tools_gui.py`) permet :
-
-- de **monter/démonter** un périphérique ;
-- de choisir le **type de périphérique** (Tout afficher / Générique / Windows / XBOX 360)
-  qui filtre dynamiquement les scripts disponibles ;
-- de lancer un script **individuellement** avec ses options (cases à cocher) ;
-- de **lancer plusieurs scans** (cases à cocher) en une fois.
-
-Voir [interface-graphique](../interface-graphique/README.md).
-
----
-
-## 🎬 Workflow type d'une analyse
-
-```text
-[Bouton GUI] Analyser un périphérique
-    └─ page « Analyse du périphérique USB » (vigil_tools_gui.py)
-         │
-         ├─ 1. Utilisateur + projet actifs requis
-         │     (chaîne de custody — voir « Projet obligatoire »)
-         │
-         ├─ 2. MONTAGE (bouton Monter)
-         │     └─ vigil_usb_mount.sh
-         │         ├─ triage USB anti-Rubber Ducky (baseline + 10 s)
-         │         ├─ sélection du périphérique (lsblk)
-         │         ├─ blockdev --setro (disque entier)
-         │         ├─ montage RO partition par partition
-         │         │   dans /investigation/<point>
-         │         └─ hash d'arbre SHA-256 → chain_of_custody.log
-         │
-         ├─ 3. ANALYSES (une ou plusieurs, cases à cocher)
-         │     ├─ vigil_census.sh        (recensement, index SQLite)
-         │     ├─ vigil_images.sh       (EXIF)
-         │     ├─ vigil_videos.sh       (ffprobe)
-         │     ├─ vigil_audio.sh        (ffprobe)
-         │     ├─ vigil_office.sh       (bureautique)
-         │     ├─ vigil_archives.sh     (7za)
-         │     ├─ vigil_crypto.sh       (archives chiffrées)
-         │     ├─ vigil_entropy.sh     (forte entropie)
-         │     ├─ vigil_bigfiles.sh     (fichiers volumineux)
-         │     ├─ vigil_faces_detection.sh (visages)
-         │     └─ ou vigil_scan_all.sh  (orchestrateur multi-scans)
-         │         └─ chaque script : détection → SHA-256 →
-         │            statistiques → rapport PDF normalisé
-         │
-         └─ 4. DÉMONTAGE (bouton Démonter)
-               └─ vigil_usb_umount.sh
-                   ├─ vérification d'intégrité (hash recalculé)
-                   ├─ démontage partition par partition
-                   ├─ remise du disque en lecture/écriture
-                   └─ suppression des points de montage
-```
-
-Chaque analyse est **indépendante** : on peut n'en lancer qu'une (ex.
-uniquement les images) ou toutes via l'orchestrateur. Les rapports PDF
-sont rangés dans `/opt/vigil/rapports/`.
+Les analyses ciblées exigent un projet actif et journalisent leurs actions dans
+`chain_of_custody.log`. Le recensement possède aussi un mode autonome technique.
+Le [scan ClamAV](antivirus.md) fonctionne sans projet ; la
+[recherche de menaces](menaces.md) utilise son propre journal.

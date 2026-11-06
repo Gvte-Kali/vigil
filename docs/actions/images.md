@@ -1,53 +1,36 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Images"
+parent: Analyse
+title: Images
 nav_order: 266
+grand_parent: Actions
 ---
 
-# 🖼️ Analyse des images — `vigil_images.sh`
+# Images
 
-> `scripts/analyse/vigil_images.sh` détecte et catalogue tous les
-> fichiers **image** (photos) du périphérique monté dans `/investigation/`.
+Repérer les images et extraire les métadonnées EXIF disponibles (date, appareil, coordonnées GPS) avec `exiftool`.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-Le script détecte les images via `file` (JPEG, PNG, GIF…), les classe par type
-MIME pour les statistiques, extrait les métadonnées **EXIF** si `exiftool` est
-disponible (date, appareil, GPS…), calcule le **SHA-256** de chaque image et
-génère un rapport PDF. Optionnellement, il peut **détecter les visages** et
-copier les images vers un dossier.
+Script : `scripts/analyse/vigil_images.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier toutes les images vers `DIR` |
-| `--faces` | activer la détection des visages après l'analyse |
-| `--copy-faces-to DIR` | copier les images contenant des visages vers `DIR` |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
+| `--faces` | Rechercher les visages après l’analyse |
+| `--copy-faces-to DIR` | Copier les images contenant des visages |
 
-## 🔄 Déroulement
+## Résultat
 
-1. Bannière, puis **détection** des fichiers image via `file`.
-2. **Classement** par type MIME → statistiques.
-3. **Extraction EXIF** via `exiftool` (si disponible).
-4. **SHA-256** de chaque image.
-5. **Détection des visages** (option `--faces`) → voir [visages.md](visages.md).
-6. **Copies** optionnelles vers les dossiers choisis.
-7. **Rapport PDF** (statistiques **avant** la liste des fichiers).
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-## 🔍 Pertinence forensique
+Les métadonnées peuvent être absentes ou modifiées. La [détection de visages](visages.md) repère des zones candidates ; elle n’identifie pas les personnes.
 
-- Les métadonnées EXIF (date de prise de vue, modèle d'appareil, coordonnées GPS)
-  sont des éléments de preuve fréquemment exploités.
-- La détection de visages peut identifier des personnes sur des photos.
-
-## 🔗 Voir aussi
-
-- [Détection des visages](visages.md)
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

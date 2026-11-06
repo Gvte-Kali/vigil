@@ -1,70 +1,45 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Orchestrateur"
+parent: Analyse
+title: Orchestrateur
 nav_order: 263
+grand_parent: Actions
 ---
 
-# 🎼 Orchestrateur de scans — `vigil_scan_all.sh`
+# Orchestrateur de scans
 
-> `scripts/vigil_scan_all.sh` lance **l'intégralité des analyses forensiques** en
-> une seule commande, dans un ordre fixe.
+`scripts/vigil_scan_all.sh` lance une chaîne prédéfinie sur les supports déjà montés
+dans `/investigation` et produit **un seul PDF consolidé**.
 
----
+## Prérequis et lancement
 
-## 📖 En résumé
+Sélectionner un utilisateur et un projet, puis monter le support avant de lancer :
 
-L'orchestrateur enchaîne toutes les analyses disponibles (recensement,
-antivirus, images, vidéos, audio, bureautique, archives, fichiers verrouillés,
-forte entropie, fichiers volumineux), chaque analyse générant son propre
-rapport PDF. Les scripts sont lancés de façon **indépendante** : l'échec
-d'une analyse n'interrompt pas les suivantes. Un **bilan global** est affiché
-à la fin.
+```bash
+bash /opt/vigil/scripts/vigil_scan_all.sh
+```
 
-La **chaîne de custody** est gérée par chaque script individuel (dans le
-dossier du projet), pas par l'orchestrateur. Les analyses de fichiers
-exigent un projet actif ; le scan antivirus (ClamAV) reste l'exception
-(sans custody, sans projet).
+Le script ne bloque pas lui-même l’absence de projet, mais les analyses ciblées
+l’exigent et échoueront sans ce contexte.
 
----
+## Ordre des analyses
 
-## 📋 Ordre des analyses
+Recensement → ClamAV → images → vidéos → audio → bureautique → archives →
+fichiers chiffrés → forte entropie → fichiers volumineux.
 
-1. **Recensement des fichiers** (`vigil_census.sh`) — inventorie tous les
-   fichiers et alimente la base SQLite du projet (exige un projet actif).
-2. Antivirus (ClamAV) — mode non-interactif (`--all --yes --comment ""`),
-   sans custody.
-3. Fichiers image
-4. Fichiers vidéo
-5. Fichiers audio
-6. Fichiers bureautiques
-7. Fichiers archives
-8. Fichiers verrouillés (crypto)
-9. Fichiers à forte entropie
-10. Fichiers volumineux
+Chaque analyse est indépendante : un échec n’interrompt pas les suivantes.
+Lire le bilan final et les sections en erreur dans le rapport.
 
-## ⚙️ Options
+## Options et résultats
 
 | Option | Effet |
 |---|---|
-| `--pdf` | forcer la génération des rapports PDF (défaut) |
-| `--no-pdf` | désactiver la génération des rapports PDF |
+| `--pdf` | Générer le PDF consolidé (défaut) |
+| `--no-pdf` | Ne pas générer le PDF consolidé |
 
-## 🔧 Prérequis
+Les résultats intermédiaires alimentent le générateur commun ; les PDF individuels
+sont désactivés. Le rapport final est écrit dans `/opt/vigil/rapports/` et copié
+dans le projet lorsque son dossier est accessible.
 
-- Un **utilisateur** actif doit être sélectionné (obligatoire).
-- Un **projet** est optionnel (`(no-project)` si aucun).
-- Le périphérique doit déjà être **monté** dans `/investigation/`.
-
-## 🛠️ Fonctionnement
-
-- Chaque analyse reçoit une **entrée vide** pour satisfaire son `read` final
-  sans bloquer la chaîne.
-- La sortie et le code retour de chaque script sont capturés.
-- Un **bilan** récapitule le nombre d'analyses lancées, réussies et en erreur.
-- Les rapports PDF (si activés) sont disponibles dans `/opt/vigil/rapports/`.
-
-## 🔗 Voir aussi
-
-- [Montage en lecture seule](montage-lecture-seule.md)
-- [Générateur PDF](../rapports-pdf/README.md)
+Le multi-scan de l’interface permet aussi de choisir un sous-ensemble d’outils.
+Voir [Analyse](analyse.md) et [Rapports PDF](../rapports-pdf/README.md).

@@ -1,50 +1,35 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Archives"
+parent: Analyse
+title: Archives
 nav_order: 270
+grand_parent: Actions
 ---
 
-# 🗄️ Analyse des archives — `vigil_archives.sh`
+# Archives
 
-> `scripts/analyse/vigil_archives.sh` détecte et catalogue les fichiers
-> **archives** (zip, 7z, rar, tar, gzip, xz, bzip2…) du périphérique monté dans
-> `/investigation/`.
+Recenser les archives, les classer par type et rechercher une protection par mot de passe lorsque les outils nécessaires sont disponibles.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-Le script détecte les archives via `file`, les classe par type MIME pour les
-statistiques, **vérifie si l'archive est protégée par mot de passe** (si les
-outils sont disponibles), calcule le **SHA-256** et génère un rapport PDF.
+Script : `scripts/analyse/vigil_archives.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier toutes les archives vers `DIR` |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
 
-## 🔄 Déroulement
 
-1. Bannière, **détection** des archives via `file`.
-2. **Classement** par type MIME → statistiques.
-3. **Vérification** de la protection par mot de passe (si outils dispo).
-4. **SHA-256** de chaque archive.
-5. **Copie** optionnelle vers un dossier.
-6. **Rapport PDF** (statistiques **avant** la liste des fichiers).
+## Résultat
 
-## 🔍 Pertinence forensique
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-- Les archives peuvent **masquer** des fichiers (mot de passe) ou contenir des
-  éléments effacés ailleurs sur le support.
-- Le statut « protégé par mot de passe » est un indicateur important pour la
-  suite de l'enquête (cf. [fichiers verrouillés](crypto.md)).
+Une archive protégée nécessite une analyse complémentaire de son contenu. Voir [Fichiers chiffrés](crypto.md).
 
-## 🔗 Voir aussi
-
-- [Fichiers verrouillés (crypto)](crypto.md)
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

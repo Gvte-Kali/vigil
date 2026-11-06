@@ -1,49 +1,35 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Audio"
+parent: Analyse
+title: Audio
 nav_order: 268
+grand_parent: Actions
 ---
 
-# 🎵 Analyse des fichiers audio — `vigil_audio.sh`
+# Audio
 
-> `scripts/analyse/vigil_audio.sh` détecte et catalogue tous les
-> fichiers **audio** du périphérique monté dans `/investigation/`.
+Repérer les fichiers audio et relever leur durée et leur débit avec `ffprobe`.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-Le script détecte les fichiers audio via `file` (MPEG, OGG, WAV…), les classe
-par type MIME pour les statistiques, extrait la **durée** et le **débit**
-(bitrate) via `ffprobe`, calcule le **SHA-256** de chaque fichier et génère un
-rapport PDF.
+Script : `scripts/analyse/vigil_audio.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier tous les fichiers audio vers `DIR` |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
 
-## 🔄 Déroulement
 
-1. Bannière, **détection** des fichiers audio via `file`.
-2. **Classement** par type MIME → statistiques.
-3. **Métadonnées** (durée, bitrate) via `ffprobe`.
-4. **SHA-256** de chaque fichier.
-5. **Copie** optionnelle vers un dossier.
-6. **Rapport PDF** (statistiques **avant** la liste des fichiers).
+## Résultat
 
-## 🔍 Pertinence forensique
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-- Le **chemin** (avec le nom de partition) et le **SHA-256** identifient sans
-  ambiguïté chaque enregistrement audio.
-- La durée et le bitrate aident à corréler des enregistrements (notes vocales,
-  messages, etc.).
+La durée et le débit facilitent le tri ; ils ne suffisent pas à établir l’origine d’un enregistrement.
 
-## 🔗 Voir aussi
-
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

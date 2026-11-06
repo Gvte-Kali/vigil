@@ -1,68 +1,29 @@
 ---
 layout: default
-parent: "Configuration"
-title: "Mise à jour ClamAV"
+parent: Configuration
+title: Mise à jour ClamAV
 nav_order: 14
 ---
 
-# 🧪 Mise à jour ClamAV
+# Mise à jour ClamAV
 
-> Bouton **« Mettre à jour l'antivirus ClamAV »** de la section
-> Configuration — page `gui/vigil_clamav_update_gui.py`.
+Depuis **Mettre à jour l’antivirus ClamAV**, choisir le mode de mise à jour.
+Les opérations s’exécutent dans Konsole.
 
----
+## Poste connecté
 
-## 📖 En résumé
+Lancer le mode **En ligne**. Le script `scripts/clamav/vigil_clamav_update.sh`
+arrête temporairement `clamav-freshclam`, exécute `freshclam`, redémarre le service
+et affiche les versions des bases installées.
 
-Mise à jour des **signatures virales** ClamAV, en ligne ou par clé USB
-(postes isolés hors réseau). La page GUI propose le choix du mode puis
-lance le script correspondant dans Konsole.
+## Poste isolé
 
----
+1. Préparer les bases `.cvd` sur un poste connecté.
+2. Choisir **Par clé USB** et suivre le triage USB.
+3. Sélectionner le support contenant les bases.
+4. Laisser le script monter le support en lecture seule, copier les bases dans le répertoire ClamAV et démonter le support.
+5. Vérifier les versions affichées.
 
-## 🔄 Mode en ligne (`vigil_clamav_update.sh`)
+Script : `scripts/clamav/vigil_clamav_update_usb.sh`.
 
-Pour un poste connecté :
-
-1. bannière, puis arrêt temporaire du service `clamav-freshclam`
-   (sinon le daemon bloque la base) ;
-2. **`freshclam`** : téléchargement des bases (main, daily, bytecode)
-   dans le `DatabaseDirectory` ClamAV ;
-3. redémarrage du service ;
-4. affichage des versions de bases installées.
-
----
-
-## 🔌 Mode par clé USB (`vigil_clamav_update_usb.sh`)
-
-Pour un poste **isolé** (air-gapped) — les bases sont préparées sur un
-poste connecté puis transportées :
-
-1. **Triage USB** anti-Rubber Ducky (baseline, branchement, 10 s — même
-   procédure que le montage d'analyse) ;
-2. **sélection** du périphérique contenant les `.cvd` ;
-3. **verrouillage lecture seule** du périphérique (`blockdev --setro`) ;
-4. montage dans `/stockage`, **copie** des fichiers `.cvd` (main,
-   daily, bytecode) vers le `DatabaseDirectory` ClamAV ;
-5. **démontage** et re-blocage du périphérique ;
-6. affichage des versions installées.
-
----
-
-## 🎬 Workflow type
-
-```text
-[Bouton GUI] Mettre à jour l'antivirus ClamAV
-    └─ choix du mode :
-         ├─ [En ligne]  → vigil_clamav_update.sh
-         │     └─ stop freshclam → freshclam → start freshclam
-         └─ [Par clé USB] → vigil_clamav_update_usb.sh
-               └─ triage USB → montage RO → copie .cvd → démontage
-```
-
----
-
-## 🔗 Voir aussi
-
-- [Antivirus](../actions/antivirus.md) — le scan ClamAV lui-même
-- [Périphériques USB](peripheriques-usb.md) — les listes du triage
+La mise à jour des signatures est distincte du [scan antivirus](../actions/antivirus.md).

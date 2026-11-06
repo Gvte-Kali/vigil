@@ -1,64 +1,33 @@
 ---
 layout: default
-parent: "Configuration"
-title: "Périphériques USB"
+parent: Configuration
+title: Périphériques USB
 nav_order: 13
 ---
 
-# 🔌 Périphériques USB
+# Périphériques USB
 
-> Bouton **« Périphériques USB »** de la section Configuration —
-> page `gui/vigil_usb_gui.py`.
+Ouvrir **Périphériques USB** depuis la section Configuration pour consulter les
+périphériques connectés et gérer les listes utilisées pendant le triage.
 
----
+## Gérer les listes
 
-## 📖 En résumé
+1. Repérer le périphérique par son fabricant, son produit, son identifiant `VID:PID` ou son numéro de série.
+2. Choisir **Whitelister (confiance)** ou **Blacklister (suspect)**.
+3. Vérifier les entrées et cliquer sur **Enregistrer**.
 
-Inventaire des périphériques USB **connectés** et gestion des listes
-**whitelist / blacklist** du triage anti-Rubber Ducky. Ces listes sont
-persistantes (`data/usb/whitelist.txt` / `blacklist.txt`) et partagées
-avec le triage de **tous** les montages (analyse, stockage, recherche de
-menaces).
+Les tableaux permettent aussi d’ajouter et de retirer des entrées manuellement.
 
----
+| Liste | Fichier | Effet au triage |
+|---|---|---|
+| Confiance | `data/usb/whitelist.txt` | Exempte le périphérique du blocage des nouveaux claviers HID |
+| Blocage | `data/usb/blacklist.txt` | Désautorise le périphérique au niveau du noyau, y compris s’il n’est pas HID |
 
-## 🖥️ La page
+## Protéger le clavier de travail
 
-- **Inventaire connecté** : port, fabricant/produit, `VID:PID`, n° de
-  série, interface clavier (oui/non), statut
-  **Whitelisté / Blacklisté / Non listé**.
-- Bouton **Whitelister (confiance)** : ajoute le périphérique à la
-  whitelist (par `VID:PID` ou n° de série) — un clavier whitelisté
-  n'est **jamais bloqué** au triage.
-- Bouton **Blacklister (suspect)** : ajoute à la blacklist — le
-  périphérique est bloqué d'office au niveau noyau (`authorized=0`),
-  même non-HID, invisible de `lsblk`, non montable.
-- **Tableaux des listes** avec boutons Ajouter / Retirer / Enregistrer
-  (édition manuelle des entrées `VID:PID` ou n° de série).
+Laisser le clavier branché pendant l’état de référence du triage.
+S’il doit être débranché puis rebranché, l’ajouter à la liste de confiance.
+Un nouveau clavier HID non autorisé est bloqué par défaut.
 
----
-
-## 🛡️ Rôle dans le triage
-
-Le [triage USB](../actions/montage-lecture-seule.md#-triage-usb-anti-rubber-ducks)
-de chaque montage compare les périphériques apparus au branchement à ces
-listes :
-
-1. clavier HID **whitelisté** → jamais bloqué (clavier de travail) ;
-2. périphérique **blacklisté** → bloqué immédiatement, rapport de triage
-   « Blacklisté — bloqué », fin propre si c'est le seul périphérique ;
-3. clavier HID **non listé** apparu au branchement → **bloqué par
-   défaut** (unbind `usbhid`) — c'est le comportement attendu pour un
-   Rubber Ducky.
-
-**Cas d'usage typique** : un clavier de travail débranché pendant la
-baseline du triage puis rebranché serait bloqué comme « nouveau ». Pour
-l'éviter, l'ajouter **une fois** via cette page — il reste ensuite
-pleinement fonctionnel à chaque montage.
-
----
-
-## 🔗 Voir aussi
-
-- [Montage lecture seule](../actions/montage-lecture-seule.md) — le triage détaillé
-- [Stockage](../actions/stockage.md) — même triage, montage lecture/écriture
+Un identifiant USB est un critère de filtrage, pas une preuve d’identité du matériel.
+Voir [Montage en lecture seule](../actions/montage-lecture-seule.md).

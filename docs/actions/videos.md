@@ -1,50 +1,35 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Vidéos"
+parent: Analyse
+title: Vidéos
 nav_order: 267
+grand_parent: Actions
 ---
 
-# 🎬 Analyse des vidéos — `vigil_videos.sh`
+# Vidéos
 
-> `scripts/analyse/vigil_videos.sh` détecte et catalogue tous les
-> fichiers **vidéo** du périphérique monté dans `/investigation/`.
+Repérer les vidéos et relever leur durée et leur résolution avec `ffprobe`.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-Le script détecte les vidéos via `file` (MP4, AVI, x-msvideo…), les classe par
-type MIME pour les statistiques, extrait la **durée** et la **résolution** de
-chaque fichier via `ffprobe`, calcule le **SHA-256** et génère un rapport PDF.
-Le rapport conserve le **chemin** de chaque vidéo (avec le dossier racine de la
-partition) et sa signature, indicateurs pertinents pour une enquête.
+Script : `scripts/analyse/vigil_videos.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier toutes les vidéos vers `DIR` |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
 
-## 🔄 Déroulement
 
-1. Bannière, **détection** des fichiers vidéo via `file`.
-2. **Classement** par type MIME → statistiques.
-3. **Métadonnées** (durée, résolution) via `ffprobe`.
-4. **SHA-256** de chaque vidéo.
-5. **Copie** optionnelle vers un dossier.
-6. **Rapport PDF** (statistiques **avant** la liste des fichiers).
+## Résultat
 
-## 🔍 Pertinence forensique
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-- Le **chemin** de chaque vidéo (avec le nom de la partition) situe le fichier
-  dans l'arborescence du support analysé.
-- Le **SHA-256** garantit l'identification non ambiguë du fichier.
-- La durée et la résolution aident au tri et à la corroboration.
+Le rapport conserve le chemin, le type et les caractéristiques disponibles de chaque vidéo.
 
-## 🔗 Voir aussi
-
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

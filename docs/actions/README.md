@@ -1,30 +1,21 @@
 ---
 layout: default
-title: "Actions"
+title: Actions
 nav_order: 20
 has_children: true
 ---
 
-# ⚡ Actions
+# Actions
 
-> La section **Actions** de la page d'accueil (`vigil_main_gui.py`) regroupe
-> les cinq boutons opérationnels : recherche de menaces, analyse d'un
-> périphérique, stockage, copie forensique et clonage.
+Choisir l’opération selon le résultat attendu.
 
----
-
-## 📖 En résumé
-
-| Bouton de l'accueil | Cible | Documentation |
+| Action | Usage | Contexte |
 |---|---|---|
-| 🛡️ Recherche de menaces | `vigil_malware_hunt.sh` (Konsole) | [Recherche de menaces](menaces.md) |
-| 🔍 Analyser un périphérique | `gui/vigil_tools_gui.py` | [Analyser un périphérique](analyse.md) |
-| 📁 Monter un périphérique de stockage | `gui/vigil_stockage_gui.py` | [Stockage](stockage.md) |
-| 💾 Faire une copie forensique d'un disque | `gui/vigil_imager_gui.py` | [Copie forensique](copie-forensique.md) |
-| 💾 Cloner un disque dur | `vigil_disk_clone.sh` (Konsole) | [Clonage bit-à-bit](clonage.md) |
+| [Recherche de menaces](menaces.md) | Triage USB, audit de format et antivirus | Opérateur, sans projet |
+| [Analyse](analyse.md) | Examiner et documenter les fichiers | Utilisateur et projet dans l’interface |
+| [Stockage](stockage.md) | Déposer ou récupérer des fichiers de travail | Lecture/écriture |
+| [Copie forensique](copie-forensique.md) | Créer une image RAW, E01 ou AFF | Source protégée en lecture seule |
+| [Clonage](clonage.md) | Copier un disque vers un autre | Cible entièrement écrasée |
 
-Les actions qui ouvrent une page GUI demandent l'analyse dans la page fille
-(montage, choix du périphérique, lancement des scans). Les actions
-**Recherche de menaces** et **Clonage** sont lancées directement dans un
-terminal **Konsole** après une confirmation, avec le déroulé complet
-(interactif) dans le terminal.
+Les analyses et les opérations sur les supports sont interactives dans **Konsole**.
+Lire le bilan du terminal avant de le fermer.

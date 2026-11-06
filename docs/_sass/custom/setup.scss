@@ -1,4 +1,4 @@
-// Surcharge des variables du thème (importée avant l'émission CSS) :
-// contenu plus large que les 50rem par défaut, qui laissaient une grande
-// partie de la page inutilisée sur écran large.
-$content-width: 60rem;
+$content-width: 64rem;
+$nav-width: 17rem;
+$body-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$mono-font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;

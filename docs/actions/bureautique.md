@@ -1,51 +1,35 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Bureautique"
+parent: Analyse
+title: Bureautique
 nav_order: 269
+grand_parent: Actions
 ---
 
-# 📑 Analyse des fichiers bureautiques — `vigil_office.sh`
+# Bureautique
 
-> `scripts/analyse/vigil_office.sh` détecte et catalogue les fichiers
-> **bureautiques** (Documents, Tableurs, Présentations, PDF, RTF) du périphérique
-> monté dans `/investigation/`.
+Recenser les documents bureautiques à partir de leur type détecté par `file`.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-La détection se fait **par extension** puis confirmation du **type MIME** via
-`file`. Cela est nécessaire car `file` ne distingue pas les formats OOXML
-(docx/xlsx/pptx sont tous renvoyés comme `application/zip`). Les fichiers sont
-classés par catégorie (Document, Tableur, Présentation, PDF, RTF) et par
-format (extension) pour les statistiques, puis le **SHA-256** est calculé et un
-rapport PDF est généré.
+Script : `scripts/analyse/vigil_office.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier tous les fichiers bureautiques vers `DIR` |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
 
-## 🔄 Déroulement
 
-1. Bannière, **détection** par extension + vérification du type MIME.
-2. **Classement** par catégorie et par format → statistiques.
-3. **SHA-256** de chaque fichier.
-4. **Copie** optionnelle vers un dossier.
-5. **Rapport PDF** (statistiques **avant** la liste des fichiers).
+## Résultat
 
-## 🔍 Pertinence forensique
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-- Les documents bureautiques peuvent contenir des **métadonnées d'auteur**,
-  des dates de création/modification et des commentaires.
-- Le SHA-256 garantit l'identification non ambiguë de chaque pièce.
+Pour rechercher les protections par mot de passe, utiliser aussi [Fichiers chiffrés](crypto.md).
 
-## 🔗 Voir aussi
-
-- [Fichiers verrouillés (crypto)](crypto.md)
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

@@ -1,62 +1,30 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Démontage"
+parent: Analyse
+title: Démontage
 nav_order: 262
+grand_parent: Actions
 ---
 
-# 📌 Démontage — `vigil_usb_umount.sh`
+# Démontage
 
-> `scripts/analyse/vigil_usb_umount.sh` démonte proprement les périphériques montés
-> en lecture seule dans `/investigation` et déverrouille l'accès bloc.
+Le bouton **Démonter** de la page d’analyse lance
+`scripts/analyse/vigil_usb_umount.sh` dans Konsole.
+Il traite **tous les montages actifs** sous `/investigation`.
 
----
+## Déroulement
 
-## 📖 En résumé
+1. Recalculer le hash d’arbre et le comparer à celui du montage, s’il est disponible.
+2. Signaler les écarts d’intégrité ; l’écart est tracé et le démontage continue.
+3. Démonter chaque partition.
+4. Relâcher le verrou bloc avec `blockdev --setrw`.
+5. Supprimer les points de montage vides et afficher le bilan.
 
-Le script liste les points de montage actifs sous `/investigation`, vérifie
-l'**intégrité** du contenu (hash d'arbre recalculé vs hash pris au montage),
-démonte chaque point (`umount`), puis relâche le verrou lecture seule du
-device bloc associé (`blockdev --setrw`). Aucune donnée n'est altérée : le
-démontage reste une opération en lecture seule sur le périphérique.
+Attendre le bilan avant de débrancher le support. Un hash initial absent entraîne
+un avertissement : aucune comparaison d’intégrité n’est alors possible.
 
----
+L’opération fonctionne sans contexte actif ; les événements sont inscrits dans
+le journal du projet ou de la chasse lorsqu’un tel journal est disponible.
+Le support n’est plus protégé par le verrou logiciel après sa remise en lecture/écriture.
 
-## 🔄 Détail du déroulement
-
-1. **Bannière ASCII** « VIGIL », puis contexte utilisateur/projet repris
-   des fichiers actifs (`data/active_user`, `data/active_project`) — sans
-   contexte, le démontage fonctionne quand même, sans log de custody.
-2. **Liste** des points de montage sous `/investigation` avec leur device
-   bloc associé.
-3. **Vérification d'intégrité** (par point de montage) :
-   - le **hash d'arbre actuel** est recalculé
-     (`sha256sum` de tous les fichiers, trié, lui-même hashé) ;
-   - il est comparé au **hash stocké au montage**
-     (`data/projects/<projet>/device_<dev>.sha256`) ;
-   - **égal** → `integrity_check` en succès dans la chaîne de custody
-     (« hash initial = hash recalculé ») ;
-   - **différent** → alerte « périphérique corrompu » (statut
-     `corrupted`) — le démontage continue mais l'écart est tracé ;
-   - fichier de hash **manquant** (montage hors projet) → simple
-     avertissement.
-4. **Démontage** de chaque point (`umount`), partition par partition.
-5. **Déverrouillage** du device bloc (`blockdev --setrw`) : le
-   périphérique redevient accessible en lecture/écriture pour son
-   propriétaire légitime.
-6. **Suppression** des points de montage vides sous `/investigation`.
-7. **Bilan** : succès/échecs par device, tracé dans la chaîne de custody
-   (projet) ou le journal de chasse (`hunt/chain_of_custody.json` si
-   `VIGIL_HUNT_CUSTODY` est exporté — cas de la
-   [recherche de menaces](menaces.md)).
-
-## 🖥️ Lancement depuis la GUI
-
-Sur la page **« Analyse du périphérique USB »**, le bouton **Démonter**
-lance le script dans Konsole. Il agit sur **tous** les points de montage
-actifs sous `/investigation`.
-
-## 🔗 Voir aussi
-
-- [Montage en lecture seule](montage-lecture-seule.md)
-- [Analyse](analyse.md) — le workflow complet d'une analyse
+Voir [Montage en lecture seule](montage-lecture-seule.md).

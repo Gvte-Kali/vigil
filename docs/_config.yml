@@ -1,13 +1,15 @@
-remote_theme: just-the-docs/just-the-docs
+remote_theme: just-the-docs/just-the-docs@v0.12.0
+
+lang: fr-FR
 
 title: Vigil
 description: >
   Surcouche Linux pour l'analyse forensique sécurisée de périphériques USB.
-  Montage en lecture seule, chaîne de custody, rapports PDF normalisés.
+  Montage en lecture seule, traçabilité et rapports PDF.
 
 url: ""
 
-color_scheme: dark
+color_scheme: graphite
 
 # Icône Vigil (onglet navigateur / favoris) — docs/favicon.ico,
 # servi comme /favicon.ico quand la source GitHub Pages est /docs.
@@ -35,14 +37,23 @@ heading_anchors: true
 back_to_top: true
 back_to_top_text: "Haut de page"
 
-footer_content: "Vigil — Documentation technique"
+footer_content: "Vigil · Documentation"
 
 gh_edit_link: false
 
 plugins:
   - jekyll-seo-tag
+  - jekyll-remote-theme
+  - jekyll-relative-links
+
+relative_links:
+  enabled: true
+  collections: false
 
 exclude:
   - "*.gemspec"
   - Gemfile
   - Gemfile.lock
+  - DEVELOPMENT.md
+  - vendor
+  - .bundle

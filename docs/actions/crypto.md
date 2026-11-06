@@ -1,57 +1,35 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Fichiers chiffrés"
+parent: Analyse
+title: Fichiers chiffrés
 nav_order: 271
+grand_parent: Actions
 ---
 
-# 🔐 Fichiers verrouillés (crypto) — `vigil_crypto.sh`
+# Fichiers chiffrés
 
-> `scripts/analyse/vigil_crypto.sh` détecte les fichiers **protégés par
-> mot de passe** ou **chiffrés** : archives (zip/7z/rar) et documents pouvant être
-> chiffrés (Office OLE/OOXML, PDF, OpenDocument).
+Rechercher les protections par mot de passe dans les archives et les documents compatibles (Office, PDF, OpenDocument), avec `7za` ou `file`.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-Le script détecte les **candidats** (archives et documents chiffrables), vérifie
-pour chacun s'il est **réellement protégé par mot de passe** (via `7za` ou
-`file` en fallback), puis ne retient que les fichiers **confirmés** comme
-verrouillés. Le **SHA-256** de chaque fichier confirmé est calculé et un
-rapport PDF est généré. Les statistiques et la liste ne portent que sur les
-fichiers **confirmés** (pas les candidats).
+Script : `scripts/analyse/vigil_crypto.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier les fichiers verrouillés vers `DIR` |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
 
-## 🔄 Déroulement
 
-1. Bannière, **détection** des candidats (archives + documents chiffrables).
-2. **Vérification** de la protection par mot de passe via `7za` (polyvalent),
-   fallback `file`.
-3. **Filtrage** : seuls les fichiers **confirmés** verrouillés sont retenus.
-4. **SHA-256** de chaque fichier confirmé.
-5. **Copie** optionnelle vers un dossier.
-6. **Rapport PDF** (statistiques **confirmées** avant la liste **confirmée**).
+## Résultat
 
-## 🔍 Pertinence forensique
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-- Un fichier verrouillé peut indiquer une **volonté de dissimulation**.
-- La présence d'archives chiffrées oriente la suite de l'enquête (cassage de
-  mot de passe, exploitation dédiée).
+Seuls les fichiers dont la protection est confirmée figurent dans les résultats. La présence de chiffrement ne prouve pas une intention de dissimulation.
 
-> ℹ️ Les **candidats** (fichiers détectés mais non confirmés verrouillés) ne
-> figurent ni dans les statistiques ni dans la liste du rapport — seuls les
-> fichiers **confirmés** sont reportés.
-
-## 🔗 Voir aussi
-
-- [Archives](archives.md)
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

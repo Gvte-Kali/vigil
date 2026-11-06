@@ -1,51 +1,35 @@
 ---
 layout: default
-parent: "Analyse"
-title: "Fichiers volumineux"
+parent: Analyse
+title: Fichiers volumineux
 nav_order: 273
+grand_parent: Actions
 ---
 
-# 🗃️ Fichiers volumineux — `vigil_bigfiles.sh`
+# Fichiers volumineux
 
-> `scripts/analyse/vigil_bigfiles.sh` détecte les fichiers de **grande
-> taille** (défaut ≥ 512 Mo), en écartant les vidéos (traitées par le script
-> dédié). Il détecte aussi les **fichiers creux** (sparse) composés uniquement
-> d'octets nuls.
+Repérer les fichiers d’au moins 512 Mio, hors vidéos, et rechercher ceux constitués uniquement d’octets nuls.
 
----
+## Utilisation
 
-## 📖 En résumé
+Dans la page **Analyser un périphérique**, sélectionner l’utilisateur et le projet,
+monter le support, puis lancer cette analyse.
 
-Le script détecte les fichiers ≥ `--min-size` Mo (sauf vidéos), repère les
-fichiers **creux** (octets nuls uniquement — espaces non alloués), calcule le
-**SHA-256** de chaque fichier retenu et génère un rapport PDF.
+Script : `scripts/analyse/vigil_bigfiles.sh`.
 
----
-
-## ⚙️ Options
+## Options
 
 | Option | Effet |
 |---|---|
-| `--pdf` / `--no-pdf` | rapport PDF (activé par défaut) |
-| `--copy-to DIR` | copier les fichiers volumineux vers `DIR` |
-| `--min-size N` | taille minimale en Mo (défaut : 512) |
+| `--pdf` / `--no-pdf` | Activer le rapport PDF (défaut) ou le désactiver |
+| `--copy-to DIR` | Copier les fichiers retenus vers un dossier de travail |
+| `--min-size N` | Taille minimale en Mio (défaut : `512`) |
 
-## 🔄 Déroulement
+## Résultat
 
-1. Bannière, **détection** des fichiers ≥ `--min-size` Mo (hors vidéos).
-2. **Détection** des fichiers creux (octets nuls uniquement).
-3. **SHA-256** de chaque fichier retenu.
-4. **Copie** optionnelle vers un dossier.
-5. **Rapport PDF** (statistiques **avant** la liste des fichiers).
+Le rapport présente les statistiques puis les fichiers retenus avec leur chemin et
+leur empreinte SHA-256. Les PDF sont écrits dans `/opt/vigil/rapports/`.
 
-## 🔍 Pertinence forensique
+Un fichier contenant des zéros n’est pas nécessairement un fichier creux : la taille logique et l’allocation physique sont des notions distinctes.
 
-- Un fichier volumineux non identifié peut être une **image disque**, une
-  **base de données** ou un **conteneur caché**.
-- Les fichiers creux (sparse) sont un **indicateur forensique** important :
-  image disque, fichier effacé, espace non alloué.
-
-## 🔗 Voir aussi
-
-- [Forte entropie](entropie.md)
-- [Générateur PDF](../rapports-pdf/README.md)
+Voir [le parcours d’analyse](analyse.md) et [les rapports PDF](../rapports-pdf/README.md).

@@ -1,39 +1,30 @@
 ---
 layout: default
-parent: "Interface"
-title: "Navigation"
+parent: Interface
+title: Navigation
 nav_order: 41
 ---
 
-# 🧭 Navigation parent/enfant
+# Navigation
 
-> Toutes les pages Vigil partagent une **fenêtre racine unique invisible**.
-> La navigation est gérée par une pile (`NAV`) qui reconstruit le titre.
+La navigation est centralisée dans `gui/vigil_gui_base.py`.
+Les pages utilisent une racine Tkinter partagée et une pile de labels `NAV`.
 
----
+## Comportement
 
-## 📖 En résumé
+1. Le parent ouvre une page avec `window.open_child(...)`.
+2. Le contenu est remplacé et le label de la page est ajouté à la pile.
+3. Le titre reflète le chemin, par exemple `Vigil > Configuration > Utilisateurs`.
+4. **Retour** restaure le parent ; `quit_app()` ferme l’application.
 
-Ouvrir une page fille remplace le contenu du corps de la fenêtre, pousse son
-label sur la pile `NAV`, ajoute un bouton **Retour**, et reconstruit le titre
-sous la forme `Vigil > Configuration > Utilisateurs`. Fermer la page fille
-dépile et restaure le parent. L'application se ferme proprement via `quit_app`.
+## Composants partagés
 
----
+| Composant | Usage |
+|---|---|
+| `VigilWindow` | En-tête, corps et navigation |
+| `header_title()` | Logo, titre et sous-titre |
+| `Section` | Groupe repliable |
+| `CategoryButton` | Bouton principal |
+| `ActionButton` | Action compacte |
 
-## 🧱 Composants (`gui/vigil_gui_base.py`)
-
-- `VigilWindow` : conteneur avec en-tête (logo + titre + bouton retour) et corps.
-- `NAV` : pile globale des labels, utilisée pour reconstruire le titre.
-- `header_title()` : en-tête centré (logo + titre + sous-titre).
-- `Section` : cadre de catégorie repliable avec icône.
-- `CategoryButton` : bouton large pleine largeur.
-- `ActionButton` : bouton compact de la barre d'actions.
-- `quit_app()` : fermeture propre (détruit la racine, sort de `mainloop`).
-
-## 🔄 Cycle d'ouverture d'une page
-
-1. La page parente appelle `window.open_child("fille.py", nav_label=...)`.
-2. `VigilWindow` détruit le contenu courant, instancie la fenêtre fille
-   (qui reconstruit son propre `VigilWindow`), pousse le label sur `NAV`.
-3. La fille affiche un bouton **Retour** qui dépile et rouvre le parent.
+Réutiliser ces composants pour conserver les mêmes repères entre les pages.

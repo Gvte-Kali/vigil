@@ -1,16 +1,61 @@
-// Sidebar à largeur fixe : par défaut, sur grands écrans le thème élargit
-// la sidebar avec calc((100% - nav - contenu) / 2 + nav) — elle absorbe la
-// marge de centrage et peut occuper jusqu'à un tiers de la page. On la
-// fixe à $nav-width et le contenu démarre juste après.
+// Les couleurs de la palette restent définies dans color_schemes/graphite.scss.
+html { scroll-behavior: smooth; }
+body { line-height: 1.65; }
 
-.side-bar {
-  @include mq(lg) {
-    width: $nav-width;
-  }
+.site-title {
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
-
-.side-bar + .main {
-  @include mq(lg) {
-    margin-left: $nav-width;
+.site-header { border-bottom: 1px solid $border-color; }
+.main-content {
+  h1 { font-weight: 650; letter-spacing: -0.035em; line-height: 1.15; }
+  h2 { margin-top: 2.5rem; font-weight: 600; letter-spacing: -0.02em; }
+  h3 { font-weight: 600; }
+  a:not(.btn) { text-underline-offset: 0.2em; }
+  p, li { overflow-wrap: anywhere; }
+  .eyebrow {
+    margin-bottom: 1rem;
+    color: $nav-child-link-color;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
+  blockquote {
+    margin-left: 0;
+    padding: 0.5rem 1rem;
+    border-left: 3px solid $link-color;
+    background: $sidebar-color;
+    p:last-child { margin-bottom: 0; }
+  }
+  table { font-size: 0.9rem; }
+  th { color: $body-heading-color; font-weight: 600; }
+  th, td { border-color: $border-color; }
+  pre { border: 1px solid $border-color; border-radius: 0.5rem; }
+  .btn { margin: 0 0.5rem 0.5rem 0; border-radius: 0.4rem; box-shadow: none; }
+  .btn-primary { color: #181b20; background-image: none; font-weight: 600; }
+  .btn-primary:hover, .btn-primary:focus { color: #181b20; background-color: #b7d9fa; }
+}
+.nav-list .nav-list-item > .nav-list-link.active {
+  color: $body-heading-color;
+  background: $feedback-color;
+  box-shadow: inset 3px 0 0 $link-color;
+}
+.nav-list .nav-list-item .nav-list-link:hover { background-image: none; background-color: $feedback-color; }
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 2px solid $link-color;
+  outline-offset: 3px;
+}
+.site-footer { color: $nav-child-link-color; }
+
+// Sur grand écran, conserver une navigation fixe et une colonne de lecture ample.
+.side-bar { @include mq(lg) { width: $nav-width; } }
+.side-bar + .main { @include mq(lg) { margin-left: $nav-width; } }
+
+@media (max-width: 49.99rem) {
+  .main-content h1 { font-size: 2rem !important; }
+  .main-content .btn { display: inline-block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }

@@ -1,85 +1,34 @@
 ---
 layout: default
-parent: "Configuration"
-title: "Système et utilisateurs"
+parent: Configuration
+title: Système et utilisateurs
 nav_order: 11
 ---
 
-# ⚙️ Système et utilisateurs
+# Système et utilisateurs
 
-> Bouton **« Configuration du système »** de la section Configuration —
-> page `gui/vigil_config_gui.py`.
+Depuis l’accueil, ouvrir **Configuration du système**.
 
----
+## Configurer l’entité
 
-## 📖 En résumé
+1. Saisir le nom de l’entité, l’établissement et les coordonnées.
+2. Choisir un logo, si nécessaire ; la page affiche une prévisualisation.
+3. Cliquer sur **Enregistrer**.
 
-La configuration de Vigil est centralisée : une **entité statique unique**
-(organisme) et des **utilisateurs** rattachés, plus un **logo** affiché
-sur les rapports. Avant d'analyser un périphérique, on configure une fois
-l'entité et on crée au moins un utilisateur (obligatoire pour logger les
-actions via la chaîne de custody).
+Ces informations alimentent la couverture des rapports PDF. Le logo est copié dans `data/config/logo/`.
 
----
+## Gérer les utilisateurs
 
-## 🏢 Entité (page principale)
+Ouvrir **Utilisateurs**, puis **Ajouter**, **Modifier** ou **Supprimer**.
+Le nom est obligatoire, unique et non modifiable après création.
 
-Le formulaire **« Configuration du système »** rassemble les champs de
-l'entité, utilisés sur la **page de garde de tous les rapports PDF** :
+Chaque profil a le rôle fixe `analyst`. Les profils identifient les opérateurs ;
+ils ne définissent pas de permissions d’accès.
 
-| Champ | Usage |
+| Donnée | Emplacement |
 |---|---|
-| Nom de l'entité | En-tête des rapports |
-| Établissement | En-tête des rapports |
-| Adresse / téléphone / email | Coordonnées sur les rapports |
-| Logo | Miniature GUI + page de garde des rapports |
+| Profil | `data/users/<nom>/profile.json` |
+| Utilisateur actif | `data/active_user` |
 
-- **Choisir un logo** : boîte de dialogue de sélection d'image ; une
-  **prévisualisation** s'affiche dans la page (miniature générée par
-  PIL).
-- **Retirer** : supprime le logo (le champ redevient « (aucun logo) »).
-- **Enregistrer** : persiste la configuration statique (le logo est
-  copié dans `data/config/logo/`).
-- Le bouton **Utilisateurs** ouvre la gestion des utilisateurs
-  (page fille).
-
----
-
-## 👤 Utilisateurs (page fille)
-
-Liste des profils créés, avec boutons **Ajouter** / **Modifier** /
-**Supprimer**. Le **dialogue de création/modification** demande :
-
-| Champ | Détail |
-|---|---|
-| Nom * | Obligatoire, unique (création) ; non modifiable ensuite |
-
-Tous les utilisateurs sont enregistrés avec le rôle fixe `analyst` — Vigil ne
-gère **pas de permissions** par utilisateur. Le profil
-(`data/users/<nom>/profile.json`) contient le nom, le rôle (`analyst`)
-et la date de création.
-
-L'utilisateur actif (`data/active_user`) est utilisé par tous les scripts
-pour la chaîne de custody — c'est lui qui apparaît dans les rapports.
-
----
-
-## 🎬 Workflow type
-
-```text
-[Bouton GUI] Configuration du système
-    └─ saisie de l'entité (nom, établissement, adresse, tel, email)
-    └─ choix du logo (preview)
-    └─ [Enregistrer]
-    └─ [Utilisateurs]
-         └─ [Ajouter] → nom (rôle analyst attribué automatiquement)
-         └─ l'utilisateur apparaît dans la barre de sélection des pages
-            d'analyse (obligatoire pour la custody)
-```
-
----
-
-## 🔗 Voir aussi
-
-- [Projets](projets.md) — le projet actif, obligatoire pour l'analyse
-- [Rapports](../rapports-pdf/README.md) — où l'entité et le logo sont utilisés
+Sélectionner l’utilisateur dans la page d’analyse avant de lancer une opération.
+Voir aussi [Projets](projets.md) et [Rapports PDF](../rapports-pdf/README.md).
