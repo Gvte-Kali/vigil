@@ -15,8 +15,9 @@ RÈGLES À RESPECTER (inchangées, pour tout nouvel axe) :
    fichiers de travail/récupération) — /opt/vigil/rapports (sortie PDF).
    Toute récupération/carving écrit dans /stockage, pas sur le support.
 2. Chaîne de custody : chaque nouvelle analyse logge via le mécanisme
-   existant (active_user obligatoire, active_project obligatoire sauf
-   antivirus, chain_of_custody.log + actions.log via log_action()).
+   existant (chain_of_custody.log + actions.log via log_action()).
+   Conserver l’opérateur et le projet quand le parcours l’exige dans le
+   contexte propre à chaque exécution (voir chantier C).
 3. Rapport PDF : réutiliser scripts/pdf/vigil_pdf.py comme les autres
    analyses (stats avant la liste, SHA-256 par fichier, chemins conservant
    la racine de partition).
@@ -26,6 +27,57 @@ RÈGLES À RESPECTER (inchangées, pour tout nouvel axe) :
 5. Chaque module = nouveau script dans scripts/analyse/ + entrée GUI
    (vigil_tools_gui.py, SCRIPTS + tag device si spécifique) + doc
    (docs/analyse-forensique/<module>.md + entrée README de la catégorie).
+
+================================================================================
+CHANTIERS TRANSVERSAUX — FIABILISER L’EXISTANT
+================================================================================
+
+Ordre suggéré : sécuriser le poste, vérifier la protection des sources,
+isoler les exécutions, puis intégrer leur suivi à l’interface.
+
+--- A. Privilèges et bases checksafe
+[ ] Remplacer les règles NOPASSWD globales par des opérations limitées au
+    groupe vigil-operators. Installer le programme privilégié sous contrôle
+    de root et valider chaque action, périphérique et destination.
+[ ] Remplacer la lecture des bases pickle de /stockage par un format
+    validé (SQLite ou TSV) en conservant le filtrage par nom et empreinte.
+
+--- B. Protection effective des supports
+[ ] Ajouter un mode strict pour les supports bloc : vérifier le verrouillage
+    bloc et les options de montage avant d’autoriser l’analyse.
+[ ] En mode triage, signaler explicitement si le montage est en lecture
+    seule sans verrouillage bloc confirmé. Afficher un état distinct pour
+    MTP. Reporter les protections vérifiées dans le bilan et le PDF.
+
+--- C. Contexte d’exécution, conservation et export
+[ ] Attribuer à chaque analyse un identifiant et un dossier dédiés.
+    Figer au lancement l’opérateur, le projet éventuel, l’identité du
+    support et les paramètres, puis transmettre ce contexte aux scripts
+    et au journal de traçabilité.
+[ ] Conserver les recensements successifs et isoler chaque recherche de
+    menaces. Une relance doit préserver les résultats précédents ainsi
+    que les livrables récupérables après un échec.
+[ ] Construire l’export à partir d’un ensemble figé de livrables. Vérifier
+    la cohérence de l’archive et du manifeste avant de publier le lot.
+
+--- D. Suivi des analyses dans Tkinter
+[ ] Réutiliser les scripts existants et afficher dans Vigil la progression,
+    les erreurs et les liens vers les rapports et autres résultats.
+[ ] Afficher pour chaque outil un état terminé, partiel, échoué ou ignoré.
+    Reporter dans l’interface et le PDF les compteurs de fichiers examinés
+    et ignorés quand ils sont disponibles, ainsi que les limites de ClamAV
+    (archives ou fichiers écartés, par exemple).
+
+================================================================================
+NOUVELLE FONCTIONNALITÉ — ANALYSER UNE IMAGE DISQUE EXISTANTE
+================================================================================
+
+[ ] Ajouter un parcours pour ouvrir une image RAW ou E01 en lecture seule,
+    enregistrer son empreinte SHA-256 et choisir la partition à examiner.
+[ ] Réutiliser le recensement et les analyses existantes. Enregistrer
+    l’identité de l’image et de la partition dans la traçabilité et le
+    rapport, puis libérer les montages et périphériques associés en fin
+    d’opération ou en cas d’échec.
 
 ================================================================================
 AXE 0 — DÉCISIONS EN SUSPENS « RECHERCHE DE MENACES » (PRIORITÉ MAXIMALE)
@@ -39,8 +91,8 @@ trancher avant de continuer sur ces axes.
     chaque montage d'un périphérique dans /investigation (via
     vigil_usb_mount.sh), ou rester sur le recensement explicite uniquement
     (recherche de menaces, GUI analyse).
-[ ] Si oui : purge des livrables précédents déjà en place, PDF census
-    généré ou pas selon le choix de l'opérateur.
+[ ] Si oui : conserver les recensements précédents (voir chantier C) et
+    laisser l'opérateur choisir de générer ou non le PDF du recensement.
 
 --- 0.2. Rebrancher les scripts d'analyse sur l'index census
 [ ] Décider puis implémenter : les scripts d'analyse (images, office,
