@@ -17,5 +17,5 @@ Choisir l’opération selon le résultat attendu.
 | [Copie forensique](copie-forensique.md) | Créer une image RAW, E01 ou AFF | Source protégée en lecture seule |
 | [Clonage](clonage.md) | Copier un disque vers un autre | Cible entièrement écrasée |
 
-Les analyses et les opérations sur les supports sont interactives dans **Konsole**.
+Les analyses et les opérations sur les supports sont interactives dans le **terminal par défaut**.
 Lire le bilan du terminal avant de le fermer.

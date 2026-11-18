@@ -222,8 +222,8 @@ def device_key_for_label(device_filters, label):
 #  Lancement des scripts
 # --------------------------------------------------------------------------- #
 
-def _run_script_in_konsole(script_path, user, project, extra_args=None):
-    """Lance un script shell dans Konsole en enregistrant l'etat actif."""
+def _run_script_in_terminal(script_path, user, project, extra_args=None):
+    """Lance un script dans le terminal par défaut et enregistre l’état actif."""
     if not os.path.exists(script_path):
         messagebox.showerror("Erreur", f"Script introuvable : {script_path}")
         return
@@ -231,22 +231,7 @@ def _run_script_in_konsole(script_path, user, project, extra_args=None):
     if project:
         vigil_data.append_custody(user, project, "lancement_outil",
                                   detail=os.path.basename(script_path))
-    args_str = " ".join(extra_args) if extra_args else ""
-    try:
-        subprocess.Popen([
-            base.script_terminal(), "-e", "bash", "-c",
-            f"bash {script_path} {args_str}; rc=$?; "
-            f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-            f"✓ Outil terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
-            f"else echo -e '\\n\\e[91m"
-            f"✕ Outil terminé avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-            f"read"
-        ])
-    except FileNotFoundError:
-        messagebox.showerror("Erreur",
-                             "Terminal introuvable. Installez Konsole ou xterm.")
-    except Exception as exc:
-        messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
+    base.run_in_terminal(["bash", script_path, *(extra_args or [])])
 
 
 # --------------------------------------------------------------------------- #
@@ -368,15 +353,15 @@ def show_tools_view():
         """Lance un script sans bloquer sur l'utilisateur/projet (montage USB)."""
         user, project = current_selection()
         script_path = os.path.join(vigil_data.SCRIPTS_DIR, script_name)
-        _run_script_in_konsole(script_path, user or "(no-user)",
-                               project if project else "(no-project)")
+        _run_script_in_terminal(script_path, user or "(no-user)",
+                                project if project else "(no-project)")
 
     def launch(script_name, extra_args):
         user, project = require_context(script_name)
         if user is None:
             return
         script_path = os.path.join(vigil_data.SCRIPTS_DIR, script_name)
-        _run_script_in_konsole(script_path, user, project, extra_args)
+        _run_script_in_terminal(script_path, user, project, extra_args)
 
     # --- Section montage / demontage USB ---
     usb_section = Section(page, "Monter / démonter le périphérique USB",
@@ -1163,21 +1148,7 @@ def show_tools_view():
             f"{pdf_gen_block}; "
             'rm -rf "$COLLECT_DIR" 2>/dev/null'
         )
-        try:
-            subprocess.Popen([
-                base.script_terminal(), "-e", "bash", "-c",
-                f"{cmd}; rc=$?; "
-                f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-                f"✓ Scans terminés. Appuyez sur Entrée pour fermer...\\e[0m'; "
-                f"else echo -e '\\n\\e[91m"
-                f"✕ Scans terminés avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-                f"read"
-            ])
-        except FileNotFoundError:
-            messagebox.showerror("Erreur",
-                                 "Terminal introuvable. Installez Konsole ou xterm.")
-        except Exception as exc:
-            messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
+        base.run_in_terminal(["bash", "-c", cmd], "Scans")
 
     multi_btn_row = tk.Frame(multi_section.content, bg=COLOR_SURFACE)
     multi_btn_row.pack(fill=tk.X, pady=(WIDGET_PAD, 0))

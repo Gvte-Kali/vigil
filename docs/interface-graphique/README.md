@@ -8,7 +8,7 @@ has_children: true
 # Interface graphique
 
 Vigil utilise Python et Tkinter. L’accueil regroupe **Configuration** et **Actions**.
-Les opérations interactives s’ouvrent dans **Konsole**, installé avec le poste.
+Les opérations interactives s’ouvrent dans le **terminal par défaut** de la session.
 
 ## Pages et modules
 
@@ -26,7 +26,7 @@ Les opérations interactives s’ouvrent dans **Konsole**, installé avec le pos
 | `vigil_gui_base.py` | Fenêtre, navigation et widgets communs |
 | `vigil_icons.py` | Chargement des icônes |
 
-La recherche de menaces et le clonage se lancent directement dans Konsole.
+La recherche de menaces et le clonage se lancent directement dans le terminal par défaut.
 
 ## Repères pour contribuer
 

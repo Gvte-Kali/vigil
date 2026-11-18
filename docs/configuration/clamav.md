@@ -8,7 +8,7 @@ nav_order: 14
 # Mise à jour ClamAV
 
 Depuis **Mettre à jour l’antivirus ClamAV**, choisir le mode de mise à jour.
-Les opérations s’exécutent dans Konsole.
+Les opérations s’exécutent dans le terminal par défaut.
 
 ## Poste connecté
 

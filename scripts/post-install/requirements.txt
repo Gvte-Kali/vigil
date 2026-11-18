@@ -10,7 +10,6 @@ base       sudo                       sudo                     sudo
 base       jq                         jq                       jq
 base       file                       file                     file
 base       sqlite3                    sqlite                   sqlite
-base       xterm                      xterm                    xterm
 base       python3                    python3                  python
 base       python3-tk                 python3-tkinter          tk
 base       python3-pil.imagetk         python3-pillow-tk        python-pillow
@@ -22,7 +21,7 @@ option     cryptsetup                 cryptsetup               cryptsetup
 option     clamav                     clamav                   clamav
 option     clamav-freshclam            clamav-freshclam         clamav
 option     clamav-daemon               clamd                    clamav
-option     konsole                    konsole                  konsole
+option     xdg-terminal-exec          xdg-terminal-exec        xdg-terminal-exec
 option     kdialog                    kdialog                  kdialog
 option     zenity                     zenity                   zenity
 option     jmtpfs                     jmtpfs                   jmtpfs

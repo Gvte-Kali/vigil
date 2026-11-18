@@ -68,7 +68,7 @@ else
 fi
 
 # --- Compteur d'erreurs global et pause finale ---
-# final_pause() s'assure que le terminal (Konsole) ne se ferme jamais sans
+# final_pause() s'assure que le terminal ne se ferme jamais sans
 # que l'utilisateur ait lu le message d'erreur final.
 final_pause() {
     echo ""

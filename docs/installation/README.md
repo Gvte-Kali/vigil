@@ -27,9 +27,21 @@ et les droits sudo du compte opérateur. Ce compte doit être administrateur.
 L’accès RDP est proposé pendant l’installation interactive via `apt` et
 reste facultatif. Après installation, [configurer l’entité et les utilisateurs](../configuration/systeme.md).
 
-L’interface Tkinter utilise X11 ou XWayland et fonctionne avec Konsole
-ou xterm. La protection udev s’applique indépendamment de l’environnement de
-bureau ou du gestionnaire de fenêtres.
+L’interface Tkinter utilise X11 ou XWayland. Les actions interactives
+s’ouvrent dans le terminal par défaut de la session. Vigil utilise le réglage
+de Plasma ou de Xfce lorsqu’il est accessible, puis le lanceur
+`xdg-terminal-exec` ou l’alternative `x-terminal-emulator` de Debian.
+L’installateur propose `xdg-terminal-exec` si le paquet est disponible.
+
+Sur une session minimale, définir le terminal préféré dans
+`${XDG_CONFIG_HOME:-$HOME/.config}/xdg-terminals.list` avec son identifiant
+`.desktop`. Si la session ne propose pas de lanceur compatible, on peut
+aussi définir `VIGIL_TERMINAL` avec le chemin du lanceur et les options
+requises pour exécuter une commande. Par exemple, pour un terminal qui
+accepte l’option `-e`, utiliser `VIGIL_TERMINAL='mon-terminal -e' vigil`.
+
+La protection udev s’applique indépendamment du bureau et du gestionnaire
+de fenêtres.
 
 ## Protection des supports
 

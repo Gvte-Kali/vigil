@@ -9,7 +9,7 @@ grand_parent: Actions
 # Démontage
 
 Le bouton **Démonter** de la page d’analyse lance
-`scripts/analyse/vigil_usb_umount.sh` dans Konsole.
+`scripts/analyse/vigil_usb_umount.sh` dans le terminal par défaut.
 Il traite **tous les montages actifs** sous `/investigation`.
 
 ## Déroulement

@@ -14,7 +14,7 @@ Examiner les fichiers d’un support monté dans `/investigation` et rattacher l
 
 - Un utilisateur et un projet créés dans la configuration.
 - Un support à examiner et de l’espace pour les résultats.
-- Konsole disponible pour les scripts interactifs.
+- Terminal par défaut configuré pour les scripts interactifs.
 
 ## Procédure
 

@@ -8,7 +8,6 @@ un peripherique a analyser (il faut utiliser le menu "Analyse USB / Disque Dur
 """
 
 import os
-import subprocess
 import tkinter as tk
 from tkinter import messagebox
 
@@ -40,26 +39,12 @@ from vigil_gui_base import (
 )
 
 
-def _run_script_in_konsole(script_path, user, project):
+def _run_script_in_terminal(script_path, user, project):
     if not os.path.exists(script_path):
         messagebox.showerror("Erreur", f"Script introuvable : {script_path}")
         return
     vigil_data.set_active(user, project if project else "(no-project)")
-    try:
-        subprocess.Popen([
-            base.script_terminal(), "-e", "bash", "-c",
-            f"bash {script_path}; rc=$?; "
-            f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-            f"✓ Outil terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
-            f"else echo -e '\\n\\e[91m"
-            f"✕ Outil terminé avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-            f"read"
-        ])
-    except FileNotFoundError:
-        messagebox.showerror("Erreur",
-                             "Terminal introuvable. Installez Konsole ou xterm.")
-    except Exception as exc:
-        messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
+    base.run_in_terminal(["bash", script_path])
 
 
 
@@ -150,13 +135,13 @@ def show_stockage_view():
             return
         script = os.path.join(vigil_data.SCRIPTS_DIR,
                               "stockage", "vigil_stockage_mount.sh")
-        _run_script_in_konsole(script, user or "(no-user)",
+        _run_script_in_terminal(script, user or "(no-user)",
                                project if project else "(no-project)")
 
     def do_umount():
         script = os.path.join(vigil_data.SCRIPTS_DIR,
                               "stockage", "vigil_stockage_umount.sh")
-        _run_script_in_konsole(script, user or "(no-user)",
+        _run_script_in_terminal(script, user or "(no-user)",
                                project if project else "(no-project)")
 
     accent_button(

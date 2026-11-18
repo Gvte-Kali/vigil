@@ -8,7 +8,6 @@ selectionner une entite ni un utilisateur.
 """
 
 import os
-import subprocess
 import sys
 import tkinter as tk
 from datetime import datetime
@@ -142,21 +141,7 @@ def show_projects_view():
             messagebox.showerror("Erreur", f"Script introuvable : {script}")
             return
         vigil_data.set_active(None, name)
-        try:
-            subprocess.Popen([
-                base.script_terminal(), "-e", "bash", "-c",
-                f"bash {script} --dest {dest_dir}; rc=$?; "
-                f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-                f"\u2713 Export terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
-                f"else echo -e '\\n\\e[91m"
-                f"\u2715 Export terminé avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-                f"read"
-            ])
-        except FileNotFoundError:
-            messagebox.showerror("Erreur",
-                                 "Terminal introuvable. Installez Konsole ou xterm.")
-        except Exception as exc:
-            messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
+        base.run_in_terminal(["bash", script, "--dest", dest_dir], "Export")
 
     def delete_project():
         name = selected_project()

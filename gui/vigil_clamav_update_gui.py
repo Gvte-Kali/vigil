@@ -8,7 +8,6 @@ Deux boutons :
 """
 
 import os
-import subprocess
 import tkinter as tk
 from tkinter import messagebox
 
@@ -38,25 +37,11 @@ from vigil_gui_base import (
 )
 
 
-def _run_script_in_konsole(script_path):
+def _run_script_in_terminal(script_path):
     if not os.path.exists(script_path):
         messagebox.showerror("Erreur", f"Script introuvable : {script_path}")
         return
-    try:
-        subprocess.Popen([
-            base.script_terminal(), "-e", "bash", "-c",
-            f"bash {script_path}; rc=$?; "
-            f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-            f"✓ Mise à jour terminée. Appuyez sur Entrée pour fermer...\\e[0m'; "
-            f"else echo -e '\\n\\e[91m"
-            f"✕ Mise à jour terminée avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-            f"read"
-        ])
-    except FileNotFoundError:
-        messagebox.showerror("Erreur",
-                             "Terminal introuvable. Installez Konsole ou xterm.")
-    except Exception as exc:
-        messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
+    base.run_in_terminal(["bash", script_path], "Mise à jour")
 
 
 
@@ -118,7 +103,7 @@ def show_clamav_update_view():
             "La machine doit être connectée à Internet.\n"
             "Le mot de passe administrateur sera demandé.")
         if confirm:
-            _run_script_in_konsole(update_online)
+            _run_script_in_terminal(update_online)
 
     def do_usb():
         confirm = messagebox.askyesno(
@@ -128,7 +113,7 @@ def show_clamav_update_view():
             "contenant les fichiers de base.\n"
             "Le mot de passe administrateur sera demandé.")
         if confirm:
-            _run_script_in_konsole(update_usb)
+            _run_script_in_terminal(update_usb)
 
     accent_button(
         actions.content, COLOR_SUCCESS,

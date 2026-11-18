@@ -8,7 +8,7 @@ nav_order: 21
 # Recherche de menaces
 
 Depuis l’accueil, **Recherche de menaces** lance
-`scripts/clamav/vigil_malware_hunt.sh` dans Konsole.
+`scripts/clamav/vigil_malware_hunt.sh` dans le terminal par défaut.
 Ce parcours utilise un opérateur et son propre journal, **sans projet**.
 
 ## Procédure

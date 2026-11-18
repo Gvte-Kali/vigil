@@ -18,7 +18,7 @@ script référencé par l'orchestrateur)
 [ ] `python3 -m py_compile gui/<module>.py` sur chaque module Python modifié.
 [ ] GUI : ouvrir la page d'analyse, aucune erreur dans la console au
     démarrage, au changement de filtre, au changement de script.
-[ ] Lancer un scan quelconque depuis la GUI (konsole s'ouvre, custody
+[ ] Lancer un scan quelconque depuis la GUI (le terminal par défaut s’ouvre, custody
     journalisée, PDF généré, copie dans le dossier du projet).
 [ ] `vigil_scan_all.sh` : s'exécute de bout en bout sans référence cassée
     (aucun « Script introuvable »), PDF consolidé généré.
@@ -99,7 +99,7 @@ Exécution :
     tableau principal bascule sur « Tout afficher » et coche EXACTEMENT
     les analyses du preset (les autres décochées).
 [x] « Lancer les analyses sélectionnées » après application d'un preset :
-    seuls les scripts du preset sont exécutés (vérifier dans konsole et
+    seuls les scripts du preset sont exécutés (vérifier dans le terminal et
     dans chain_of_custody.log — détail « preset=<nom> »).
 [x] Décocher une ligne à la main après application d'un preset : le nom
     du preset n'est plus journalisé dans la custody (sélection modifiée).
@@ -133,7 +133,7 @@ Paramètres des analyses cochées (panneau sous le tableau) :
     s'applique à toutes les analyses concernées.
 [x] Paramètre de type dossier : case + champ + bouton Parcourir ; le
     dossier choisi est bien passé au script concerné (vérifier dans le
-    konsole : --copy-to <dossier>).
+    terminal : --copy-to <dossier>).
 [x] L'option « Générer un rapport PDF » n'apparaît PAS dans le panneau
     (le multi-scans génère déjà le PDF consolidé).
 [x] Décocher une analyse : ses paramètres disparaissent du panneau, les
@@ -571,7 +571,7 @@ consolidé unique)
 --------------------------------------------------------------------------------
 [ ] `bash -n scripts/clamav/vigil_malware_hunt.sh` passe.
 [ ] Bouton « Recherche de menaces » : confirmation affichée (5 étapes),
-    konsole s'ouvre, utilisateur demandé (sélection numérotée + q).
+    le terminal par défaut s’ouvre, utilisateur demandé (sélection numérotée + q).
 [ ] Sans projet actif : arrêt propre avec message explicite (l'index est un
     livrable signé, il exige un projet).
 [ ] Chaîne complète sur clé de test (avec un exe renommé .jpg + un fichier

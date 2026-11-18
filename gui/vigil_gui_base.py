@@ -17,6 +17,7 @@ une fenetre via ``VigilWindow`` ou ``navigate_to``, puis on appelle
 
 import fcntl
 import os
+import shlex
 import shutil
 import sys
 import subprocess
@@ -35,9 +36,74 @@ MOUNT_POINTS = ("/investigation", "/stockage")
 USB_GUARD_LOCK = "/run/vigil-usb.lock"
 
 
-def script_terminal():
-    """Return a terminal that accepts a command and arguments after -e."""
-    return shutil.which("konsole") or "xterm"
+def terminal_command(command):
+    """Resolve the session's terminal launcher without choosing an emulator."""
+    override = os.environ.get("VIGIL_TERMINAL", "").strip()
+    if override:
+        return [*shlex.split(override), *command]
+
+    desktops = os.environ.get("XDG_CURRENT_DESKTOP", "").lower().split(":")
+    if "kde" in desktops:
+        reader = shutil.which("kreadconfig6") or shutil.which("kreadconfig5")
+        if reader:
+            preferred = subprocess.run(
+                [reader, "--file", "kdeglobals", "--group", "General",
+                 "--key", "TerminalApplication"],
+                capture_output=True, text=True, check=False,
+            )
+            if preferred.returncode == 0 and preferred.stdout.strip():
+                terminal = shlex.split(preferred.stdout)
+                if shutil.which(terminal[0]):
+                    return [*terminal, "-e", *command]
+
+    if "xfce" in desktops:
+        helper = shutil.which("xfce4-mime-helper") or shutil.which("exo-open")
+        if helper:
+            return [helper, "--launch", "TerminalEmulator", shlex.join(command)]
+
+    xdg_terminal = shutil.which("xdg-terminal-exec")
+    if xdg_terminal:
+        return [xdg_terminal, "--", *command]
+    alternatives = shutil.which("x-terminal-emulator")
+    if alternatives:
+        return [alternatives, "-e", *command]
+    raise FileNotFoundError(
+        "Configurez un terminal par défaut via xdg-terminal-exec "
+        "ou indiquez le lanceur de votre session dans VIGIL_TERMINAL."
+    )
+
+
+def _check_terminal_process(process):
+    status = process.poll()
+    if status is None:
+        get_root().after(500, _check_terminal_process, process)
+    elif status:
+        messagebox.showerror(
+            "Terminal",
+            "Le lancement a échoué ou le terminal a été interrompu. "
+            "Vérifiez le terminal par défaut de la session.",
+        )
+
+
+def run_in_terminal(command, label="Outil"):
+    """Run an action with its arguments and keep the terminal open for review."""
+    pause = r"""
+"$@"
+rc=$?
+if [ "$rc" -eq 0 ]; then
+    printf '\n\033[92m✓ %s : opération terminée.\033[0m\n' "$0"
+else
+    printf '\n\033[91m✕ %s : opération terminée avec une erreur.\033[0m\n' "$0"
+fi
+read -r -p 'Appuyez sur Entrée pour fermer...'
+exit 0
+"""
+    try:
+        process = subprocess.Popen(terminal_command(["bash", "-c", pause, label, *command]))
+    except (OSError, ValueError) as exc:
+        messagebox.showerror("Terminal", str(exc))
+        return
+    get_root().after(500, _check_terminal_process, process)
 
 
 def mounted_children(base):

@@ -5,7 +5,7 @@
        (chaque paquet y est commenté) : base, montage USB, forensique
        (dc3dd, ewf-tools, afflib-tools), analyses (exiftool, ffmpeg,
        p7zip-full, zstd, binwalk, pv), réparation partitions (gdisk,
-       growpart, parted), Python (tkinter, reportlab, cairosvg), konsole,
+       growpart, parted), Python (tkinter, reportlab, cairosvg), terminal par défaut,
        kdialog/zenity, imagemagick/feh (papier peint lsblk)
      - Symlink /usr/local/bin/vigil, sudoers NOPASSWD, màj ClamAV
      - RDP (xrdp) : demandé interactivement (pas activé par défaut)
