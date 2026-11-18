@@ -21,7 +21,9 @@ import shlex
 import shutil
 import sys
 import subprocess
+import tempfile
 import tkinter as tk
+from pathlib import Path
 from tkinter import ttk, messagebox
 
 import vigil_data
@@ -73,11 +75,12 @@ def terminal_command(command):
     )
 
 
-def _check_terminal_process(process):
+def _check_terminal_process(process, script):
     status = process.poll()
     if status is None:
-        get_root().after(500, _check_terminal_process, process)
+        get_root().after(500, _check_terminal_process, process, script)
     elif status:
+        script.unlink(missing_ok=True)
         messagebox.showerror(
             "Terminal",
             "Le lancement a échoué ou le terminal a été interrompu. "
@@ -86,24 +89,36 @@ def _check_terminal_process(process):
 
 
 def run_in_terminal(command, label="Outil"):
-    """Run an action with its arguments and keep the terminal open for review."""
+    """Run an action and keep the terminal open for review."""
+    # Some terminal launchers accept only one argument after their exec flag.
+    # A private script preserves argv across both command-string and argv launchers.
     pause = r"""
-"$@"
 rc=$?
 if [ "$rc" -eq 0 ]; then
-    printf '\n\033[92m✓ %s : opération terminée.\033[0m\n' "$0"
+    printf '\n\033[92m✓ %s : opération terminée.\033[0m\n' "$label"
 else
-    printf '\n\033[91m✕ %s : opération terminée avec une erreur.\033[0m\n' "$0"
+    printf '\n\033[91m✕ %s : opération terminée avec une erreur.\033[0m\n' "$label"
 fi
 read -r -p 'Appuyez sur Entrée pour fermer...'
 exit 0
 """
+    script = None
     try:
-        process = subprocess.Popen(terminal_command(["bash", "-c", pause, label, *command]))
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", prefix="vigil-terminal-", dir="/tmp", delete=False
+        ) as output:
+            script = Path(output.name)
+            os.fchmod(output.fileno(), 0o700)
+            output.write('#!/bin/bash\nrm -f -- "$0"\n')
+            output.write(f"label={shlex.quote(label)}\n{shlex.join(command)}\n")
+            output.write(pause)
+        process = subprocess.Popen(terminal_command([str(script)]))
     except (OSError, ValueError) as exc:
+        if script is not None:
+            script.unlink(missing_ok=True)
         messagebox.showerror("Terminal", str(exc))
         return
-    get_root().after(500, _check_terminal_process, process)
+    get_root().after(500, _check_terminal_process, process, script)
 
 
 def mounted_children(base):
