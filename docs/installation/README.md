@@ -27,21 +27,52 @@ et les droits sudo du compte opérateur. Ce compte doit être administrateur.
 L’accès RDP est proposé pendant l’installation interactive via `apt` et
 reste facultatif. Après installation, [configurer l’entité et les utilisateurs](../configuration/systeme.md).
 
-L’interface Tkinter utilise X11 ou XWayland. Les actions interactives
-s’ouvrent dans le terminal par défaut de la session. Vigil utilise le réglage
-de Plasma ou de Xfce lorsqu’il est accessible, puis le lanceur
-`xdg-terminal-exec` ou l’alternative `x-terminal-emulator` de Debian.
-L’installateur propose `xdg-terminal-exec` si le paquet est disponible.
+L’interface Tkinter nécessite X11 ou XWayland. La protection udev s’applique
+indépendamment du bureau et du gestionnaire de fenêtres.
 
-Sur une session minimale, définir le terminal préféré dans
-`${XDG_CONFIG_HOME:-$HOME/.config}/xdg-terminals.list` avec son identifiant
-`.desktop`. Si la session ne propose pas de lanceur compatible, on peut
-aussi définir `VIGIL_TERMINAL` avec le chemin du lanceur et les options
-requises pour exécuter une commande. Par exemple, pour un terminal qui
-accepte l’option `-e`, utiliser `VIGIL_TERMINAL='mon-terminal -e' vigil`.
+## Terminal des actions interactives
 
-La protection udev s’applique indépendamment du bureau et du gestionnaire
-de fenêtres.
+| Session | Terminal utilisé par Vigil |
+|---|---|
+| KDE Plasma | Le terminal préféré dans KDE, si le réglage est accessible et la commande disponible. |
+| Xfce | Le terminal préféré de Xfce, via `xfce4-mime-helper` ou `exo-open`. |
+| GNOME | Le terminal sélectionné par `xdg-terminal-exec`, selon la configuration XDG de la session. |
+| Hyprland, i3, Sway et autres gestionnaires | Le terminal sélectionné par `xdg-terminal-exec`. Un raccourci comme `Super+Entrée` configure le terminal de ce raccourci uniquement. |
+
+`VIGIL_TERMINAL` a priorité sur ces réglages. En l’absence de lanceur natif
+détecté, Vigil essaie `xdg-terminal-exec`, puis `x-terminal-emulator`
+si le lanceur XDG est absent. Ce dernier correspond à l’alternative système
+sur Debian et ses dérivés. L’installateur propose `xdg-terminal-exec` si le
+paquet est disponible. Si aucun lanceur compatible n’est trouvé, Vigil
+affiche une erreur.
+
+### Choisir un terminal via XDG
+
+1. Créer ou ouvrir `${XDG_CONFIG_HOME:-$HOME/.config}/xdg-terminals.list`.
+2. Ajouter l’identifiant `.desktop` du terminal souhaité sur une ligne, par
+   exemple `foot.desktop` si cette entrée est installée. Placer le premier
+   choix en tête de liste.
+3. Depuis la session graphique, vérifier le choix avec
+   `xdg-terminal-exec -- bash -c 'echo "Terminal de Vigil"; read -r'`.
+   Appuyer sur Entrée pour fermer la fenêtre.
+
+On peut ainsi utiliser dans Vigil le même terminal que dans le raccourci
+du gestionnaire de fenêtres.
+
+### Choisir un terminal pour Vigil uniquement
+
+Définir `VIGIL_TERMINAL` avec la commande du terminal, suivie des options
+dont il a besoin pour exécuter un programme. Vigil ajoute ensuite le
+programme et ses arguments. Par exemple, pour un terminal qui accepte
+l’option `-e` :
+
+```bash
+VIGIL_TERMINAL='mon-terminal -e' vigil
+```
+
+Cette commande applique le choix à l’instance de Vigil ainsi lancée.
+Pour un réglage permanent accessible depuis le menu des applications,
+privilégier la configuration XDG ou le réglage natif du bureau.
 
 ## Protection des supports
 
