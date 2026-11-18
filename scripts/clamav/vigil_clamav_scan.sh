@@ -288,7 +288,7 @@ echo ""
 echo -e "${BLUE}=== Vérification des dépendances ===${NC}"
 if ! command -v clamscan >/dev/null 2>&1; then
     echo -e "${RED}❌ clamscan n'est pas installé.${NC}"
-    echo -e "${YELLOW}    Installez-le : sudo apt install clamav${NC}"
+    echo -e "${YELLOW}    Installez-le : ClamAV${NC}"
     echo -e "${YELLOW}    Puis mettez à jour les bases : sudo bash $(dirname "$0")/vigil_clamav_update.sh${NC}"
     ERRORS=$((ERRORS + 1))
     final_pause

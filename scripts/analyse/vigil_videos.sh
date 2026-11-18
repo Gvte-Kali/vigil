@@ -143,7 +143,7 @@ if command -v ffprobe >/dev/null 2>&1; then
     echo -e "${GREEN}✅ ffprobe détecté : extraction durée/résolution disponible.${NC}"
 else
     echo -e "${YELLOW}⚠️  ffprobe absent : extraction durée/résolution désactivée.${NC}"
-    echo -e "${GREY}    Installez-le : sudo apt install ffmpeg${NC}"
+    echo -e "${GREY}    Installez-le : FFmpeg${NC}"
 fi
 [ "$MISSING" -gt 0 ] && fail "Dépendances obligatoires manquantes ($MISSING)."
 

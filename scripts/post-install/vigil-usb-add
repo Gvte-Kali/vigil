@@ -1,0 +1,15 @@
+#!/bin/bash
+# Invoked by udev as root. The installer places a root-owned copy in libexec.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+device=$1
+
+# A GUI holds a shared lock. An exclusive lock succeeds only with no GUI open.
+exec 9</run/vigil-usb.lock || exit 1
+flock -n -E 75 -x 9
+[ "$?" -eq 75 ] || exit 1
+
+# Mark the device for UDisks even if the kernel refuses the RO request.
+if ! blockdev --setro "$device" || [ "$(blockdev --getro "$device")" != 1 ]; then
+    logger -p daemon.err -t vigil-usb -- "Impossible de verrouiller $device en lecture seule"
+fi
+exit 0

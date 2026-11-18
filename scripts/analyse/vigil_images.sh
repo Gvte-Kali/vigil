@@ -148,7 +148,7 @@ if command -v exiftool >/dev/null 2>&1; then
     echo -e "${GREEN}✅ exiftool détecté : extraction EXIF disponible.${NC}"
 else
     echo -e "${YELLOW}⚠️  exiftool absent : extraction EXIF désactivée.${NC}"
-    echo -e "${GREY}    Installez-le : sudo apt install libimage-exiftool-perl${NC}"
+    echo -e "${GREY}    Installez-le : ExifTool${NC}"
 fi
 [ "$MISSING" -gt 0 ] && fail "Dépendances obligatoires manquantes ($MISSING)."
 

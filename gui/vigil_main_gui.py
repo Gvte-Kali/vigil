@@ -57,7 +57,7 @@ def _run_script_in_konsole(script_path, user, project):
         vigil_data.set_active(user, project if project else "(no-project)")
     try:
         subprocess.Popen([
-            "konsole", "-e", "bash", "-c",
+            base.script_terminal(), "-e", "bash", "-c",
             f"bash {script_path}; rc=$?; "
             f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
             f"\u2713 Outil termin\u00e9. Appuyez sur Entr\u00e9e pour fermer...\\e[0m'; "
@@ -67,7 +67,7 @@ def _run_script_in_konsole(script_path, user, project):
         ])
     except FileNotFoundError:
         messagebox.showerror("Erreur",
-                             "Konsole absent. Installez-le : sudo apt install konsole")
+                             "Terminal introuvable. Installez Konsole ou xterm.")
     except Exception as exc:
         messagebox.showerror("Erreur", f"\u00c9chec du lancement : {exc}")
 

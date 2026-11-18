@@ -2,7 +2,7 @@
 
 Application Linux d’analyse de supports numériques : montage en lecture seule,
 analyses de fichiers, recherche de menaces et rapports PDF.
-Pensée pour un poste dédié sous ParrotOS / Debian, avec une interface Python / Tkinter.
+Interface Python / Tkinter pour les postes Linux avec X11 ou XWayland.
 
 [Lire la documentation](https://gvte-kali.github.io/vigil/) · [Documentation dans le dépôt](docs/index.md)
 
@@ -16,9 +16,10 @@ sudo bash scripts/post-install/post_install_vigil.sh
 vigil
 ```
 
-Le script installe les dépendances et configure le poste : montage automatique,
-règles sudo, raccourcis et ClamAV. Le RDP est facultatif.
-Voir [Installation](docs/installation/README.md) et `post-install-checked.txt`.
+Le script détecte `apt`, `dnf` ou `pacman`. Pendant la session Vigil,
+les nouveaux supports bloc USB et MMC/SD sont protégés en lecture seule.
+L’action **Périphérique de stockage** permet de monter un support sélectionné
+en lecture/écriture. Voir [Installation](docs/installation/README.md).
 
 ## Première analyse
 

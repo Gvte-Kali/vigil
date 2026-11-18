@@ -3,6 +3,8 @@ set -uo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
+source "$(dirname -- "${BASH_SOURCE[0]}")/../vigil_block_policy.sh"
+
 # --- Demontage des peripheriques de stockage montes dans /stockage ---
 
 # --- Couleurs ---
@@ -170,6 +172,7 @@ for mount_point in "${MOUNT_POINTS[@]}"; do
 done
 
 # --- 2. Demontage de chaque peripherique ---
+vigil_storage_lock || exit 1
 for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo ""
     echo -e "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}"
@@ -213,7 +216,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
         # apres usage en stockage, par securite (empeche une reecriture
         # accidentelle avant debranchement ou avant un montage forensique).
         if [ -n "$DEVICE" ] && [ -b "$DEVICE" ] && command -v blockdev >/dev/null 2>&1; then
-            if sudo blockdev --setro "$DEVICE" 2>/dev/null; then
+            if vigil_storage_relock "$DEVICE"; then
                 echo -e "${GREEN}\u2705 Block device $DEVICE rebloque en lecture seule (securite).${NC}"
                 log_action "set_ro_stockage" "$DEVICE" "" "success" "Block device rebloque en RO apres demontage"
             else
@@ -239,6 +242,8 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
         fi
     fi
 done
+
+vigil_storage_unlock
 
 # --- 3. Verification finale ---
 echo ""

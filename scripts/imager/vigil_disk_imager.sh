@@ -3,6 +3,8 @@ set -uo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
+source "$(dirname -- "${BASH_SOURCE[0]}")/../vigil_block_policy.sh"
+
 # --- Couleurs ---
 RED='\e[91m'
 GREEN='\e[92m'
@@ -129,9 +131,9 @@ if [ "$MISSING_DEPS" -gt 0 ]; then
 fi
 
 echo -e "${GREY}Formats disponibles :${NC}"
-[ "$_HAVE_EWF" -eq 1 ]    && echo -e "  ${GREEN}✅${NC} E01 (ewfacquire)" || echo -e "  ${YELLOW}⚠️${NC} E01 absent — sudo apt install ewf-tools"
-[ "$_HAVE_DC3DD" -eq 1 ] && echo -e "  ${GREEN}✅${NC} RAW (dc3dd)"     || echo -e "  ${YELLOW}⚠️${NC} RAW absent — sudo apt install dc3dd"
-[ "$_HAVE_AFF" -eq 1 ]   && echo -e "  ${GREEN}✅${NC} AFF (afflib)"    || echo -e "  ${YELLOW}⚠️${NC} AFF absent — sudo apt install afflib-tools"
+[ "$_HAVE_EWF" -eq 1 ]    && echo -e "  ${GREEN}✅${NC} E01 (ewfacquire)" || echo -e "  ${YELLOW}⚠️${NC} E01 absent — installez les outils EWF"
+[ "$_HAVE_DC3DD" -eq 1 ] && echo -e "  ${GREEN}✅${NC} RAW (dc3dd)"     || echo -e "  ${YELLOW}⚠️${NC} RAW absent — installez dc3dd"
+[ "$_HAVE_AFF" -eq 1 ]   && echo -e "  ${GREEN}✅${NC} AFF (afflib)"    || echo -e "  ${YELLOW}⚠️${NC} AFF absent — installez les outils AFFlib"
 
 echo ""
 echo -e "${BLUE}Utilisateur : ${ACTIVE_USER}${NC}"
@@ -290,19 +292,19 @@ echo -e "  ${BOLD}${BLUE}[1]${NC}  ${BOLD}RAW (dd)${NC}"
 echo -e "        ${GREY}Extensions : .raw .dd .img${NC}"
 echo -e "        ${GREY}Copie bit-à-bit sans compression ni métadonnées.${NC}"
 echo -e "        ${GREY}Logiciels : dc3dd, dd, Autopsy, FTK Imager, X-Ways${NC}"
-[ "$_HAVE_DC3DD" -eq 1 ] && echo -e "        ${GREEN}✅ dc3dd disponible${NC}" || echo -e "        ${YELLOW}⚠️ dc3dd absent — sudo apt install dc3dd${NC}"
+[ "$_HAVE_DC3DD" -eq 1 ] && echo -e "        ${GREEN}✅ dc3dd disponible${NC}" || echo -e "        ${YELLOW}⚠️ dc3dd absent — installez dc3dd${NC}"
 echo ""
 echo -e "  ${BOLD}${BLUE}[2]${NC}  ${BOLD}E01 (EnCase / EWF)${NC}  ${GREY}(par défaut)${NC}"
 echo -e "        ${GREY}Extensions : .E01 (segments .E02, .E03 ... si > 2GiB)${NC}"
 echo -e "        ${GREY}Format Expert Witness : compression + hash + métadonnées.${NC}"
 echo -e "        ${GREY}Logiciels : ewfacquire, EnCase, Autopsy, FTK Imager, X-Ways, Magnet AXIOM${NC}"
-[ "$_HAVE_EWF" -eq 1 ] && echo -e "        ${GREEN}✅ ewfacquire disponible${NC}" || echo -e "        ${YELLOW}⚠️ ewfacquire absent — sudo apt install ewf-tools${NC}"
+[ "$_HAVE_EWF" -eq 1 ] && echo -e "        ${GREEN}✅ ewfacquire disponible${NC}" || echo -e "        ${YELLOW}⚠️ ewfacquire absent — installez les outils EWF${NC}"
 echo ""
 echo -e "  ${BOLD}${BLUE}[3]${NC}  ${BOLD}AFF (Advanced Forensic Format)${NC}"
 echo -e "        ${GREY}Extensions : .aff .afd .afm${NC}"
 echo -e "        ${GREY}Format ouvert : compression + hash + métadonnées + chiffrement optionnel.${NC}"
 echo -e "        ${GREY}Logiciels : affcat, affuse, Autopsy, Sleuth Kit, aimage${NC}"
-[ "$_HAVE_AFF" -eq 1 ] && echo -e "        ${GREEN}✅ afflib disponible${NC}" || echo -e "        ${YELLOW}⚠️ afflib absent — sudo apt install afflib-tools${NC}"
+[ "$_HAVE_AFF" -eq 1 ] && echo -e "        ${GREEN}✅ afflib disponible${NC}" || echo -e "        ${YELLOW}⚠️ afflib absent — installez les outils AFFlib${NC}"
 echo ""
 
 while true; do
@@ -312,7 +314,7 @@ while true; do
     case "$FORMAT_CHOICE" in
         1)
             if [ "$_HAVE_DC3DD" -ne 1 ]; then
-                echo -e "${RED}❌ dc3dd n'est pas installé. Installez-le (sudo apt install dc3dd) ou choisissez un autre format.${NC}"
+                echo -e "${RED}❌ dc3dd n'est pas installé. Installez-le (installez dc3dd) ou choisissez un autre format.${NC}"
                 continue
             fi
             OUTPUT_FORMAT="raw"
@@ -342,7 +344,7 @@ while true; do
             ;;
         2)
             if [ "$_HAVE_EWF" -ne 1 ]; then
-                echo -e "${RED}❌ ewfacquire n'est pas installé. Installez-le (sudo apt install ewf-tools) ou choisissez un autre format.${NC}"
+                echo -e "${RED}❌ ewfacquire n'est pas installé. Installez-le (installez les outils EWF) ou choisissez un autre format.${NC}"
                 continue
             fi
             OUTPUT_FORMAT="ewf"
@@ -352,7 +354,7 @@ while true; do
             ;;
         3)
             if [ "$_HAVE_AFF" -ne 1 ]; then
-                echo -e "${RED}❌ afflib n'est pas installé. Installez-le (sudo apt install afflib-tools) ou choisissez un autre format.${NC}"
+                echo -e "${RED}❌ afflib n'est pas installé. Installez-le (installez les outils AFFlib) ou choisissez un autre format.${NC}"
                 continue
             fi
             OUTPUT_FORMAT="aff"
@@ -424,7 +426,7 @@ case "$TARGET_MODE_CHOICE" in
         ;;
     *)
         # Remettre le disque source en RW avant d'abandonner
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         fail "Choix invalide : $TARGET_MODE_CHOICE"
         ;;
 esac
@@ -456,6 +458,7 @@ if [ "$TARGET_MODE" = "external" ]; then
         esac
         # Exclure le disque source
         [ "/dev/$NAME" = "$SOURCE_DEV" ] && continue
+        vigil_protected_device "/dev/$NAME" && continue
         _rm=$(lsblk -no RM "/dev/$NAME" 2>/dev/null | head -n1 | tr -d '[:space:]')
         _mount=$(lsblk -no MOUNTPOINT "/dev/$NAME" 2>/dev/null | head -n1)
         _mount=${_mount:-}
@@ -476,7 +479,7 @@ if [ "$TARGET_MODE" = "external" ]; then
     done < <(lsblk -P -o NAME,TYPE,SIZE,MODEL 2>/dev/null | grep 'TYPE="disk"')
 
     if [ "$TARGET_NUM" -eq 0 ]; then
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         fail "Aucun disque cible externe détecté. Branchez un disque USB et réessayez."
     fi
 
@@ -484,7 +487,7 @@ if [ "$TARGET_MODE" = "external" ]; then
         echo -ne "${BOLD}${YELLOW}Entrez le numéro du disque cible (ou \"q\" pour quitter) : ${NC}"
         read -r TARGET_CHOICE
         if [ "$TARGET_CHOICE" = "q" ]; then
-            sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+            vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
             echo -e "${YELLOW}Annulé.${NC}"
             _cleanup_target
             final_pause
@@ -502,7 +505,11 @@ if [ "$TARGET_MODE" = "external" ]; then
     echo -e "${GREEN}Disque cible sélectionné :${NC} ${BOLD}$TARGET_DEV${NC}"
 
     # Déverrouiller le disque cible (il était peut-être en RO)
-    sudo blockdev --setrw "$TARGET_DEV" 2>/dev/null || true
+    if vigil_protected_device "$TARGET_DEV"; then
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
+        fail "Ce support est protégé par Vigil. Choisissez une autre destination."
+    fi
+    sudo blockdev --setrw "$TARGET_DEV" || fail "Impossible d’ouvrir la destination en écriture."
 
     # Chercher une partition montable sur le disque cible (1ère ou 2e partition)
     TARGET_PART=""
@@ -522,7 +529,7 @@ if [ "$TARGET_MODE" = "external" ]; then
     done
 
     if [ -z "$TARGET_PART" ]; then
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         fail "Aucune partition montable trouvée sur $TARGET_DEV. Partitionnez/formatez le disque cible d'abord."
     fi
 
@@ -532,14 +539,14 @@ if [ "$TARGET_MODE" = "external" ]; then
     _fst=$(lsblk -no FSTYPE "$TARGET_PART" 2>/dev/null | head -n1 | tr -d '[:space:]')
     [ "$_fst" = "ntfs" ] && _mount_opts="-o big_writes"
     if ! sudo mount $_mount_opts "$TARGET_PART" "$TARGET_POINT" 2>/dev/null; then
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         _cleanup_target
         fail "Échec du montage de $TARGET_PART"
     fi
 
     # Vérifier qu'on peut écrire
     if ! sudo touch "$TARGET_POINT/.vigil_rw_test" 2>/dev/null; then
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         _cleanup_target
         fail "Impossible d'écrire sur la partition cible $TARGET_PART"
     fi
@@ -549,7 +556,7 @@ if [ "$TARGET_MODE" = "external" ]; then
     # Dossier d'images sur la cible
     IMAGE_DIR="$TARGET_POINT/vigil_images"
     sudo mkdir -p "$IMAGE_DIR" 2>/dev/null || {
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         _cleanup_target
         fail "Impossible de créer $IMAGE_DIR"
     }
@@ -621,7 +628,7 @@ else
     echo ""
 
     if [ "$USABLE_BYTES" -le 0 ]; then
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         fail "Espace local insuffisant : la réserve de 20% n'est pas satisfaite. Utilisez un disque cible externe."
     fi
 
@@ -634,7 +641,7 @@ else
         echo -ne "${BOLD}${YELLOW}Continuer quand même ? (o/n) : ${NC}"
         read -r LOCAL_FORCE
         if [ "$LOCAL_FORCE" != "o" ] && [ "$LOCAL_FORCE" != "O" ] && [ "$LOCAL_FORCE" != "y" ] && [ "$LOCAL_FORCE" != "Y" ]; then
-            sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+            vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
             echo -e "${YELLOW}Annulé.${NC}"
             final_pause
             exit 0
@@ -648,7 +655,7 @@ else
     mkdir -p "$IMAGE_DIR" 2>/dev/null || {
         # Réessayer via sudo si l'utilisateur n'a pas les droits
         sudo mkdir -p "$IMAGE_DIR" 2>/dev/null || {
-            sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+            vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
             fail "Impossible de créer $IMAGE_DIR"
         }
     }
@@ -850,7 +857,7 @@ sleep 2
 
 # Libérer le disque source (remise en RW)
 echo -e "${YELLOW}Déverrouillage du disque source...${NC}"
-sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
 
 # Démonter la cible si externe
 _cleanup_target

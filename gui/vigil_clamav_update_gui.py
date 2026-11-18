@@ -44,7 +44,7 @@ def _run_script_in_konsole(script_path):
         return
     try:
         subprocess.Popen([
-            "konsole", "-e", "bash", "-c",
+            base.script_terminal(), "-e", "bash", "-c",
             f"bash {script_path}; rc=$?; "
             f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
             f"✓ Mise à jour terminée. Appuyez sur Entrée pour fermer...\\e[0m'; "
@@ -54,7 +54,7 @@ def _run_script_in_konsole(script_path):
         ])
     except FileNotFoundError:
         messagebox.showerror("Erreur",
-                             "Konsole absent. Installez-le : sudo apt install konsole")
+                             "Terminal introuvable. Installez Konsole ou xterm.")
     except Exception as exc:
         messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 

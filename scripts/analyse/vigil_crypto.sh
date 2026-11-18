@@ -128,11 +128,16 @@ for cmd in file find stat; do
 done
 # Outil optionnel : 7za pour detection mot de passe
 HAS_7ZA=""
-if command -v 7za >/dev/null 2>&1; then
-    HAS_7ZA="7za"
-    echo -e "${GREEN}✅ 7za détecté : détection mot de passe disponible.${NC}"
+for archiver in 7zz 7z 7za; do
+    if command -v "$archiver" >/dev/null 2>&1; then
+        HAS_7ZA=$archiver
+        break
+    fi
+done
+if [ -n "$HAS_7ZA" ]; then
+    echo -e "${GREEN}✅ $HAS_7ZA détecté : détection mot de passe disponible.${NC}"
 else
-    echo -e "${YELLOW}⚠️  7za absent : détection limitée au type MIME.${NC}"
+    echo -e "${YELLOW}⚠️  7-Zip absent : détection limitée au type MIME.${NC}"
 fi
 [ "$MISSING" -gt 0 ] && fail "Dépendances obligatoires manquantes ($MISSING)."
 
@@ -258,7 +263,7 @@ while IFS=$'\t' read -r path mime size mtime rel ext; do
     if [ -n "$HAS_7ZA" ]; then
         LOCK_METHOD_AVAIL="true"
         # 7za gere zip, 7z, rar, et certains documents Office
-        if 7za l -p. "$path" 2>&1 | grep -Eqim1 'password|encrypted|Headers Error|ERROR.*password|Can not open encrypted file'; then
+        if "$HAS_7ZA" l -p. "$path" 2>&1 | grep -Eqim1 'password|encrypted|Headers Error|ERROR.*password|Can not open encrypted file'; then
             is_locked="mot de passe (7za)"
         fi
     fi

@@ -15,7 +15,9 @@ une fenetre via ``VigilWindow`` ou ``navigate_to``, puis on appelle
 ``run_mainloop`` depuis le script d'entree.
 """
 
+import fcntl
 import os
+import shutil
 import sys
 import subprocess
 import tkinter as tk
@@ -30,6 +32,12 @@ import vigil_icons as icons
 # --------------------------------------------------------------------------- #
 
 MOUNT_POINTS = ("/investigation", "/stockage")
+USB_GUARD_LOCK = "/run/vigil-usb.lock"
+
+
+def script_terminal():
+    """Return a terminal that accepts a command and arguments after -e."""
+    return shutil.which("konsole") or "xterm"
 
 
 def mounted_children(base):
@@ -846,4 +854,20 @@ def accent_button(parent, accent_color, make_button, icon_name="",
 def run_mainloop():
     """Point d'entree commun : restaure la nav puis lance le mainloop."""
     restore_nav_from_env()
-    get_root().mainloop()
+    root = get_root()
+    if os.path.realpath(vigil_data.BASE_DIR) != "/opt/vigil":
+        # Une copie de développement ne contrôle pas le poste.
+        root.mainloop()
+        return
+    try:
+        guard = open(USB_GUARD_LOCK, "rb")
+        fcntl.flock(guard, fcntl.LOCK_SH)
+    except OSError as exc:
+        messagebox.showerror(
+            "Protection des supports",
+            f"Impossible d’activer le verrou Vigil. Relancez la post-installation.\n{exc}",
+            parent=root,
+        )
+        raise SystemExit(1) from exc
+    with guard:
+        root.mainloop()

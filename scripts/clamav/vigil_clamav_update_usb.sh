@@ -3,6 +3,8 @@ set -uo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
+source "$(dirname -- "${BASH_SOURCE[0]}")/../vigil_block_policy.sh"
+
 # --- Mise a jour des bases virales ClamAV depuis un peripherique USB ---
 #
 # Pour les postes isoles (hors reseau) : on recupere les fichiers de bases
@@ -98,7 +100,7 @@ while IFS= read -r -d '' dir; do
         echo -e "${YELLOW}Démontage de $dir...${NC}"
         sudo umount "$dir" 2>/dev/null || sudo umount -l "$dir" 2>/dev/null || true
         if [ -n "$DEVICE" ] && [ -b "$DEVICE" ]; then
-            sudo blockdev --setrw "$DEVICE" 2>/dev/null || true
+            vigil_restore_rw "$DEVICE" 2>/dev/null || true
         fi
         sudo rmdir "$dir" 2>/dev/null || true
     fi
@@ -221,7 +223,7 @@ esac
 if ! sudo mount $MOUNT_OPTS "$DEVICE_PATH" "$MOUNT_POINT" 2>/dev/null; then
     echo -e "${RED}❌ Échec du montage de $DEVICE_PATH.${NC}"
     sudo mount $MOUNT_OPTS "$DEVICE_PATH" "$MOUNT_POINT" 2>&1 || true
-    sudo blockdev --setrw "$DEVICE_PATH" 2>/dev/null || true
+    vigil_restore_rw "$DEVICE_PATH" 2>/dev/null || true
     sudo rmdir "$MOUNT_POINT" 2>/dev/null || true
     fail "Échec du montage."
 fi
@@ -256,7 +258,7 @@ if [ "${#FOUND_FILES[@]}" -eq 0 ]; then
 
     # Demonter avant de quitter
     sudo umount "$MOUNT_POINT" 2>/dev/null || sudo umount -l "$MOUNT_POINT" 2>/dev/null || true
-    sudo blockdev --setrw "$DEVICE_PATH" 2>/dev/null || true
+    vigil_restore_rw "$DEVICE_PATH" 2>/dev/null || true
     sudo rmdir "$MOUNT_POINT" 2>/dev/null || true
     fail "Aucune base ClamAV trouvée sur le périphérique."
 fi
@@ -298,7 +300,7 @@ sudo rmdir "$MOUNT_POINT" 2>/dev/null || true
 
 # Rebloquer le peripherique en RO puis remettre en RW (etat propre)
 if [ -b "$DEVICE_PATH" ]; then
-    sudo blockdev --setrw "$DEVICE_PATH" 2>/dev/null || true
+    vigil_restore_rw "$DEVICE_PATH" 2>/dev/null || true
     echo -e "${GREEN}✅ Périphérique démonté, block device remis en lecture/écriture.${NC}"
 fi
 

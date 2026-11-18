@@ -3,6 +3,8 @@ set -uo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
+source "$(dirname -- "${BASH_SOURCE[0]}")/../vigil_block_policy.sh"
+
 # --- Couleurs ---
 RED='\e[91m'
 GREEN='\e[92m'
@@ -1019,7 +1021,7 @@ fi
             echo -e "${RED}❌ $dev n'est pas monté en lecture seule !${NC}"
             sudo umount "$mnt" 2>/dev/null || true
             sudo rmdir "$mnt" 2>/dev/null || true
-            command -v blockdev >/dev/null 2>&1 && sudo blockdev --setrw "$dev" 2>/dev/null || true
+            command -v blockdev >/dev/null 2>&1 && vigil_restore_rw "$dev" 2>/dev/null || true
             log_action "mount" "$dev" "$mnt" "failed" "Périphérique non monté en lecture seule"
             return 1
         fi

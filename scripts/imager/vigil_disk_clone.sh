@@ -3,6 +3,8 @@ set -uo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
+source "$(dirname -- "${BASH_SOURCE[0]}")/../vigil_block_policy.sh"
+
 # --- Clonage bit-a-bit d'un disque vers un autre peripherique ---
 #
 # Copie le contenu integral d'un disque source vers un disque cible, secteur
@@ -136,7 +138,7 @@ for cmd in lsblk blockdev sync; do
     fi
 done
 if ! command -v dc3dd >/dev/null 2>&1; then
-    echo -e "${YELLOW}⚠️  dc3dd absent — sudo apt install dc3dd (recommandé pour la fiabilité)${NC}"
+    echo -e "${YELLOW}⚠️  dc3dd absent — installez dc3dd (recommandé pour la fiabilité)${NC}"
     echo -e "${GREY}    Fallback possible via dd si dc3dd n'est pas installé.${NC}"
 fi
 if [ "$MISSING_DEPS" -gt 0 ]; then
@@ -297,6 +299,7 @@ while IFS= read -r line; do
     fi
     # Exclure le disque source
     [ "/dev/$NAME" = "$SOURCE_DEV" ] && continue
+    vigil_protected_device "/dev/$NAME" && continue
     _vendor=$(lsblk -no VENDOR "/dev/$NAME" 2>/dev/null | head -n1 | tr -d '[:space:]')
     _serial=$(lsblk -no SERIAL "/dev/$NAME" 2>/dev/null | head -n1 | tr -d '[:space:]')
     _tran=$(lsblk -no TRAN "/dev/$NAME" 2>/dev/null | head -n1 | tr -d '[:space:]')
@@ -323,7 +326,7 @@ while IFS= read -r line; do
 done < <(lsblk -P -o NAME,TYPE,SIZE,MODEL 2>/dev/null | grep 'TYPE="disk"')
 
 if [ "$TARGET_NUM" -eq 0 ]; then
-    sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+    vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
     fail "Aucun disque cible détecté. Branchez un disque cible (au moins $(_fmt_human $SOURCE_BYTES))."
 fi
 
@@ -331,7 +334,7 @@ while true; do
     echo -ne "${BOLD}${YELLOW}Entrez le numéro du disque cible (ou \"q\" pour quitter) : ${NC}"
     read -r TARGET_CHOICE
     if [ "$TARGET_CHOICE" = "q" ]; then
-        sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+        vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
         echo -e "${YELLOW}Annulé.${NC}"
         final_pause
         exit 0
@@ -355,7 +358,7 @@ if [ "$TARGET_BYTES" -lt "$SOURCE_BYTES" ]; then
     echo -e "${YELLOW}   Source : $(_fmt_human $SOURCE_BYTES) ($SOURCE_DEV)${NC}"
     echo -e "${YELLOW}   Cible  : $(_fmt_human $TARGET_BYTES) ($TARGET_DEV)${NC}"
     echo -e "${YELLOW}   Le disque cible ne peut pas contenir toute la source.${NC}"
-    sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+    vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
     fail "Disque cible insuffisant. Branchez un disque d'au moins $(_fmt_human $SOURCE_BYTES)."
 fi
 
@@ -377,7 +380,11 @@ if [ -n "$TARGET_MOUNTED" ]; then
 fi
 
 # Deverrouiller la cible en lecture/écriture
-sudo blockdev --setrw "$TARGET_DEV" 2>/dev/null || true
+if vigil_protected_device "$TARGET_DEV"; then
+    vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
+    fail "Ce support est protégé par Vigil. Choisissez une autre destination."
+fi
+sudo blockdev --setrw "$TARGET_DEV" || fail "Impossible d’ouvrir la destination en écriture."
 
 # ============================================================================
 # 3. CONFIRMATION + COPIE
@@ -396,7 +403,7 @@ echo ""
 echo -ne "${BOLD}${YELLOW}Confirmer le clonage de $SOURCE_DEV vers $TARGET_DEV ? (oui/non) : ${NC}"
 read -r CONFIRM
 if [ "$CONFIRM" != "oui" ] && [ "$CONFIRM" != "o" ] && [ "$CONFIRM" != "O" ]; then
-    sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+    vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
     echo -e "${YELLOW}Annulé.${NC}"
     final_pause
     exit 0
@@ -567,7 +574,7 @@ fi
 # ============================================================================
 echo ""
 echo -e "${YELLOW}Déverrouillage du disque source...${NC}"
-sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
+vigil_restore_rw "$SOURCE_DEV" 2>/dev/null || true
 
 echo ""
 if [ "$ERRORS" -gt 0 ]; then

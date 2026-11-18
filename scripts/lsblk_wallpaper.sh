@@ -1,15 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- 1. Installer les dépendances si manquantes ---
-if ! command -v convert &> /dev/null; then
-    echo "Installation de ImageMagick..."
-    sudo apt install -y imagemagick
-fi
-if ! command -v feh &> /dev/null; then
-    echo "Installation de feh..."
-    sudo apt install -y feh
-fi
+# Les paquets sont installés par la post-installation de Vigil.
+for tool in convert feh; do
+    if ! command -v "$tool" >/dev/null; then
+        echo "Commande absente : $tool. Installez ImageMagick et feh." >&2
+        exit 1
+    fi
+done
 
 # --- 2. Tuer les instances existantes de feh ---
 pkill feh 2>/dev/null || true

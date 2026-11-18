@@ -86,8 +86,8 @@ elif command -v python3 >/dev/null 2>&1 && python3 -c "import cv2" 2>/dev/null; 
 else
     echo -e "${RED}❌ Aucun outil de détection des visages disponible.${NC}"
     echo -e "${YELLOW}    Installez l'un des suivants :${NC}"
-    echo -e "${GREY}    - sudo apt install facedetect${NC}"
-    echo -e "${GREY}    - sudo apt install python3-opencv${NC}"
+    echo -e "${GREY}    - facedetect${NC}"
+    echo -e "${GREY}    - les bindings Python d’OpenCV${NC}"
     echo ""
     echo -e "${YELLOW}Détection des visages annulée.${NC}"
     rmdir "$FACES_DIR" 2>/dev/null

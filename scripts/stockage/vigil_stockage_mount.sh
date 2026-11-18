@@ -3,6 +3,8 @@ set -uo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
+source "$(dirname -- "${BASH_SOURCE[0]}")/../vigil_block_policy.sh"
+
 # --- Montage d'un peripherique de stockage dans /stockage (lecture/ecriture) ---
 #
 # Ce script monte un peripherique USB/Disque selectionne dans /stockage. Comme
@@ -681,18 +683,8 @@ _is_encrypted() {
 # --- Helper : montage RW d'un device dans un point de montage ---
 _mount_single_rw() {
     local dev="$1" mnt="$2"
-    local fstype mount_opts
-    sudo mkdir -p "$mnt" 2>/dev/null || {
-        echo -e "${RED}❌ Impossible de créer le point de montage $mnt.${NC}"
-        log_action "mkdir_mountpoint_stockage" "$dev" "$mnt" "failed" "Échec de la création du répertoire"
-        return 1
-    }
-    # S'assurer que le block device n'est pas resté en lecture seule après un
-    # montage forensique (vigil_usb_mount.sh fait blockdev --setro).
-    if command -v blockdev >/dev/null 2>&1; then
-        sudo blockdev --setrw "$dev" 2>/dev/null || true
-    fi
-    fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null || echo "")
+    local fstype mount_opts parent
+    fstype=$(lsblk -dno FSTYPE "$dev" 2>/dev/null || echo "")
     mount_opts="-o rw,nosuid,nodev"
     case "$fstype" in
         fat32|vfat) mount_opts="$mount_opts,utf8=true,flush" ;;
@@ -711,14 +703,36 @@ _mount_single_rw() {
             fi
             ;;
     esac
-    if ! sudo mount $mount_opts "$dev" "$mnt" 2>/dev/null; then
-        echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
-        sudo mount $mount_opts "$dev" "$mnt" 2>&1 || true
-        log_action "mount_stockage" "$dev" "$mnt" "failed" "Échec du montage"
-        sudo rmdir "$mnt" 2>/dev/null || true
+    parent=$(lsblk -dnpo PKNAME "$dev") || return 1
+    vigil_storage_lock || return 1
+    if findmnt -rn -S "$dev" >/dev/null || findmnt -rn -M "$mnt" >/dev/null; then
+        echo "Support ou point de montage déjà utilisé : $dev → $mnt" >&2
+        vigil_storage_unlock
         return 1
     fi
-    sudo chown -R "$USER:$USER" "$mnt" 2>/dev/null || true
+    if ! sudo mkdir -p "$mnt"; then
+        vigil_storage_unlock
+        return 1
+    fi
+    # Le drapeau RO du disque physique s'applique aussi à ses partitions.
+    # Seule la partition choisie est déverrouillée ; les autres gardent leur RO.
+    if { [[ -n "$parent" ]] && vigil_protected_device "$parent" &&
+        ! sudo blockdev --setrw "$parent"; } ||
+        ! sudo blockdev --setrw "$dev" ||
+        [[ $(sudo blockdev --getro "$dev") != 0 ]] ||
+        ! sudo mount $mount_opts "$dev" "$mnt"; then
+        echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
+        log_action "mount_stockage" "$dev" "$mnt" "failed" "Échec du montage"
+        if vigil_protected_device "$dev" ||
+            { [[ -n "$parent" ]] && vigil_protected_device "$parent"; }; then
+            vigil_storage_relock "$dev" || echo "Impossible de reprotéger $dev." >&2
+        fi
+        sudo rmdir "$mnt" 2>/dev/null || true
+        vigil_storage_unlock
+        return 1
+    fi
+    sudo chown -R "$USER:" "$mnt" 2>/dev/null || true
+    vigil_storage_unlock
     echo -e "${GREEN}✅ ${NC}${BOLD}$dev${NC}${GREEN} → $mnt${NC}"
     log_action "mount_stockage" "$dev" "$mnt" "success" "Périphérique monté en lecture/écriture"
     return 0
@@ -960,9 +974,6 @@ echo -e "\n${YELLOW}Montage en lecture/écriture...${NC}"
 if [ "$SELECTED_KIND" = "whole" ]; then
     # Monter toutes les partitions du disque sous /stockage/<disk>/<part>
     echo -e "${YELLOW}Montage de toutes les partitions de /dev/$SELECTED_DEVICE...${NC}"
-    if command -v blockdev >/dev/null 2>&1; then
-        sudo blockdev --setrw "/dev/$SELECTED_DEVICE" 2>/dev/null || true
-    fi
     _ok=0; _fail=0
     _parts="${DISK_PARTS["$SELECTED_DEVICE"]:-}"
     for _part in $_parts; do

@@ -3,6 +3,8 @@ set -uo pipefail
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
+source "$(dirname -- "${BASH_SOURCE[0]}")/../vigil_block_policy.sh"
+
 # --- Couleurs ---
 RED='\e[91m'
 GREEN='\e[92m'
@@ -274,7 +276,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
 
         # --- 2.4. Remettre le block device en read-write s'il avait été forcé en RO ---
         if [ -n "$DEVICE" ] && [ -b "$DEVICE" ]; then
-            sudo blockdev --setrw "$DEVICE" 2>/dev/null && \
+            vigil_restore_rw "$DEVICE" 2>/dev/null && \
                 echo -e "${GREEN}✅ Block device $DEVICE remis en lecture/écriture.${NC}" || true
             log_action "set_rw" "$DEVICE" "" "success" "Block device remis en RW" 2>/dev/null || true
         fi

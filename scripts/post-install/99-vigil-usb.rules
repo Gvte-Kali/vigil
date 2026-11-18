@@ -1,0 +1,4 @@
+# Protect newly attached USB mass storage and MMC/SD before publishing to UDisks.
+ACTION=="add", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk|partition", SUBSYSTEMS=="usb|mmc", PROGRAM=="/usr/local/libexec/vigil-usb-add $devnode", ENV{VIGIL_USB_PROTECTED}="1"
+SUBSYSTEM=="block", ACTION=="change", IMPORT{db}="VIGIL_USB_PROTECTED"
+SUBSYSTEM=="block", ACTION!="remove", ENV{VIGIL_USB_PROTECTED}=="1", ENV{UDISKS_IGNORE}="1"

@@ -59,7 +59,7 @@ MISSING=0
 for cmd in freshclam clamscan; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
         echo -e "${RED}❌ Outil requis absent : $cmd${NC}"
-        echo -e "${YELLOW}    Installez-le : sudo apt install clamav clamav-daemon${NC}"
+        echo -e "${YELLOW}    Installez-le : ClamAV et FreshClam${NC}"
         MISSING=$((MISSING + 1))
     fi
 done

@@ -1,97 +1,126 @@
 #!/bin/bash
 set -euo pipefail
 
-# --- 1. Verifier et creer les repertoires necessaires ---
-echo "Création des répertoires..."
-sudo mkdir -p /investigation /stockage /opt/vigil/{data,scripts,logs,rapports}
-sudo chown -R "$USER:$USER" /investigation /stockage /opt/vigil
-sudo chmod -R 755 /investigation /stockage /opt/vigil
-echo "✅ Répertoires créés avec les droits pour $USER."
-
-# --- 2. Installer les dependances depuis requirements.txt ---
-# Les paquets y sont documentes (un commentaire par paquet).
-# La liste ci-dessous reste synchronisee avec ce fichier : elle sert de
-# secours si requirements.txt est introuvable.
-REQUIREMENTS_FILE="/opt/vigil/scripts/post-install/requirements.txt"
-FALLBACK_PKGS="util-linux coreutils jq eject cryptsetup clamav clamav-daemon clamav-freshclam xrdp xorgxrdp udisks2 ufw konsole kdialog zenity jmtpfs ntfs-3g exfat-fuse dc3dd ewf-tools afflib-tools sleuthkit autopsy yara guymager gnupg ldmtool exiftool ffmpeg p7zip-full zstd binwalk pv file gdisk cloud-guest-utils parted imagemagick feh python3 python3-tk python3-pil python3-pip python3-reportlab python3-cairosvg libcairo2 facedetect python3-opencv"
-if [ -f "$REQUIREMENTS_FILE" ]; then
-    echo "Installation des dépendances depuis $REQUIREMENTS_FILE..."
-    sudo apt update
-    # Filtrer les commentaires (#) et lignes vides avant de passer a apt
-    PKGS=$(grep -v '^[[:space:]]*#' "$REQUIREMENTS_FILE" | grep -v '^[[:space:]]*$' | tr '\n' ' ')
-    if [ -n "$PKGS" ]; then
-        sudo apt install -y $PKGS
-    fi
-    echo "✅ Dépendances installées."
-else
-    echo "❌ Fichier $REQUIREMENTS_FILE introuvable. Installation des dépendances de base..."
-    sudo apt update
-    sudo apt install -y $FALLBACK_PKGS
+INSTALL_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+if [[ "$INSTALL_DIR" != /opt/vigil/scripts/post-install ]]; then
+    echo "Placez Vigil dans /opt/vigil avant de lancer ce script." >&2
+    exit 1
 fi
+VIGIL_OPERATOR=${SUDO_USER:-$(id -un)}
+if [[ "$VIGIL_OPERATOR" == root || ! "$VIGIL_OPERATOR" =~ ^[a-zA-Z_][a-zA-Z0-9_.-]*$ ]]; then
+    echo "Lancez ce script depuis le compte opérateur de Vigil." >&2
+    exit 1
+fi
+VIGIL_GROUP=$(id -gn "$VIGIL_OPERATOR")
+VIGIL_HOME=$(getent passwd "$VIGIL_OPERATOR" | cut -d: -f6)
 
-# --- 3. Configurer le service RDP (optionnel) ---
-# L'accès RDP n'est pertinent que pour un usage à distance (serveur forensique
-# accédé depuis un autre poste). Sur une station de travail dédiée ou un live USB,
-# on n'en a pas besoin et on évite d'ouvrir un port inutile.
-echo ""
-echo "Souhaitez-vous activer l'accès RDP (xrdp) sur cette machine ?"
-echo "  [o] Oui — accès distant via RDP (ouverture du port 3389/tcp)"
-echo "  [n] Non  — station de travail locale, pas d'accès distant"
-echo -ne "Votre choix (o/n) [n] : "
-read -r ENABLE_RDP || ENABLE_RDP=""
-ENABLE_RDP="${ENABLE_RDP:-n}"
-case "$ENABLE_RDP" in
-    o|O|y|Y)
-        echo "Configuration du service RDP..."
-        sudo systemctl enable --now xrdp
-        sudo ufw allow 3389/tcp
-        echo "✅ Service RDP configuré."
-        ;;
+# ID et ID_LIKE évitent de choisir apt sur une distribution qui utilise dnf.
+. /etc/os-release
+case " ${ID:-} ${ID_LIKE:-} " in
+    *" debian "*|*" ubuntu "*|*" kali "*|*" parrot "*) manager=apt ;;
+    *" fedora "*|*" rhel "*|*" centos "*) manager=dnf ;;
+    *" arch "*) manager=pacman ;;
     *)
-        echo "RDP non activé."
-        ;;
+        for manager in apt dnf pacman; do
+            command -v "$manager" >/dev/null 2>&1 && break
+        done ;;
 esac
-
-# --- 4. Désactiver udisks2 pour éviter le montage automatique ---
-echo "Configuration de udisks2..."
-sudo systemctl mask udisks2.service
-sudo systemctl stop udisks2.service
-sudo tee /etc/udisks2/udisks2.conf << 'EOF'
-[udisks2]
-auto_mount=false
-EOF
-sudo systemctl daemon-reload
-echo "✅ udisks2 configuré pour ne pas monter automatiquement les périphériques."
-
-# --- 5.1. Purger usbguard s'il est présent (bloque les nouveaux USB) ---
-# usbguard force authorized=0 sur les peripheriques non whitelistes via une
-# regle udev persistante. Masquer le service ne suffit pas : il faut purger
-# le paquet (retire la regle udev) puis recharger udev, sinon les nouveaux USB
-# restent bloques au niveau noyau (dmesg : "Device is not authorized").
-if command -v usbguard-daemon >/dev/null 2>&1 || dpkg -l usbguard >/dev/null 2>&1; then
-    echo "Purge de usbguard (interfère avec la détection USB)..."
-    sudo systemctl disable --now usbguard 2>/dev/null || true
-    sudo apt-get -y purge usbguard 2>/dev/null || true
-    sudo rm -f /etc/udev/rules.d/*usbguard* /lib/udev/rules.d/*usbguard* /usr/lib/udev/rules.d/*usbguard* 2>/dev/null || true
-    sudo udevadm control --reload-rules 2>/dev/null || true
-    sudo udevadm trigger 2>/dev/null || true
-    for dev in /sys/bus/usb/devices/*/authorized; do
-        echo 1 | sudo tee "$dev" >/dev/null 2>&1 || true
-    done
-    echo "✅ usbguard purgé. Les nouveaux périphériques USB seront détectés normalement."
+if ! command -v "$manager" >/dev/null; then
+    echo "Gestionnaire de paquets introuvable : $manager" >&2
+    exit 1
 fi
 
-# --- 5. Configurer les permissions pour /investigation ---
-sudo chmod 755 /investigation
-sudo chown $USER:$USER /investigation
+case "$manager" in
+    apt) sudo apt-get update; install_command=(apt-get install -y) ;;
+    dnf) install_command=(dnf install -y) ;;
+    pacman) install_command=(pacman -S --needed --noconfirm) ;;
+esac
+package_available() {
+    case "$manager" in
+        apt) apt-cache show --no-all-versions "$1" >/dev/null 2>&1 ;;
+        dnf) rpm -q "$1" >/dev/null 2>&1 || dnf -q list --available "$1" >/dev/null 2>&1 ;;
+        pacman) pacman -Q "$1" >/dev/null 2>&1 || pacman -Si "$1" >/dev/null 2>&1 ;;
+    esac
+}
 
-# --- 6. Initialiser les logs et données ---
-mkdir -p /opt/vigil/data/{config/logo,projects,users,scans,usb}
-mkdir -p /opt/vigil/logs
-mkdir -p /opt/vigil/rapports
-touch /opt/vigil/data/active_user
-touch /opt/vigil/data/active_project
-touch /opt/vigil/data/usb/whitelist.txt /opt/vigil/data/usb/blacklist.txt
+declare -A selected=()
+required=() optional=() missing=()
+while read -r kind apt_pkg dnf_pkg pacman_pkg; do
+    [[ -z "$kind" || "$kind" == \#* ]] && continue
+    case "$manager" in
+        apt) names=$apt_pkg ;;
+        dnf) names=$dnf_pkg ;;
+        pacman) names=$pacman_pkg ;;
+    esac
+    IFS='|' read -ra candidates <<< "$names"
+    package=
+    for candidate in "${candidates[@]}"; do
+        if package_available "$candidate"; then
+            package=$candidate
+            break
+        fi
+    done
+    if [[ -z "$package" ]]; then
+        if [[ "$kind" == base ]]; then
+            missing+=("$names")
+        else
+            echo "Dépendance facultative absente des dépôts actifs ($manager) : $names"
+        fi
+    elif [[ ! ${selected[$package]+x} ]]; then
+        selected[$package]=1
+        if [[ "$kind" == base ]]; then
+            required+=("$package")
+        else
+            optional+=("$package")
+        fi
+    fi
+done < "$INSTALL_DIR/requirements.txt"
+if (( ${#missing[@]} )); then
+    echo "Paquets requis absents des dépôts actifs ($manager) : ${missing[*]}" >&2
+    exit 1
+fi
+sudo "${install_command[@]}" "${required[@]}"
+if (( ${#optional[@]} )) && ! sudo "${install_command[@]}" "${optional[@]}"; then
+    for package in "${optional[@]}"; do
+        sudo "${install_command[@]}" "$package" ||
+            echo "Installation facultative échouée : $package" >&2
+    done
+fi
+
+# L'ancien installateur masquait UDisks. Un masque existant peut aussi relever
+# d'une politique administrateur, donc le signaler sans modifier son choix.
+if [[ $(systemctl is-enabled udisks2.service 2>/dev/null || true) == masked* ]]; then
+    echo "UDisks est masqué. Voir la procédure de migration dans la documentation."
+fi
+sudo install -D -m 0755 -o root -g root "$INSTALL_DIR/vigil-usb-add" /usr/local/libexec/vigil-usb-add
+sudo install -D -m 0644 -o root -g root "$INSTALL_DIR/99-vigil-usb.rules" /etc/udev/rules.d/99-vigil-usb.rules
+printf 'f %s 0600 %s root -\n' /run/vigil-usb.lock "$VIGIL_OPERATOR" \
+    /run/vigil-storage.lock "$VIGIL_OPERATOR" |
+    sudo tee /etc/tmpfiles.d/vigil-usb.conf >/dev/null
+sudo systemd-tmpfiles --create /etc/tmpfiles.d/vigil-usb.conf
+if command -v restorecon >/dev/null; then
+    sudo restorecon /usr/local/libexec/vigil-usb-add /etc/udev/rules.d/99-vigil-usb.rules /run/vigil-usb.lock /run/vigil-storage.lock
+fi
+sudo udevadm control --reload-rules
+
+sudo install -d /usr/local/bin /usr/share/applications
+for directory in /investigation /stockage /opt/vigil/data /opt/vigil/logs /opt/vigil/rapports; do
+    sudo install -d -m 0755 -o "$VIGIL_OPERATOR" -g "$VIGIL_GROUP" "$directory"
+done
+# Une installation historique lancée avec sudo pouvait laisser ces données à root.
+sudo chown -R "$VIGIL_OPERATOR:$VIGIL_GROUP" /opt/vigil/{data,logs,rapports}
+sudo -u "$VIGIL_OPERATOR" mkdir -p /opt/vigil/data/{config/logo,projects,users,scans,usb}
+sudo -u "$VIGIL_OPERATOR" touch /opt/vigil/data/{active_user,active_project,usb/whitelist.txt,usb/blacklist.txt}
+
+if [[ "$manager" == apt && -t 0 ]]; then
+    read -rp "Activer l'accès RDP via xrdp et UFW ? [o/N] " ENABLE_RDP || ENABLE_RDP=
+    case "$ENABLE_RDP" in
+        o|O|y|Y)
+            sudo "${install_command[@]}" xrdp xorgxrdp ufw
+            sudo systemctl enable --now xrdp
+            sudo ufw allow 3389/tcp ;;
+    esac
+fi
 
 # --- 6.1. Lien symbolique vigil -> vigil_main_gui.py ---
 echo "Création du lien symbolique /usr/local/bin/vigil..."
@@ -102,27 +131,23 @@ echo "✅ Lien symbolique /usr/local/bin/vigil créé (pointe vers /opt/vigil/gu
 # --- 7. Configurer sudoers NOPASSWD pour Vigil ---
 echo "Configuration de sudoers (sans mot de passe pour Vigil)..."
 SUDOERS_FILE="/etc/sudoers.d/vigil"
-cat > /tmp/vigil-sudoers << 'SUDOERS_EOF'
-# Vigil : permet aux scripts de monter/demonter des peripheriques USB et de
-# lancer clamscan/freshclam sans mot de passe. Limite aux commandes utilisees
-# par /opt/vigil/scripts/.
-Cmnd_Alias VIGIL_MOUNT = /bin/mount, /bin/umount, /sbin/blkid, /sbin/blockdev, /sbin/findmnt, /usr/bin/eject, /usr/bin/mount, /usr/bin/umount, /usr/sbin/blkid, /usr/sbin/blockdev, /usr/sbin/findmnt
+tmp_sudoers=$(mktemp)
+trap 'rm -f -- "$tmp_sudoers"' EXIT
+cat > "$tmp_sudoers" << 'SUDOERS_EOF'
+# Commandes privilégiées requises par Vigil pour le compte opérateur.
+# Plusieurs acceptent des arguments libres : réserver ce compte à un administrateur.
+Cmnd_Alias VIGIL_MOUNT = /bin/mount, /bin/umount, /sbin/blkid, /sbin/blockdev, /sbin/findmnt, /usr/bin/eject, /usr/bin/mount, /usr/bin/umount, /usr/sbin/blkid, /usr/sbin/blockdev, /usr/sbin/findmnt, /usr/bin/blockdev, /usr/bin/blkid, /usr/bin/findmnt
 Cmnd_Alias VIGIL_FS = /bin/mkdir, /bin/rmdir, /bin/rm, /bin/chmod, /bin/chown, /usr/bin/install, /usr/bin/mkdir, /usr/bin/rmdir, /usr/bin/rm, /usr/bin/chmod, /usr/bin/chown
 Cmnd_Alias VIGIL_CLAM = /usr/bin/clamscan, /usr/bin/freshclam, /usr/bin/clamconf
-Cmnd_Alias VIGIL_SYSTEMCTL = /bin/systemctl stop clamav-freshclam, /bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl start clamav-freshclam, /usr/sbin/systemctl stop clamav-freshclam, /usr/sbin/systemctl start clamav-freshclam
+Cmnd_Alias VIGIL_SYSTEMCTL = /bin/systemctl stop clamav-freshclam, /bin/systemctl stop clamav-freshclam.service, /bin/systemctl stop freshclam.service, /bin/systemctl start clamav-freshclam, /bin/systemctl start clamav-freshclam.service, /bin/systemctl start freshclam.service, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam.service, /usr/bin/systemctl stop freshclam.service, /usr/bin/systemctl start clamav-freshclam, /usr/bin/systemctl start clamav-freshclam.service, /usr/bin/systemctl start freshclam.service
 Cmnd_Alias VIGIL_LOG = /usr/bin/tee
 Cmnd_Alias VIGIL_UDEV = /usr/bin/udevadm, /bin/udevadm
 Cmnd_Alias VIGIL_MTP = /usr/bin/jmtpfs, /usr/bin/ldmtool
 Cmnd_Alias VIGIL_ALL = VIGIL_MOUNT, VIGIL_FS, VIGIL_CLAM, VIGIL_SYSTEMCTL, VIGIL_LOG, VIGIL_UDEV, VIGIL_MTP
-ALL ALL=(root) NOPASSWD: VIGIL_ALL
 SUDOERS_EOF
-sudo install -m 0440 /tmp/vigil-sudoers "$SUDOERS_FILE" && rm -f /tmp/vigil-sudoers
-if sudo visudo -c -f "$SUDOERS_FILE" >/dev/null 2>&1; then
-    echo "✅ sudoers Vigil configure (NOPASSWD pour les commandes Vigil)."
-else
-    echo "❌ Erreur de syntaxe sudoers, fichier $SUDOERS_FILE supprime."
-    sudo rm -f "$SUDOERS_FILE"
-fi
+printf '%s ALL=(root) NOPASSWD: VIGIL_ALL\n' "$VIGIL_OPERATOR" >> "$tmp_sudoers"
+sudo visudo -c -f "$tmp_sudoers"
+sudo install -o root -g root -m 0440 "$tmp_sudoers" "$SUDOERS_FILE"
 
 # --- 8. Créer le raccourci bureau (item 6 du checklist) ---
 echo "Création du raccourci Vigil..."
@@ -144,7 +169,7 @@ sudo tee /usr/share/applications/vigil.desktop >/dev/null <<DESKTOP_EOF
 [Desktop Entry]
 Name=Vigil
 Comment=Outil d'analyse forensique pour périphériques USB
-Exec=python3 /opt/vigil/gui/vigil_main_gui.py
+Exec=/usr/local/bin/vigil
 Icon=$VIGIL_ICON
 Terminal=false
 Type=Application
@@ -161,19 +186,20 @@ elif command -v kbuildsycoca5 >/dev/null 2>&1; then
 fi
 echo "✅ Raccourci créé : /usr/share/applications/vigil.desktop (icône : $VIGIL_ICON)"
 
+if [[ "${XDG_CURRENT_DESKTOP:-}" == *KDE* || -f "$VIGIL_HOME/.local/share/user-places.xbel" ]]; then
 # --- 9. Ajouter les emplacements Dolphin (item 4 du checklist) ---
 # Dolphin (KDE) stocke les emplacements dans ~/.local/share/user-places.xbel
 # (format XBEL). On ajoute /investigation, /stockage, /rapports de façon
 # idempotente : on ne réécrit pas un emplacement déjà présent.
 echo "Ajout des emplacements Dolphin..."
-PLACES_FILE="$HOME/.local/share/user-places.xbel"
-mkdir -p "$(dirname "$PLACES_FILE")"
+PLACES_FILE="$VIGIL_HOME/.local/share/user-places.xbel"
+sudo -u "$VIGIL_OPERATOR" mkdir -p "$(dirname "$PLACES_FILE")"
 # Créer le fichier s'il n'existe pas avec l'en-tête XBEL minimal
 if [ ! -f "$PLACES_FILE" ]; then
-    cat > "$PLACES_FILE" <<'XBEL_EOF'
+    sudo -u "$VIGIL_OPERATOR" tee "$PLACES_FILE" >/dev/null <<'XBEL_EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE xbel>
-<xbel xmlns:kde="http:// kde.org/xbel-ns/1.0/" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info" xmlns:bookmark="http://www.freedesktop.org/standards/xesam/1.0#">
+<xbel xmlns:kde="http://www.kde.org/xbel-ns/1.0/" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info" xmlns:bookmark="http://www.freedesktop.org/standards/xesam/1.0#">
 </xbel>
 XBEL_EOF
 fi
@@ -199,26 +225,20 @@ _add_dolphin_place() {
             print "  </bookmark>"
         }
         { print }
-    ' "$PLACES_FILE" > "$tmpfile" && mv "$tmpfile" "$PLACES_FILE"
+    ' "$PLACES_FILE" > "$tmpfile" && sudo -u "$VIGIL_OPERATOR" tee "$PLACES_FILE" < "$tmpfile" >/dev/null
+    rm -f "$tmpfile"
 }
 _add_dolphin_place "/investigation" "Investigation"
 _add_dolphin_place "/stockage" "Stockage"
 _add_dolphin_place "/rapports" "Rapports"
 echo "✅ Emplacements ajoutés à Dolphin : /investigation /stockage /rapports"
 
-# --- 10. Mettre a jour les bases de donnees ClamAV ---
-echo "Mise à jour des bases de données ClamAV..."
-sudo freshclam
-echo "✅ Bases de données ClamAV mises à jour."
+fi
 
-echo "Script de post-installation terminé."
+if command -v freshclam >/dev/null &&
+    ! systemctl is-active --quiet clamav-freshclam.service &&
+    ! systemctl is-active --quiet freshclam.service; then
+    sudo freshclam || echo "Signatures ClamAV à mettre à jour depuis Vigil." >&2
+fi
 
-echo ""
-echo "=== Étapes manuelles restantes ==="
-echo "Consultez post-install-checked.txt pour le détail :"
-echo "  - Bords d'écran : désactiver les actions (Paramètres > Souris & pavé tactile)"
-echo "  - Pop-up USB KDE : désactiver \"Disques et Périphériques\" (icônes cachées > Entrées)"
-echo "  - Barre des tâches : déplacer en bas (clic droit > Configurer le panneau)"
-echo ""
-echo "Ces éléments cosmétiques KDE sont figés dans l'image disque préconfigurée,"
-echo "ils ne sont pas automatisés (dépendent du layout Plasma de la cible)."
+echo "Installation terminée. Lancez vigil depuis le compte $VIGIL_OPERATOR."

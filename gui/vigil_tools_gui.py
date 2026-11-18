@@ -234,7 +234,7 @@ def _run_script_in_konsole(script_path, user, project, extra_args=None):
     args_str = " ".join(extra_args) if extra_args else ""
     try:
         subprocess.Popen([
-            "konsole", "-e", "bash", "-c",
+            base.script_terminal(), "-e", "bash", "-c",
             f"bash {script_path} {args_str}; rc=$?; "
             f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
             f"✓ Outil terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
@@ -244,7 +244,7 @@ def _run_script_in_konsole(script_path, user, project, extra_args=None):
         ])
     except FileNotFoundError:
         messagebox.showerror("Erreur",
-                             "Konsole absent. Installez-le : sudo apt install konsole")
+                             "Terminal introuvable. Installez Konsole ou xterm.")
     except Exception as exc:
         messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 
@@ -1165,7 +1165,7 @@ def show_tools_view():
         )
         try:
             subprocess.Popen([
-                "konsole", "-e", "bash", "-c",
+                base.script_terminal(), "-e", "bash", "-c",
                 f"{cmd}; rc=$?; "
                 f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
                 f"✓ Scans terminés. Appuyez sur Entrée pour fermer...\\e[0m'; "
@@ -1175,7 +1175,7 @@ def show_tools_view():
             ])
         except FileNotFoundError:
             messagebox.showerror("Erreur",
-                                 "Konsole absent. Installez-le : sudo apt install konsole")
+                                 "Terminal introuvable. Installez Konsole ou xterm.")
         except Exception as exc:
             messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 

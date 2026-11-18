@@ -128,11 +128,16 @@ for cmd in file find stat; do
 done
 # Outil optionnel : 7za pour detection mot de passe
 HAS_7ZA=""
-if command -v 7za >/dev/null 2>&1; then
-    HAS_7ZA="7za"
-    echo -e "${GREEN}✅ 7za détecté : détection mot de passe disponible.${NC}"
+for archiver in 7zz 7z 7za; do
+    if command -v "$archiver" >/dev/null 2>&1; then
+        HAS_7ZA=$archiver
+        break
+    fi
+done
+if [ -n "$HAS_7ZA" ]; then
+    echo -e "${GREEN}✅ $HAS_7ZA détecté : détection mot de passe disponible.${NC}"
 else
-    echo -e "${YELLOW}⚠️  7za absent : détection mot de passe désactivée.${NC}"
+    echo -e "${YELLOW}⚠️  7-Zip absent : détection mot de passe désactivée.${NC}"
 fi
 [ "$MISSING" -gt 0 ] && fail "Dépendances obligatoires manquantes ($MISSING)."
 
@@ -291,7 +296,7 @@ if [ -n "$HAS_7ZA" ]; then
         [ -z "$path" ] && continue
         # 7za liste avec un mot de passe bidon ; s'il demande un mot de passe
         # ou signale une erreur de chiffrement, l'archive est protegee.
-        if 7za l -p. "$path" 2>&1 | grep -Eqim1 'password|encrypted|Headers Error|ERROR.*password'; then
+        if "$HAS_7ZA" l -p. "$path" 2>&1 | grep -Eqim1 'password|encrypted|Headers Error|ERROR.*password'; then
             echo -e "${rel}" >> "$PROTECTED_FILE"
             PROTECTED_COUNT=$((PROTECTED_COUNT + 1))
         fi

@@ -144,7 +144,7 @@ def show_projects_view():
         vigil_data.set_active(None, name)
         try:
             subprocess.Popen([
-                "konsole", "-e", "bash", "-c",
+                base.script_terminal(), "-e", "bash", "-c",
                 f"bash {script} --dest {dest_dir}; rc=$?; "
                 f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
                 f"\u2713 Export terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
@@ -154,7 +154,7 @@ def show_projects_view():
             ])
         except FileNotFoundError:
             messagebox.showerror("Erreur",
-                                 "Konsole absent. Installez-le : sudo apt install konsole")
+                                 "Terminal introuvable. Installez Konsole ou xterm.")
         except Exception as exc:
             messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 
