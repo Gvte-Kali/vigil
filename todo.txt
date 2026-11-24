@@ -88,7 +88,9 @@ PHASE 04 — WORKSPACE QT ET MODULES
     Terminal PTY Qt pour ClamAV local, FreshClam utilisateur et inventaire
     stockage. Diagnostic AppArmor documenté pour la configuration FreshClam
     locale sur Parrot. Post-install Qt, données de travail et signatures sous
-    /opt/vigil, exception AppArmor limitée aux signatures. Recette cible à faire.
+    /opt/vigil, exception AppArmor limitée aux signatures. Le démarrage
+    éditable sous /opt et les préférences Qt utilisent aussi data/state.
+    Copie des PDF antivirus vers le dossier commun. Recette cible à faire.
     Lecture de l’état RO bloc au démarrage. Montage via le broker
     et migration des autres modules interactifs restent ouverts.
     Accueil centré sur les données réelles de l’affaire, inventaire dans

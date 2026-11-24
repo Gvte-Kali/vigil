@@ -35,6 +35,8 @@ def default_database():
     site_state = os.environ.get("VIGIL_STATE_DIR")
     if site_state and Path(site_state).is_absolute():
         return Path(site_state) / "cases.sqlite"
+    if Path(__file__).resolve().parents[1] == Path("/opt/vigil"):
+        return Path("/opt/vigil/data/state/cases.sqlite")
     root = os.environ.get("XDG_STATE_HOME")
     base = Path(root) if root and Path(root).is_absolute() else Path.home() / ".local/state"
     return base / "vigil" / "cases.sqlite"

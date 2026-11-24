@@ -635,6 +635,25 @@ else
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
                 PDF_GENERATED=1
                 echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+                if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+                    common_reports="$VIGIL_BASE/rapports"
+                    report_name="${PDF_OUT##*/}"
+                    published="$common_reports/${report_name%.pdf}_${VIGIL_LEGACY_SCAN_DIR##*/}.pdf"
+                    if [ "$(realpath -m -- "$common_reports")" = "$common_reports" ] &&
+                       mkdir -p -- "$common_reports" &&
+                       staged=$(mktemp "$common_reports/.clamav-pdf.XXXXXX"); then
+                        if cp -- "$PDF_OUT" "$staged" && ln -T -- "$staged" "$published"; then
+                            printf 'Copie PDF dans le dossier commun : %s\n' "$published"
+                        else
+                            echo "Copie PDF impossible. Original conservé : $PDF_OUT" >&2
+                            ERRORS=$((ERRORS + 1))
+                        fi
+                        rm -f -- "$staged"
+                    else
+                        echo "Dossier commun des rapports inaccessible. Original conservé : $PDF_OUT" >&2
+                        ERRORS=$((ERRORS + 1))
+                    fi
+                fi
                 # Copie du rapport PDF dans le dossier du projet actif (pour l'export).
                 _AP=""
                 [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ] && [ -f "$VIGIL_BASE/data/active_project" ] && _AP=$(cat "$VIGIL_BASE/data/active_project" 2>/dev/null)

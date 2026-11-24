@@ -1576,7 +1576,13 @@ def main():
               file=sys.stderr)
         return 1
     app = QApplication(sys.argv)
-    window = Workspace(QSettings("Vigil", "Vigil2"), storage.default_database())
+    database_path = storage.default_database()
+    preferences = database_path.parent / "preferences" / f"{os.getuid()}.ini"
+    settings = QSettings(str(preferences), QSettings.Format.IniFormat)
+    if not preferences.exists():
+        legacy_settings = QSettings("Vigil", "Vigil2")
+        settings.setValue("language", legacy_settings.value("language", "fr"))
+    window = Workspace(settings, database_path)
     if window.startup_state_error is not None:
         window.notify("Impossible d’enregistrer l’état système initial.",
                       "Could not record the initial system state.", str(window.startup_state_error))

@@ -242,6 +242,11 @@ D. Registre, CLI et compatibilité
 [ ] Simuler un changement de numéro de séquence bloc avec un mode
     identique. La fermeture doit fonctionner si les zones sont démontées.
 
+[ ] Sur une installation /opt/vigil, comparer le lanceur installé et
+    le lanceur éditable. Vérifier la même base et les préférences sous
+    data/state, et l’original du PDF dans le run plus une copie distincte
+    sous /opt/vigil/rapports. Répéter pour vérifier l’absence d’écrasement.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

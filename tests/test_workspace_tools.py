@@ -75,6 +75,11 @@ printf '%s\n' "${INVESTIGATION_MOUNTS[@]}"
         }):
             self.assertEqual(default_database(), Path("/opt/vigil/data/state/cases.sqlite"))
 
+    def test_checkout_under_opt_uses_site_state_even_with_xdg(self):
+        with patch("vigil.storage.__file__", "/opt/vigil/vigil/storage.py"), \
+                patch.dict("os.environ", {"VIGIL_STATE_DIR": "", "XDG_STATE_HOME": "/tmp/dev"}):
+            self.assertEqual(default_database(), Path("/opt/vigil/data/state/cases.sqlite"))
+
     def test_refresh_config_ignores_stale_configuration_and_handles_spaces(self):
         with tempfile.TemporaryDirectory(prefix="vigil test ") as tmp:
             directory = Path(tmp)

@@ -22,9 +22,22 @@ vigil
 Le post-install place le venv Qt dans `/opt/vigil/.venv` et le lanceur
 `vigil` démarre Qt avec les données de travail dans `/opt/vigil/data/state`.
 La configuration des signatures se trouve dans le sous-dossier `clamav`.
-Le lanceur utilise une base distincte de la base de développement sous XDG.
-Sauvegarder et migrer séparément des données existantes si nécessaire.
-La langue et les préférences d’interface restent propres au compte utilisateur.
+Un lancement éditable depuis le code dans /opt/vigil utilise aussi cet
+emplacement pour la base, la custody historique, les signatures, les
+instantanés et les préférences Qt de chaque UID. Hors de /opt/vigil,
+le mode développement continue à utiliser XDG ou ~/.local/state, sauf
+si VIGIL_STATE_DIR désigne un chemin absolu. Les scans rapides conservent
+l’original PDF par exécution et publient une copie distincte dans
+/opt/vigil/rapports.
+
+Les anciennes données utilisateur ne sont pas déplacées automatiquement.
+Fermer toutes les sessions Vigil et leurs scripts, sauvegarder les deux
+arbres et vérifier si les deux contiennent déjà une base cases.sqlite.
+S’il existe deux bases, choisir laquelle ouvrir pour organiser la
+migration des affaires. Ne pas superposer les deux. Si le dossier cible
+ne contient aucune donnée de travail, copier l’arbre d’état utilisateur
+vers /opt/vigil/data/state. Qt reprend la langue de l’ancienne configuration
+au premier démarrage si le nouveau fichier de préférences est absent.
 
 L’accès RDP est proposé pendant l’installation et désactivé par défaut.
 Après installation, terminer les réglages KDE décrits dans `post-install-checked.txt`
