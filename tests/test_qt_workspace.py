@@ -100,6 +100,13 @@ class WorkspaceTest(unittest.TestCase):
                 window.add_file()
             self.wait_for_task(window)
             self.assertEqual(window.evidence.count(), 1)
+            source.unlink()
+            window.change_language("en")
+            group = window.explorer.tree.topLevelItem(0)
+            window.explorer.inspect(group.child(0), 0)
+            self.wait_for_task(window)
+            self.assertIn("local case copy", window.explorer.views[0].toPlainText())
+            self.assertEqual(window.explorer.views[2].toPlainText(), "fixture")
             window.evidence.setCurrentRow(0)
             with patch.object(window, "notify") as notify:
                 window.verify_file()

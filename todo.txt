@@ -143,7 +143,8 @@ PHASE 06 — INVESTIGATION
     Lorsqu’un montage est visible, une preuve enregistrée y apparaît une
     seule fois dans l’explorateur et reste listée dans Preuves.
     L’explorateur conserve l’arborescence et la sélection après ajout.
-    Copies privées mode 0400, SHA-256, export complet tar.gz et manifestes.
+    Copies privées mode 0400, SHA-256, aperçu hors ligne depuis la copie,
+    export complet tar.gz et manifestes.
     La recherche et la gestion des affaires sont dans le sélecteur du titre.
     Retrait de la liste avec trace d’audit ou suppression intégrale des
     données locales, avec deux validations dans les deux parcours.

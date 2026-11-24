@@ -227,6 +227,26 @@ def evidence_copy_path(state, case_id, evidence_id):
     return path / "contenu"
 
 
+def find_evidence_copy(state, case_id, original, digest):
+    """Find the local copy for this exact recorded version of a case file."""
+    with database(state) as connection:
+        require_active_case(connection, case_id)
+        ids = connection.execute(
+            "SELECT id FROM evidence WHERE case_id = ? AND path = ? AND sha256 = ? ORDER BY rowid",
+            (case_id, str(original), digest),
+        ).fetchall()
+    for row in ids:
+        copy = evidence_copy_path(state, case_id, row["id"])
+        try:
+            mode = copy.lstat().st_mode
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISREG(mode):
+            raise ValueError("invalid local evidence copy")
+        return copy
+    return None
+
+
 def register_file(state, case_id, path, operator, *, mount=None):
     path = path.absolute()
     if state.exists() and state.samefile(path):

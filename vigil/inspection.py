@@ -63,12 +63,12 @@ def list_evidence_directory(path, root, mount_id):
     return sorted(rows, key=lambda row: (not row[1], row[0].casefold(), row[0]))
 
 
-def inspect_file(path, *, mount=None):
+def inspect_file(path, *, mount=None, display_name=None):
     if mount is not None:
         with open_evidence_path(path, *mount) as source:
             return _inspect_descriptor(path, os.open(f"/proc/self/fd/{source}", os.O_RDONLY | os.O_CLOEXEC))
     descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
-    return _inspect_descriptor(path, descriptor)
+    return _inspect_descriptor(Path(display_name) if display_name else path, descriptor)
 
 
 def _inspect_descriptor(path, descriptor):

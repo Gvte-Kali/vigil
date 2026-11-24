@@ -985,12 +985,29 @@ class Workspace(QMainWindow):
             return
         case_id = self.active_case_id
 
+        original = Path(name)
+
+        def inspect():
+            if mount is None and digest and case_id:
+                local = storage.find_evidence_copy(self.database_path, case_id, original, digest)
+                if local is not None:
+                    snapshot = inspect_file(local, display_name=original.name)
+                    snapshot["local_copy"] = True
+                    return snapshot
+                if original.is_relative_to("/investigation") or not original.is_file():
+                    raise ValueError(self.tr_pair(
+                        "Cette preuve n’a pas de copie locale. Remontez le support d’origine en lecture seule "
+                        "et ajoutez de nouveau le fichier aux preuves.",
+                        "This evidence has no local copy. Remount the original device read-only and add the file again.",
+                    ))
+            return inspect_file(original, mount=mount)
+
         def display(snapshot):
             if (self.active_case_id == case_id
-                    and (mount is None or (self.explorer.mounts or {}).get(mount[0]) == mount[1])):
+                    and (mount is None or self.explorer.mounts.get(mount[0]) == mount[1])):
                 self.explorer.show_preview(name, digest, snapshot)
 
-        self.run_task(lambda: inspect_file(Path(name), mount=mount), display)
+        self.run_task(inspect, display)
 
     def verify_integrity(self):
         self.verify_selected_file(self.integrity_files.currentItem())

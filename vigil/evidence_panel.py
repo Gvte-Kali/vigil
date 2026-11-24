@@ -220,8 +220,11 @@ class EvidencePanel(QWidget):
 
     def show_preview(self, path, digest, snapshot):
         tr = self.tr_pair
-        self.views[0].setPlainText("\n".join((
-            path,
+        lines = [path]
+        if snapshot.get("local_copy"):
+            lines.append(tr("Source de l’aperçu : copie locale de l’affaire",
+                            "Preview source: local case copy"))
+        lines.extend((
             f"{tr('Taille', 'Size')}: {snapshot['size']} B",
             f"{tr('Permissions', 'Permissions')}: {snapshot['mode']}",
             f"{tr('Modifié (UTC)', 'Modified (UTC)')}: "
@@ -230,6 +233,7 @@ class EvidencePanel(QWidget):
             f"{snapshot['mime_hint'] or '—'}",
             f"{tr('SHA-256 enregistré', 'Recorded SHA-256')}: {digest or '—'}",
             f"{tr('Octets prévisualisés', 'Bytes previewed')}: {snapshot['bytes_read']}",
-        )))
+        ))
+        self.views[0].setPlainText("\n".join(lines))
         self.views[1].setPlainText(snapshot["hex"])
         self.views[2].setPlainText(snapshot["strings"])

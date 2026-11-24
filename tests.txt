@@ -328,3 +328,9 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
     copiés dans rapports/ par exécution, sans écrasement.
 [ ] Dans Rapports PDF, vérifier l’ordre du plus récent au plus ancien,
     les dates, les noms d’analyse et la présence des copies dans l’export.
+
+
+[ ] Après avoir enregistré une preuve avec copie locale, démonter et
+    débrancher le support. Rouvrir l’affaire et ouvrir la preuve depuis
+    Explorateur. Vérifier l’aperçu et la mention « copie locale ». Pour une
+    preuve ancienne sans copie, vérifier le message de remontage.
