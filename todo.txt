@@ -33,6 +33,9 @@ PHASE 01 — SECURITE
     partition, et refuse un disque déjà monté. Aucun index
     de recensement dans le parcours antivirus rapide. Les erreurs de lecture
     sont conservées dans l’index partiel avec les entrées accessibles.
+    Actions rapides : montage et démontage du stockage 1.0 dans le
+    terminal par défaut avec opérateur Qt et journal local. Confirmation
+    avant montage RW et refus d’un disque déjà utilisé.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
     Le post-install prépare /investigation vide et démonté en root:root 0755.

@@ -8,7 +8,7 @@ from unittest.mock import patch
 from vigil.core import discover
 from vigil.inspection import PREVIEW_BYTES, inspect_file, list_evidence_directory
 from vigil.module_scaffold import create_module_draft
-from vigil.quick_actions import legacy_mount_command, update_command
+from vigil.quick_actions import legacy_mount_command, storage_command, update_command
 from vigil.storage import default_database
 
 
@@ -27,6 +27,21 @@ class WorkspaceToolsTest(unittest.TestCase):
                 if action == "mount":
                     self.assertIn('VIGIL_CASE_CENSUS=1 /usr/bin/bash "$@"', wrapper)
             self.assertFalse((root / "active_project").exists())
+
+    def test_storage_commands_use_legacy_scripts_with_qt_operator_and_log(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "cases.sqlite"
+            mount = storage_command("mount", state, "", "", "Alice")
+            self.assertIn("VIGIL_QT_STORAGE=1", mount)
+            self.assertIn("VIGIL_ACTIVE_USER=Alice", mount)
+            self.assertIn("VIGIL_LEGACY_PROJECT=(no-project)", mount)
+            self.assertIn(f"VIGIL_LEGACY_CASE_DIR={state.parent / 'storage-operations'}", mount)
+            self.assertEqual(Path(mount[-1]).name, "vigil_stockage_mount.sh")
+            case_id = "b" * 32
+            unmount = storage_command("unmount", state, case_id, "Case", "Alice")
+            self.assertIn(f"VIGIL_LEGACY_CASE_DIR={state.parent / 'legacy-custody' / case_id}", unmount)
+            self.assertEqual(Path(unmount[-1]).name, "vigil_stockage_umount.sh")
+            self.assertFalse((state.parent / "active_user").exists())
 
     def test_antivirus_reuses_dedicated_case_and_isolates_run_outputs(self):
         from vigil.storage import antivirus_case, create_case, database

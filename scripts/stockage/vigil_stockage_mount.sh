@@ -40,7 +40,8 @@ VIGIL_BASE="${VIGIL_BASE:-/opt/vigil}"
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 ACTIVE_PROJECT_FILE="$VIGIL_BASE/data/active_project"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+VIGIL_DATA_DIR="${VIGIL_DATA_DIR:-$VIGIL_BASE/data}"
+CONFIG_FILE="$VIGIL_DATA_DIR/config/system.json"
 
 STOCKAGE_DIR="/stockage"
 
@@ -59,7 +60,17 @@ if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     [ -z "$ACTIVE_ENTITY" ] && ACTIVE_ENTITY="(non configuree)"
 fi
 
-if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    ACTIVE_USER="${VIGIL_ACTIVE_USER:?opérateur Vigil requis}"
+    ACTIVE_PROJECT="${VIGIL_LEGACY_PROJECT:?contexte Vigil requis}"
+    LOG_WRITER=(tee)
+else
+    LOG_WRITER=(sudo tee)
+fi
+
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    PROJECT_LOG_DIR="${VIGIL_LEGACY_CASE_DIR:?dossier de journal Vigil requis}"
+elif [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     PROJECT_LOG_DIR="/tmp"
 else
     PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
@@ -68,6 +79,7 @@ fi
 final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
+        [ "${VIGIL_QT_STORAGE:-}" = "1" ] && exit 1
         echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
         echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
         read -r
@@ -92,11 +104,11 @@ log_action() {
     local message="$5"
 
     [ "$ACTIVE_USER" = "(no-user)" ] && return
-    [ "$ACTIVE_PROJECT" = "(no-project)" ] && return
+    [ "${VIGIL_QT_STORAGE:-}" != "1" ] && [ "$ACTIVE_PROJECT" = "(no-project)" ] && return
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S.%6NZ")
     local log_entry="[$timestamp] User:$ACTIVE_USER | Entity:$ACTIVE_ENTITY | Project:$ACTIVE_PROJECT | Action:$action | Device:$device | File:$file_path | Status:$status | Message:$message"
 
-    echo "$log_entry" | sudo tee -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
+    echo "$log_entry" | "${LOG_WRITER[@]}" -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
 
     if command -v jq >/dev/null 2>&1; then
         jq -n \
@@ -110,7 +122,7 @@ log_action() {
             --arg status "$status" \
             --arg message "$message" \
             '{timestamp: $timestamp, user: $user, entity: $entity, project: $project, action: $action, device: $device, file_path: $file_path, status: $status, message: $message}' \
-        | sudo tee -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
+        | "${LOG_WRITER[@]}" -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
     fi
 }
 
@@ -206,7 +218,7 @@ select_active_user() {
     printf '%s' "$ACTIVE_USER" > "$ACTIVE_USER_FILE" 2>/dev/null || true
 }
 
-select_active_user
+[ "${VIGIL_QT_STORAGE:-}" = "1" ] || select_active_user
 
 # --- Nettoyer l'ecran ---
 clear
@@ -222,6 +234,17 @@ echo -e "${YELLOW}⚠️  ATTENTION : montage en lecture/écriture.${NC}"
 echo ""
 
 # --- 0. Demontage automatique des peripheriques existants dans /stockage ---
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    if [ ! -e "$STOCKAGE_DIR" ] && [ ! -L "$STOCKAGE_DIR" ]; then
+        sudo mkdir -m 0755 -- "$STOCKAGE_DIR" || fail "Impossible de créer $STOCKAGE_DIR."
+    fi
+    [ "$(realpath -e -- "$STOCKAGE_DIR")" = "$STOCKAGE_DIR" ] &&
+        [ "$(stat -c '%u:%a' -- "$STOCKAGE_DIR")" = "0:755" ] ||
+        fail "$STOCKAGE_DIR doit être un répertoire root en mode 0755."
+    if mountpoint -q -- "$STOCKAGE_DIR" || [ -n "$(list_mounts_under_stockage)" ]; then
+        fail "Un montage existe sous /stockage. Utilisez d’abord Démonter le stockage."
+    fi
+else
 echo -e "${YELLOW}Nettoyage des montages existants dans $STOCKAGE_DIR...${NC}"
 sudo mkdir -p "$STOCKAGE_DIR" 2>/dev/null || true
 while IFS= read -r dir; do
@@ -254,6 +277,8 @@ while IFS= read -r -d '' dir; do
     [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ] && sudo rmdir "$dir" 2>/dev/null
 done < <(find "$STOCKAGE_DIR" -mindepth 1 -depth -type d -print0 2>/dev/null)
 echo -e "${GREEN}✅ Nettoyage initial terminé.${NC}"
+
+fi
 
 # --- 0.4. Triage USB anti-Rubber Ducky (baseline + blocage HID par défaut) ---
 # Même procédure que vigil_usb_mount.sh : détection des claviers HID apparus
@@ -681,7 +706,11 @@ _is_encrypted() {
 # --- Helper : montage RW d'un device dans un point de montage ---
 _mount_single_rw() {
     local dev="$1" mnt="$2"
-    local fstype mount_opts
+    local fstype mount_opts mount_status
+    if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+        [ ! -e "$mnt" ] && [ ! -L "$mnt" ] || return 1
+        [ "$(realpath -m -- "$mnt")" = "$mnt" ] || return 1
+    fi
     sudo mkdir -p "$mnt" 2>/dev/null || {
         echo -e "${RED}❌ Impossible de créer le point de montage $mnt.${NC}"
         log_action "mkdir_mountpoint_stockage" "$dev" "$mnt" "failed" "Échec de la création du répertoire"
@@ -695,7 +724,7 @@ _mount_single_rw() {
     fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null || echo "")
     mount_opts="-o rw,nosuid,nodev"
     case "$fstype" in
-        fat32|vfat) mount_opts="$mount_opts,utf8=true,flush" ;;
+        fat32|vfat) mount_opts="$mount_opts,utf8=true,flush,uid=$(id -u),gid=$(id -g)" ;;
         ext3|ext4)  mount_opts="$mount_opts" ;;
         ntfs|ntfs-3g)
             if command -v ntfs-3g >/dev/null 2>&1; then
@@ -706,19 +735,46 @@ _mount_single_rw() {
             fi
             ;;
         exfat)
+            mount_opts="$mount_opts,uid=$(id -u),gid=$(id -g)"
             if command -v mount.exfat >/dev/null 2>&1; then
                 mount_opts="-t exfat -o rw,nosuid,nodev,uid=$(id -u),gid=$(id -g)"
             fi
             ;;
     esac
-    if ! sudo mount $mount_opts "$dev" "$mnt" 2>/dev/null; then
+    if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+        mount_opts="$mount_opts,noexec"
+    fi
+    mount_status=0
+    if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+        sudo mount $mount_opts "$dev" "$mnt" || mount_status=$?
+    else
+        sudo mount $mount_opts "$dev" "$mnt" 2>/dev/null || mount_status=$?
+    fi
+    if [ "$mount_status" -ne 0 ]; then
+        # Only the historical standalone script retries for diagnostics.
         echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
-        sudo mount $mount_opts "$dev" "$mnt" 2>&1 || true
+        [ "${VIGIL_QT_STORAGE:-}" != "1" ] && sudo mount $mount_opts "$dev" "$mnt" 2>&1 || true
         log_action "mount_stockage" "$dev" "$mnt" "failed" "Échec du montage"
         sudo rmdir "$mnt" 2>/dev/null || true
         return 1
     fi
-    sudo chown -R "$USER:$USER" "$mnt" 2>/dev/null || true
+    if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+        if ! findmnt -n -o VFS-OPTIONS --mountpoint "$mnt" | grep -Eq '(^|,)rw(,|$)'; then
+            sudo umount "$mnt" || true
+            echo "Montage en lecture-écriture non confirmé : $mnt"
+            return 1
+        fi
+        case "$fstype" in
+            ext2|ext3|ext4)
+                if ! sudo chown "$(id -u):$(id -g)" "$mnt"; then
+                    sudo umount "$mnt" || true
+                    return 1
+                fi
+                ;;
+        esac
+    else
+        sudo chown -R "$USER:$USER" "$mnt" 2>/dev/null || true
+    fi
     echo -e "${GREEN}✅ ${NC}${BOLD}$dev${NC}${GREEN} → $mnt${NC}"
     log_action "mount_stockage" "$dev" "$mnt" "success" "Périphérique monté en lecture/écriture"
     return 0
@@ -836,7 +892,7 @@ done
 
 if [ "$DEVICE_NUM" -eq 0 ]; then
     echo -e "${RED}❌ Aucun périphérique USB/Disque non monté détecté.${NC}"
-    if [ "$MOUNTED_NUM" -gt 0 ]; then
+    if [ "$MOUNTED_NUM" -gt 0 ] && [ "${VIGIL_QT_STORAGE:-}" != "1" ]; then
         echo ""
         echo -e "${YELLOW}⚠️  ${MOUNTED_NUM} périphérique(s) USB déjà monté(s) :${NC}"
         for i in "${!MOUNTED_USB[@]}"; do
@@ -955,6 +1011,33 @@ while true; do
     break
 done
 
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    echo "Montage en lecture-écriture de /dev/$SELECTED_DEVICE."
+    echo "Saisissez OUI (ou YES) si ce périphérique est bien un support de travail."
+    read -r confirmation
+    case "$confirmation" in OUI|YES) ;; *) exit 0 ;; esac
+
+    selected="/dev/$SELECTED_DEVICE"
+    disk="$selected"
+    if [ "$SELECTED_KIND" = "part" ]; then
+        parent=$(lsblk -dnro PKNAME -- "$selected") || fail "Disque parent inaccessible."
+        [ -n "$parent" ] && [ "$parent" = "$SELECTED_PKNAME" ] ||
+            fail "Impossible de confirmer le disque parent de $selected."
+        disk="/dev/$parent"
+    fi
+    disk_info=$(lsblk -dnro TYPE,TRAN,RM -- "$disk") || fail "Disque inaccessible : $disk."
+    [[ "$disk_info" =~ ^disk[[:space:]]+usb[[:space:]]+[01]$ ]] ||
+        fail "$disk n’est pas un disque USB confirmé."
+    mounts=$(lsblk -nr -o MOUNTPOINTS -- "$disk") || fail "Montages non vérifiables pour $disk."
+    [[ "$mounts" =~ [^[:space:]] ]] && fail "$disk contient déjà un montage. Aucun passage en écriture."
+    disk_ro=$(sudo blockdev --getro "$disk") || fail "État bloc non vérifiable pour $disk."
+    case "$disk_ro" in
+        0) ;;
+        1) sudo blockdev --setrw "$disk" || fail "Impossible de rendre $disk inscriptible." ;;
+        *) fail "État bloc inconnu pour $disk." ;;
+    esac
+fi
+
 # --- 4. Montage selon le kind d'entrée sélectionnée ---
 echo -e "\n${YELLOW}Montage en lecture/écriture...${NC}"
 if [ "$SELECTED_KIND" = "whole" ]; then
@@ -982,6 +1065,7 @@ if [ "$SELECTED_KIND" = "whole" ]; then
     done
     echo ""
     echo -e "${GREEN}✅ $_ok partition(s) montée(s), $_fail échec(s) sous /stockage/$SELECTED_DEVICE/${NC}"
+    [ "${VIGIL_QT_STORAGE:-}" = "1" ] && [ "$_fail" -gt 0 ] && ERRORS=$((_fail + ERRORS))
     log_action "mount_whole_stockage" "/dev/$SELECTED_DEVICE" "/stockage/$SELECTED_DEVICE" "success" "$_ok partition(s) montée(s), $_fail échec(s)"
 else
     # Montage d'un device unique (partition ou disque sans table)

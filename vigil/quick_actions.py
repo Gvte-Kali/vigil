@@ -115,3 +115,30 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
         "/usr/bin/env", *context, "/usr/bin/bash", "-c", wrapper,
         "vigil", str(script), *arguments,
     ]
+
+
+def storage_command(operation, state, case_id, name, operator):
+    scripts = {"mount": "vigil_stockage_mount.sh", "unmount": "vigil_stockage_umount.sh"}
+    if operation not in scripts or (case_id and not re.fullmatch(r"[0-9a-f]{32}", case_id)):
+        raise ValueError("invalid storage context")
+    base = legacy_base()
+    script = base / "scripts" / "stockage" / scripts[operation]
+    if not script.is_file():
+        raise ValueError(f"legacy script unavailable: {script}")
+    directory = state.parent / ("legacy-custody" if case_id else "storage-operations")
+    if case_id:
+        directory /= case_id
+    if directory.resolve() != directory.absolute() or directory.resolve().is_relative_to("/investigation"):
+        raise ValueError("invalid storage log directory")
+    directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+
+    def label(value):
+        return "".join(character if character.isprintable() else " " for character in value)
+
+    return [
+        "/usr/bin/env", "VIGIL_QT_STORAGE=1", f"VIGIL_BASE={base}",
+        f"VIGIL_DATA_DIR={data_directory(base)}", f"VIGIL_ACTIVE_USER={label(operator)}",
+        f"VIGIL_LEGACY_PROJECT={label(name) if case_id else '(no-project)'}",
+        f"VIGIL_LEGACY_CASE_DIR={directory}", "/usr/bin/bash", "-c",
+        '/usr/bin/sudo -v && exec /usr/bin/bash "$@"', "vigil", str(script),
+    ]

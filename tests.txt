@@ -133,9 +133,13 @@ D. Registre, CLI et compatibilité
 [ ] Pour FreshClam, annuler la confirmation puis, sur un environnement
     de test connecté, vérifier que les signatures restent dans le profil
     utilisateur Vigil. Comparer le scan avant et après la mise à jour.
-[ ] Ajouter un périphérique de stockage ouvre l’inventaire lsblk dans
-    le terminal. En VM, vérifier l’apparition d’un périphérique synthétique
-    et confirmer qu’aucun montage ni changement RO/RW ne se produit.
+[ ] En VM, avec un support USB de travail, vérifier que les Actions rapides
+    ouvrent le montage historique dans le terminal par défaut. Essayer
+    l’annulation, la confirmation, un essai d’écriture dans /stockage, puis
+    Démonter le stockage. Vérifier l’opérateur et les journaux avec et sans
+    affaire active. Refuser un disque dont une partition est déjà montée.
+[ ] Dans Affaire en cours, vérifier que le nom apparaît dans le titre et que
+    « Affaire verrouillée » ne figure plus dans les sous-pages.
 [ ] Au démarrage, comparer la synthèse de protection bloc avec lsblk
     et distinguer cet état des options de montage dans Zones Vigil.
 

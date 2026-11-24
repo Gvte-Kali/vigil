@@ -32,7 +32,8 @@ VIGIL_BASE="${VIGIL_BASE:-/opt/vigil}"
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 ACTIVE_PROJECT_FILE="$VIGIL_BASE/data/active_project"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+VIGIL_DATA_DIR="${VIGIL_DATA_DIR:-$VIGIL_BASE/data}"
+CONFIG_FILE="$VIGIL_DATA_DIR/config/system.json"
 
 STOCKAGE_DIR="/stockage"
 
@@ -51,7 +52,17 @@ if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     [ -z "$ACTIVE_ENTITY" ] && ACTIVE_ENTITY="(non configuree)"
 fi
 
-if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    ACTIVE_USER="${VIGIL_ACTIVE_USER:?opérateur Vigil requis}"
+    ACTIVE_PROJECT="${VIGIL_LEGACY_PROJECT:?contexte Vigil requis}"
+    LOG_WRITER=(tee)
+else
+    LOG_WRITER=(sudo tee)
+fi
+
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    PROJECT_LOG_DIR="${VIGIL_LEGACY_CASE_DIR:?dossier de journal Vigil requis}"
+elif [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     PROJECT_LOG_DIR="/tmp"
 else
     PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
@@ -66,11 +77,11 @@ log_action() {
     local status="$4"
     local message="$5"
 
-    [ "$ACTIVE_PROJECT" = "(no-project)" ] && return
+    [ "${VIGIL_QT_STORAGE:-}" != "1" ] && [ "$ACTIVE_PROJECT" = "(no-project)" ] && return
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S.%6NZ")
     local log_entry="[$timestamp] User:$ACTIVE_USER | Entity:$ACTIVE_ENTITY | Project:$ACTIVE_PROJECT | Action:$action | Device:$device | File:$file_path | Status:$status | Message:$message"
 
-    echo "$log_entry" | sudo tee -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
+    echo "$log_entry" | "${LOG_WRITER[@]}" -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
 
     if command -v jq >/dev/null 2>&1; then
         local json_entry
@@ -85,7 +96,7 @@ log_action() {
             --arg status "$status" \
             --arg message "$message" \
             '{timestamp: $timestamp, user: $user, entity: $entity, project: $project, action: $action, device: $device, file_path: $file_path, status: $status, message: $message}' 2>/dev/null) || true
-        [ -n "$json_entry" ] && echo "$json_entry" | sudo tee -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
+        [ -n "$json_entry" ] && echo "$json_entry" | "${LOG_WRITER[@]}" -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
     fi
 }
 
@@ -96,13 +107,13 @@ log_action() {
 # Tri du plus profond au moins profond (demontage enfants avant parents).
 list_mounts_under_stockage() {
     local mounts
-    mounts="$(awk '$2 ~ "^/stockage/" {print $2}' /proc/mounts 2>/dev/null)"
+    mounts="$(awk '$2 == "/stockage" || $2 ~ "^/stockage/" {print $2}' /proc/mounts 2>/dev/null)"
     if [ -z "$mounts" ] && command -v lsblk >/dev/null 2>&1; then
         mounts="$(lsblk -J -o MOUNTPOINTS 2>/dev/null \
             | grep -oE '"/stockage/[^"]*"' | tr -d '"')"
     fi
     printf '%s\n' "$mounts" \
-        | awk -v base="/stockage/" 'index($0, base) == 1' \
+        | awk -v base="/stockage/" '$0 == "/stockage" || index($0, base) == 1' \
         | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
 }
 
@@ -110,6 +121,7 @@ list_mounts_under_stockage() {
 final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
+        [ "${VIGIL_QT_STORAGE:-}" = "1" ] && exit 1
         echo -e "${RED}\u274c Script termine avec $ERRORS erreur(s).${NC}"
         echo -e "${YELLOW}Appuyez sur Entree pour fermer ce terminal...${NC}"
         read -r
@@ -158,7 +170,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     [ "$CLEANED" -gt 0 ] && log_action "cleanup_stockage" "" "$STOCKAGE_DIR" "success" "$CLEANED dossiers vides supprimes"
 
     # Rien n'est monté : le contexte actif est incohérent -> nettoyage.
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    [ "${VIGIL_QT_STORAGE:-}" = "1" ] || rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
     log_action "clear_active" "" "$STOCKAGE_DIR" "success" "Contexte actif efface (rien monte)"
     final_pause
     exit 0
@@ -191,6 +203,9 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
         sync 2>/dev/null || true
         if sudo umount "$MOUNT_POINT" 2>/dev/null; then
             UMOUNT_OK=1
+        elif [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+            echo "Le stockage est occupé. Fermez les fichiers ouverts puis réessayez : $MOUNT_POINT"
+            ERRORS=$((ERRORS + 1))
         else
             echo -e "${YELLOW}\u26a0\ufe0f  Toujours occupe. Demontage force (lazy umount)...${NC}"
             if sudo umount -l "$MOUNT_POINT" 2>/dev/null; then
@@ -224,7 +239,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     fi
 
     sleep 1
-    if [ -d "$MOUNT_POINT" ]; then
+    if [ "$UMOUNT_OK" -eq 1 ] && [ "$MOUNT_POINT" != "$STOCKAGE_DIR" ] && [ -d "$MOUNT_POINT" ]; then
         if [ -z "$(ls -A "$MOUNT_POINT" 2>/dev/null)" ]; then
             sudo rmdir "$MOUNT_POINT" 2>/dev/null && {
                 echo -e "${GREEN}\ud83e\uddf9 Dossier de montage supprime : $MOUNT_POINT${NC}"
@@ -260,6 +275,7 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
+if [ "${VIGIL_QT_STORAGE:-}" != "1" ] || [ "${#REMAINING_MOUNTS[@]}" -eq 0 ]; then
 # --- 4. Nettoyage final des dossiers vides residuels ---
 CLEANED=0
 while IFS= read -r -d '' dir; do
@@ -272,12 +288,14 @@ while IFS= read -r -d '' dir; do
 done < <(find "$STOCKAGE_DIR" -mindepth 1 -depth -type d -print0 2>/dev/null)
 [ "$CLEANED" -gt 0 ] && log_action "cleanup_stockage" "" "$STOCKAGE_DIR" "success" "$CLEANED dossiers residuels supprimes"
 
+fi
+
 # --- 5. Nettoyage du contexte actif (anti mauvaise manipulation) ---
 # Une fois /stockage vide (tout démonté), on efface l'utilisateur et le
 # projet actifs pour éviter qu'une action suivante ne s'exécute par erreur
 # avec un contexte devenu incohérent.
 if [ ${#REMAINING_MOUNTS[@]} -eq 0 ]; then
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    [ "${VIGIL_QT_STORAGE:-}" = "1" ] || rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
     log_action "clear_active" "" "$STOCKAGE_DIR" "success" "Contexte actif (utilisateur/projet) effacé après démontage"
 fi
 

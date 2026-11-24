@@ -44,7 +44,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertFalse(window.cases.item(0).isHidden())
             window.language_buttons["en"].click()
             self.assertEqual(window.navigation.item(2).text(), "Cases")
-            self.assertEqual(window.case_label.text(), "Locked case  ·  Test & preuve")
+            self.assertEqual(window.case_title.text(), "Current case · Test & preuve")
             self.close_workspace(window)
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertEqual(reopened.navigation.item(2).text(), "Cases")
@@ -288,7 +288,7 @@ class WorkspaceTest(unittest.TestCase):
                 ["Antivirus", "Stockage"],
             )
             action_buttons = page.findChildren(QPushButton)
-            self.assertEqual(len(action_buttons), 4)
+            self.assertEqual(len(action_buttons), 5)
             self.assertTrue(all(not button.icon().isNull() for button in action_buttons))
             window.language_buttons["en"].click()
             self.assertEqual(quick.text(), "Quick actions")

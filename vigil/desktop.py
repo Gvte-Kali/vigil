@@ -29,7 +29,7 @@ from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
 from .terminal_panel import TerminalPanel
-from .quick_actions import legacy_mount_command, tool, update_command
+from .quick_actions import legacy_mount_command, storage_command, update_command
 from .external_terminal import launch_action, launch_terminal
 
 ANALYSIS_LABELS = {
@@ -289,10 +289,6 @@ class Workspace(QMainWindow):
         self.investigation_mount.setWordWrap(True)
         case_workspace.addWidget(self.investigation_mount)
         self.case_workspace_page = case_workspace.parentWidget()
-        self.module_case = QLabel()
-        self.module_case.setObjectName("sectionContext")
-        self.module_case.setTextFormat(Qt.TextFormat.PlainText)
-        case_workspace.addWidget(self.module_case)
         case_body = QHBoxLayout()
         case_workspace.addLayout(case_body, 1)
         self.case_pages = QStackedWidget()
@@ -309,10 +305,6 @@ class Workspace(QMainWindow):
         explorer.addWidget(self.explorer)
 
         evidence = self.case_view("Preuves", "Evidence")
-        self.case_label = QLabel()
-        self.case_label.setObjectName("sectionContext")
-        self.case_label.setTextFormat(Qt.TextFormat.PlainText)
-        evidence.addWidget(self.case_label)
         self.evidence = QListWidget()
         evidence.addWidget(self.evidence)
         evidence_actions = QHBoxLayout()
@@ -387,9 +379,6 @@ class Workspace(QMainWindow):
         self.entity_panel = EntityPanel(data_directory(), self.tr_pair)
         entity_page.addWidget(self.entity_panel)
         integrity = self.case_view("Intégrité", "Integrity")
-        self.integrity_context = QLabel()
-        self.integrity_context.setTextFormat(Qt.TextFormat.PlainText)
-        integrity.addWidget(self.integrity_context)
         self.integrity_files = QListWidget()
         integrity.addWidget(self.integrity_files)
         self.button(integrity, "Comparer avec l’empreinte enregistrée",
@@ -429,9 +418,15 @@ class Workspace(QMainWindow):
         storage_actions = self.quick_action_section(quick_actions, "Stockage", "Storage")
         self.quick_action_card(
             storage_actions, "Ajouter un périphérique de stockage", "Add a storage device",
-            "Affiche les périphériques détectés et leurs montages.",
-            "Show detected devices and their mounts.",
+            "Sélectionne un support de travail et le monte en lecture-écriture sous /stockage.",
+            "Select a work drive and mount it read-write under /stockage.",
             "hard-drive", self.quick_storage, primary=True,
+        )
+        self.quick_action_card(
+            storage_actions, "Démonter le stockage", "Unmount storage",
+            "Démonte les supports de travail sous /stockage.",
+            "Unmount work drives under /stockage.",
+            "hard-drive", lambda: self.quick_storage("unmount"),
         )
         storage_actions.addStretch()
         quick_actions.addStretch()
@@ -759,16 +754,12 @@ class Workspace(QMainWindow):
     def update_case_label(self):
         item = self.active_case_item()
         name = item.text() if item else self.tr_pair("Aucune affaire active", "No active case")
-        label = self.tr_pair("Affaire verrouillée", "Locked case") + f"  ·  {name}" if item else name
-        self.case_label.setText(label)
-        self.integrity_context.setText(label)
-        self.module_case.setText(label)
         title = self.tr_pair("Affaire en cours", "Current case")
         self.case_title.setText(f"{title} · {name}" if item else title)
         self.active_case.setText("·  " + self.active_case.fontMetrics().elidedText(
             name, Qt.TextElideMode.ElideRight, 200
         ))
-        self.active_case.setToolTip(label)
+        self.active_case.setToolTip(name)
 
     def refresh_evidence(self, *_):
         self.update_case_label()
@@ -1410,15 +1401,24 @@ class Workspace(QMainWindow):
         if response == QMessageBox.StandardButton.Yes:
             self.start_quick_action(lambda: update_command(self.database_path))
 
-    def quick_storage(self):
-        self.start_quick_action(lambda: [
-            tool("lsblk"), "-o", "NAME,PATH,TYPE,SIZE,FSTYPE,RO,MOUNTPOINTS",
-        ])
-        self.system_panel.refresh()
-        self.statusBar().showMessage(self.tr_pair(
-            "Connectez le périphérique puis relancez l’inventaire. Montage réservé à l’administrateur.",
-            "Connect the device and refresh the inventory. Mounting requires an administrator.",
-        ), 10000)
+    def quick_storage(self, operation="mount"):
+        operator = self.require_operator()
+        if not operator:
+            return
+        tr = self.tr_pair
+        prompt = (tr("Ouvrir le montage en lecture-écriture d’un support de travail ?",
+                     "Open the read-write mounting workflow for a work drive?")
+                  if operation == "mount" else
+                  tr("Démonter les supports de travail sous /stockage ?",
+                     "Unmount work drives under /stockage?"))
+        if QMessageBox.question(self, "Vigil", prompt,
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        case = self.active_case_item()
+        self.start_quick_action(lambda: storage_command(
+            operation, self.database_path, self.active_case_id, case.text() if case else "", operator,
+        ))
 
     def quick_finished(self, code):
         self.cancel_task_button.setEnabled(False)
