@@ -116,7 +116,8 @@ class Workspace(QMainWindow):
         super().__init__()
         self.settings = settings
         self.database_path = database_path
-        self.active_case_id = settings.value("active_case_id", "")
+        self.active_case_id = ""
+        self.settings.remove("active_case_id")
         self.language = "en" if settings.value("language") == "en" else "fr"
         self.translator = QTranslator(self)
         self.localized = []
@@ -444,7 +445,6 @@ class Workspace(QMainWindow):
             return
         if not any(case_id == self.active_case_id for case_id, _ in rows):
             self.active_case_id = ""
-            self.settings.remove("active_case_id")
         selected = selected or self.active_case_id
         self.cases.blockSignals(True)
         self.cases.clear()
@@ -452,8 +452,6 @@ class Workspace(QMainWindow):
             self.add_row(self.cases, name, case_id)
             if case_id == selected:
                 self.cases.setCurrentRow(self.cases.count() - 1)
-        if self.cases.currentRow() < 0 and rows:
-            self.cases.setCurrentRow(0)
         self.filter_cases(self.case_search.text())
         self.cases.blockSignals(False)
         self.refresh_evidence()
@@ -489,8 +487,6 @@ class Workspace(QMainWindow):
                 self.cases.setCurrentItem(current)
             return
         self.active_case_id = target_id
-        self.settings.setValue("active_case_id", target_id)
-        self.settings.sync()
         self.refresh_evidence()
         self.reset_history()
 
@@ -859,7 +855,6 @@ class Workspace(QMainWindow):
                 ).fetchone()
                 if case is None:
                     raise ValueError("active case unavailable")
-            self.settings.setValue("active_case_id", self.active_case_id)
         self.save_operator()
         self.settings.setValue("language", self.language)
         self.settings.sync()

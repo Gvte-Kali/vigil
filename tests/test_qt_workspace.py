@@ -121,7 +121,17 @@ class WorkspaceTest(unittest.TestCase):
             self.assertNotEqual(window.active_case_id, first)
             self.close_workspace(window)
 
-            reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
+            legacy_settings = QSettings(config, QSettings.Format.IniFormat)
+            legacy_settings.setValue("active_case_id", window.active_case_id)
+            legacy_settings.sync()
+            reopened = Workspace(legacy_settings, database)
+            self.assertEqual(reopened.active_case_id, "")
+            self.assertEqual(reopened.cases.currentRow(), -1)
+            self.assertEqual(reopened.history_rows.count(), 0)
+            self.assertFalse(legacy_settings.contains("active_case_id"))
+            reopened.cases.setCurrentRow(1)
+            with patch.object(reopened, "confirm_case_selection", return_value=True):
+                reopened.case_clicked(reopened.cases.currentItem())
             self.assertIn("Second", reopened.active_case.text())
             self.assertEqual(len(reopened.system_panel.cards), 4)
             self.close_workspace(reopened)

@@ -64,12 +64,12 @@ B. Langue et navigation Qt
     un résultat en cliquant ou avec Entrée. Refuser puis confirmer la
     première activation. Vérifier le nom près de Vigil 2.0. Cliquer sur
     l’affaire active puis sur une autre et vérifier la confirmation à
-    chaque clic, les preuves et la restauration après relance.
+    chaque clic. Après relance, vérifier qu’aucune affaire n’est active.
 
 [ ] Avec une affaire active, fermer Vigil et annuler la confirmation.
     Vérifier que la fenêtre et l’affaire restent ouvertes. Fermer à
-    nouveau et confirmer, puis vérifier affaire, preuves, opérateur et
-    langue après relance. Refaire la confirmation sans affaire active.
+    nouveau et confirmer. Après relance, vérifier opérateur et langue,
+    puis confirmer à nouveau l’affaire et vérifier ses preuves. Refaire la confirmation sans affaire active.
 [ ] Pendant un calcul, tenter de fermer. Vérifier que Vigil demande
     d’attendre, puis affiche la confirmation après la fin du calcul.
 

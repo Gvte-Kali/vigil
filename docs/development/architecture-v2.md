@@ -61,6 +61,8 @@ en cours doivent aboutir et terminer leurs transactions avant la fermeture.
 Les mutations des affaires et preuves sont déjà enregistrées dans SQLite
 au moment de l’action. La fermeture vérifie l’affaire active et synchronise
 les préférences locales. Une erreur conserve le workspace ouvert.
+L’affaire active appartient à la session. À chaque lancement, une confirmation
+explicite est requise pour rattacher les opérations à une affaire.
 
 Tout futur éditeur ou module Qt qui garde des données modifiées en mémoire
 doit les enregistrer via la frontière `Workspace.save_before_close`,
