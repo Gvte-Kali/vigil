@@ -32,7 +32,7 @@ class WorkspaceTest(unittest.TestCase):
                 self.assertFalse(window.language_buttons[language].icon().isNull())
             flag = window.language_buttons["fr"].icon().pixmap(QSize(24, 16), 2).toImage()
             self.assertEqual(flag.pixelColor(46, 16).name(), "#ed2939")
-            window.operator.setText("Alice")
+            window.add_operator("Alice")
             window.case_name.setText("Test & preuve")
             window.create_case()
             window.language_buttons["en"].click()
@@ -41,6 +41,7 @@ class WorkspaceTest(unittest.TestCase):
             window.close()
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertEqual(reopened.tabs.tabText(0), "Cases")
+            self.assertEqual(reopened.operator.currentText(), "Alice")
             self.assertTrue(reopened.language_buttons["en"].isChecked())
             reopened.language_buttons["fr"].click()
             self.assertEqual(reopened.tabs.tabText(1), "Preuves")
@@ -55,7 +56,7 @@ class WorkspaceTest(unittest.TestCase):
                 QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
                 root / "cases.sqlite",
             )
-            window.operator.setText("Alice")
+            window.add_operator("Alice")
             window.case_name.setText("Fixture")
             window.create_case()
             source = root / "synthetic.raw"

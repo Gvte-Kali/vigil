@@ -45,7 +45,10 @@ B. Langue et navigation Qt
     Indiquer la session utilisée et noter les erreurs de plugin Qt.
 
 C. Affaires et fichiers de preuve
-[ ] Créer une affaire avec opérateur et nom contenant des accents.
+[ ] Cliquer sur Opérateurs…, créer Alice et un second opérateur. Vérifier
+    que les deux apparaissent dans le sélecteur et que recréer Alice
+    sélectionne la fiche existante. Changer d’opérateur puis relancer Qt.
+[ ] Créer une affaire avec l’opérateur sélectionné et un nom contenant des accents.
     Tester séparément les champs vides et la traduction de l’erreur.
 [ ] Importer deux fois un projet synthétique contenant un info.json valide.
     Vérifier que la liste n’affiche qu’une affaire et que le projet source
@@ -65,6 +68,11 @@ C. Affaires et fichiers de preuve
     Le test automatisé tests/test_raw_image.py fabrique ces fixtures.
 
 D. Registre, CLI et compatibilité
+[ ] Dans Modules, utiliser Consulter un index de recensement avec une
+    affaire et un opérateur choisis. Sur une fixture SQLite contenant la
+    table files, vérifier les extensions discordantes, le refus d’une base
+    sans cette table et l’absence de modification du fichier.
+    Le test tests/test_vigil_core.py fabrique une fixture et vérifie l’audit.
 [ ] Dans Modules, vérifier les neuf analyses du registre. Dans Diagnostic,
     vérifier la session et les outils détectés ou signalés indisponibles.
 [ ] Lancer "$HOME/.venvs/vigil2/bin/vigil2" doctor et

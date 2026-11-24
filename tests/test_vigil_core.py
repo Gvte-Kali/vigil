@@ -74,3 +74,35 @@ class CoreTest(unittest.TestCase):
         with patch.object(module.shutil, "which", return_value=None):
             with self.assertRaises(FileNotFoundError):
                 module.terminal_command(["bash"])
+
+    def test_census_adapter_preserves_index_and_attributes_execution(self):
+        import sqlite3
+
+        from vigil import storage
+        from vigil.adapters import query_census
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            index = root / "index with spaces.sqlite"
+            with sqlite3.connect(index) as connection:
+                connection.execute(
+                    "CREATE TABLE files(path, size, mime_type, extension_mismatch, content_hash)"
+                )
+                connection.execute("INSERT INTO files VALUES ('example', 1, 'text/plain', 1, 'hash')")
+            original = index.read_bytes()
+            state = root / "state.sqlite"
+            with storage.database(state) as connection:
+                alice = storage.register_operator(connection, "Alice")
+                self.assertEqual(storage.register_operator(connection, "Alice"), alice)
+                case = storage.create_case(connection, "Fixture", "Alice")
+            with patch("vigil.adapters.os.geteuid", return_value=1000):
+                self.assertIn("example\t1\ttext/plain", query_census(state, case, "Alice", index))
+            self.assertEqual(index.read_bytes(), original)
+            with storage.database(state) as connection:
+                audit = list(connection.execute(
+                    "SELECT operator_id, case_id, action, details FROM audit ORDER BY sequence"
+                ))
+            self.assertEqual([row["action"] for row in audit],
+                             ["case.create", "module.start", "module.success"])
+            self.assertTrue(all(row["operator_id"] == alice and row["case_id"] == case for row in audit))
+            self.assertEqual(audit[1]["details"], audit[2]["details"])

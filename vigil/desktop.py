@@ -8,12 +8,13 @@ from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSe
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTabWidget,
     QVBoxLayout, QWidget,
 )
 
 from . import storage
+from .adapters import CENSUS_LIMIT, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 
@@ -23,7 +24,7 @@ QFrame#header { background: #1A2029; border: 1px solid #35404E; border-radius: 1
 QFrame#header QLabel { background: transparent; }
 QLabel#brand { font-size: 21px; font-weight: 700; }
 QLabel#sectionContext { color: #B9CAD9; padding: 3px 0; }
-QLineEdit, QListWidget {
+QLineEdit, QComboBox, QListWidget {
     background: #121820; border: 1px solid #3B495B; border-radius: 7px;
     padding: 8px; selection-background-color: #57C7D4; selection-color: #101318;
 }
@@ -57,7 +58,7 @@ QPushButton[languageButton="true"] { padding: 6px 9px; }
 QPushButton[languageButton="true"]:checked {
     background: #284753; border-color: #57C7D4; color: #F0FCFF;
 }
-QPushButton:focus, QLineEdit:focus, QListWidget:focus { border-color: #A3F3FC; }
+QPushButton:focus, QLineEdit:focus, QComboBox:focus, QListWidget:focus { border-color: #A3F3FC; }
 QPushButton:disabled { background: #202A36; color: #91A1B3; border-color: #35404E; }
 """
 
@@ -136,9 +137,12 @@ class Workspace(QMainWindow):
         brand.setObjectName("brand")
         header.addWidget(brand)
         header.addStretch()
-        self.operator = QLineEdit()
-        self.bind(self.operator.setPlaceholderText, "Opérateur", "Operator")
+        self.operator = QComboBox()
+        self.operator.setMinimumWidth(145)
+        self.bind(self.operator.setAccessibleName, "Opérateur actif", "Active operator")
+        self.operator.currentIndexChanged.connect(self.save_operator)
         header.addWidget(self.operator)
+        self.button(header, "Opérateurs…", "Operators…", self.manage_operators)
         self.languages = QButtonGroup(self)
         self.language_buttons = {}
         for language, name in (("fr", "Français"), ("en", "English")):
@@ -188,6 +192,11 @@ class Workspace(QMainWindow):
         modules = self.page("Modules", "Modules")
         self.modules = QListWidget()
         modules.addWidget(self.modules)
+        module_actions = QHBoxLayout()
+        modules.addLayout(module_actions)
+        self.button(module_actions, "Consulter un index de recensement",
+                    "Query a census index", self.query_index, primary=True)
+        module_actions.addStretch()
         settings_page = self.page("Diagnostic", "Diagnostics")
         self.diagnostics = QListWidget()
         settings_page.addWidget(self.diagnostics)
@@ -196,6 +205,7 @@ class Workspace(QMainWindow):
         self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
         diagnostic_actions.addStretch()
         self.cases.currentItemChanged.connect(self.refresh_evidence)
+        self.refresh_operators()
         self.translate()
         self.refresh_cases()
 
@@ -246,6 +256,8 @@ class Workspace(QMainWindow):
         self.statusBar().showMessage(
             self.tr_pair("Calcul en cours…", "Computing…") if self.busy else ""
         )
+        if self.operator.count():
+            self.operator.setItemText(0, self.tr_pair("Choisir un opérateur", "Choose an operator"))
         self.refresh_diagnostics()
         self.update_case_label()
 
@@ -318,11 +330,56 @@ class Workspace(QMainWindow):
         for evidence_id, path, digest in rows:
             self.add_row(self.evidence, f"{path}  ·  {digest}", evidence_id)
 
+    def refresh_operators(self, selected=None):
+        if selected is None:
+            selected = self.settings.value("operator_id")
+        try:
+            with storage.database(self.database_path) as connection:
+                operators = storage.list_operators(connection)
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
+            return
+        self.operator.blockSignals(True)
+        self.operator.clear()
+        self.operator.addItem(self.tr_pair("Choisir un opérateur", "Choose an operator"))
+        for operator_id, name in operators:
+            self.operator.addItem(name, operator_id)
+        self.operator.setCurrentIndex(max(0, self.operator.findData(selected)) if selected else 0)
+        self.operator.blockSignals(False)
+        self.save_operator()
+
+    def save_operator(self, *_):
+        self.settings.setValue("operator_id", self.operator.currentData() or "")
+
+    def manage_operators(self):
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle(self.tr_pair("Opérateurs", "Operators"))
+        dialog.setLabelText(self.tr_pair("Nom du nouvel opérateur", "New operator name"))
+        dialog.setOkButtonText(self.tr_pair("Enregistrer", "Save"))
+        dialog.setCancelButtonText(self.tr_pair("Annuler", "Cancel"))
+        if dialog.exec():
+            self.add_operator(dialog.textValue())
+
+    def add_operator(self, name):
+        name = name.strip()
+        if not name or len(name) > 120 or not name.isprintable():
+            self.notify("Saisissez un nom lisible de 1 à 120 caractères.",
+                        "Enter a printable name of 1 to 120 characters.")
+            return
+        try:
+            with storage.database(self.database_path) as connection:
+                operator_id = storage.register_operator(connection, name)
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
+            return
+        self.refresh_operators(operator_id)
+
     def require_operator(self):
-        operator = self.operator.text().strip()
-        if not operator:
-            self.notify("Saisissez le nom de l’opérateur.", "Enter the operator name.")
-        return operator
+        if self.operator.currentData() is None:
+            self.notify("Créez un opérateur avec Opérateurs… ou sélectionnez-en un.",
+                        "Create an operator with Operators… or select one.")
+            return None
+        return self.operator.currentText()
 
     def create_case(self):
         operator = self.require_operator()
@@ -417,6 +474,30 @@ class Workspace(QMainWindow):
             "Inspection RAW terminée.", "RAW inspection complete.",
             "\n".join([summary, *partitions, f"SHA-256\n{result['sha256']}"]),
         )
+
+    def query_index(self):
+        case = self.cases.currentItem()
+        if case is None:
+            self.notify("Sélectionnez une affaire.", "Select a case.")
+            return
+        operator = self.require_operator()
+        if not operator or not (path := self.choose_file()):
+            return
+        case_id = case.data(Qt.ItemDataRole.UserRole)
+        self.run_task(
+            lambda: query_census(self.database_path, case_id, operator, Path(path)),
+            self.show_index_result,
+        )
+
+    def show_index_result(self, result):
+        if result:
+            self.notify(
+                f"Extensions discordantes (maximum {CENSUS_LIMIT} résultats).",
+                f"Extension mismatches (up to {CENSUS_LIMIT} results).",
+                result,
+            )
+        else:
+            self.notify("Aucune extension discordante.", "No extension mismatches.")
 
     def run_task(self, operation, on_success):
         self.busy = QThread(self)

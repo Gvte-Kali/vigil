@@ -67,17 +67,26 @@ def database(path):
         connection.close()
 
 
-def audit(connection, operator, case_id, action, details):
-    if not operator.strip():
+def register_operator(connection, name):
+    if not name.strip():
         raise ValueError("operator name required")
     connection.execute(
         "INSERT INTO operators VALUES (?, ?) ON CONFLICT(name) DO NOTHING",
-        (uuid4().hex, operator),
+        (uuid4().hex, name),
     )
+    return connection.execute("SELECT id FROM operators WHERE name = ?", (name,)).fetchone()[0]
+
+
+def list_operators(connection):
+    return list(connection.execute("SELECT id, name FROM operators ORDER BY name COLLATE NOCASE, id"))
+
+
+def audit(connection, operator, case_id, action, details):
+    operator_id = register_operator(connection, operator)
     connection.execute(
         """INSERT INTO audit(timestamp, operator_id, case_id, action, details)
-           SELECT ?, id, ?, ?, ? FROM operators WHERE name = ?""",
-        (utc_now(), case_id, action, json.dumps(details), operator),
+           VALUES (?, ?, ?, ?, ?)""",
+        (utc_now(), operator_id, case_id, action, json.dumps(details)),
     )
 
 

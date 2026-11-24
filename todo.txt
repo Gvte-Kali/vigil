@@ -35,14 +35,17 @@ PHASE 02 — CORE
     disponibles (381b98f). Schéma complet et contrôle des capacités ouverts.
 [ ] Runner local automatique, adaptateurs scripts, CLI Typer.
     CLI installable (381b98f) et transport PTY interactif testé sur fixture.
-    Intégration aux adaptateurs et contrats d'exécution ouverts.
+    Premier adaptateur Qt pour la consultation census SQLite en lecture seule,
+    avec affaire/opérateur et événements d’audit. Autres adaptateurs et
+    contrat d’exécution commun ouverts.
 [ ] Préserver presets, multi-scans et recherche autonome ; tests de parité.
 [ ] Validation humaine.
 
 PHASE 03 — AFFAIRES ET PREUVES
 [ ] SQLite migrations, affaires, opérateurs, preuves, runs et audit.
     Base v1 initialisée transactionnellement, affaires, opérateurs, preuves
-    et audit disponibles (381b98f). Persistance des runs ouverte.
+    et audit disponibles (381b98f). Création, sélection et mémorisation des
+    opérateurs en Qt. Persistance des runs ouverte.
 [ ] Import anciens projets sans perte, SHA-256 et contrôle intégrité.
 [ ] RAW/E01 existants RO, partitions et nettoyage ; AFF selon capacité.
     Inspection RAW MBR primaire et SHA-256 testés sur image synthétique,
