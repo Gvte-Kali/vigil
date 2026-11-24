@@ -212,6 +212,14 @@ D. Registre, CLI et compatibilité
     de résultats distincts et aucune modification de l’affaire affichée.
     Vérifier le refus si /investigation contient déjà un montage.
 
+[ ] Au lancement, cliquer sur Créer un opérateur, saisir son nom et
+    continuer. Relancer et choisir le même opérateur dans la liste.
+[ ] Dans Système → Configuration de l’entité, vérifier les champs hérités
+    puis modifier et enregistrer sur une copie de data de recette. Choisir
+    un logo PNG/JPEG et vérifier l’aperçu, la persistance et le retrait.
+    Vérifier les valeurs dans config/system.json et un PDF de test.
+    Modifier un champ puis confirmer la fermeture pour tester sa sauvegarde.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

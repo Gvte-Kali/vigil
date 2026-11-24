@@ -31,7 +31,7 @@ VIGIL_BASE="${VIGIL_BASE:-/opt/vigil}"
 ACTIVE_PROJECT_FILE="$VIGIL_BASE/data/active_project"
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+CONFIG_FILE="${VIGIL_DATA_DIR:-$VIGIL_BASE/data}/config/system.json"
 
 ERRORS=0
 

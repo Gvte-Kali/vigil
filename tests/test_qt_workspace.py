@@ -354,14 +354,45 @@ class WorkspaceTest(unittest.TestCase):
                 QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
                 root / "cases.sqlite",
             )
-            with patch("vigil.desktop.QInputDialog.getItem", return_value=("", False)):
+            with patch.object(window, "session_operator_input", return_value=("", False)):
                 self.assertFalse(window.choose_session_operator())
-            with patch("vigil.desktop.QInputDialog.getItem", return_value=("Alice", True)):
+            with patch.object(window, "session_operator_input", return_value=("Alice", True)):
                 self.assertTrue(window.choose_session_operator())
             self.assertEqual(window.require_operator(), "Alice")
             self.assertFalse(window.operator.isEnabled())
             self.assertEqual(window.active_case_id, "")
             self.close_workspace(window)
+
+    def test_entity_form_preserves_legacy_metadata_and_validates_logo(self):
+        import json
+
+        from PySide6.QtGui import QImage
+        from vigil.entity_panel import EntityPanel
+
+        with tempfile.TemporaryDirectory() as tmp:
+            data = Path(tmp)
+            config = data / "config/system.json"
+            config.parent.mkdir()
+            config.write_text('{"entity_name":"Old name","custom":42}')
+            panel = EntityPanel(data, lambda french, english: english)
+            self.assertEqual(panel.fields["entity_name"].text(), "Old name")
+            logo = data / "example.png"
+            image = QImage(10, 10, QImage.Format.Format_RGB32)
+            image.fill(0x336699)
+            self.assertTrue(image.save(str(logo)))
+            with patch("vigil.entity_panel.QFileDialog.getOpenFileName", return_value=(str(logo), "")):
+                panel.choose_logo()
+            self.assertFalse(panel.preview.pixmap().isNull())
+            panel.fields["entity_name"].setText("New name")
+            panel.save()
+            saved = json.loads(config.read_text())
+            self.assertEqual(saved["custom"], 42)
+            self.assertEqual(saved["entity_name"], "New name")
+            self.assertTrue((data / saved["logo"]).is_file())
+            panel.remove_logo()
+            panel.save()
+            self.assertEqual(json.loads(config.read_text())["logo"], "")
+            panel.close()
 
     def wait_for_task(self, window):
         for _ in range(200):

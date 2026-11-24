@@ -9,7 +9,7 @@ from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSe
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QComboBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QStackedWidget, QTabWidget,
     QVBoxLayout, QWidget,
 )
@@ -21,6 +21,8 @@ from .images import inspect_raw
 from .inspection import inspect_file
 from .module_scaffold import create_module_draft
 from .evidence_panel import EvidencePanel
+from .entity import data_directory
+from .entity_panel import EntityPanel
 from .history import PAGE_SIZE, case_events
 from .reporting import case_report
 from .system_panel import SystemPanel
@@ -372,6 +374,9 @@ class Workspace(QMainWindow):
         settings_page.addLayout(diagnostic_actions)
         self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
         diagnostic_actions.addStretch()
+        entity_page = self.page("Configuration de l’entité", "Organization settings")
+        self.entity_panel = EntityPanel(data_directory(), self.tr_pair)
+        entity_page.addWidget(self.entity_panel)
         integrity = self.case_view("Intégrité", "Integrity")
         self.integrity_context = QLabel()
         self.integrity_context.setTextFormat(Qt.TextFormat.PlainText)
@@ -562,6 +567,7 @@ class Workspace(QMainWindow):
         self.refresh_diagnostics()
         self.system_panel.render()
         self.explorer.retranslate()
+        self.entity_panel.retranslate()
         self.update_terminal_toggle(not self.terminal_dock.isHidden())
         self.refresh_case_mount()
         self.update_case_label()
@@ -847,22 +853,58 @@ class Workspace(QMainWindow):
     def save_operator(self, *_):
         self.settings.setValue("operator_id", self.operator.currentData() or "")
 
+    def session_operator_input(self):
+        tr = self.tr_pair
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr("Opérateur de la session", "Session operator"))
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(tr("Choisissez l’opérateur.", "Choose the operator.")))
+        choices = QComboBox()
+        choices.addItems([self.operator.itemText(index) for index in range(1, self.operator.count())])
+        choices.setCurrentIndex(max(0, self.operator.currentIndex() - 1))
+        layout.addWidget(choices)
+        create = QPushButton(tr("Créer un opérateur", "Create an operator"))
+        layout.addWidget(create)
+        new_name = QLineEdit()
+        new_name.setPlaceholderText(tr("Nom du nouvel opérateur", "New operator name"))
+        layout.addWidget(new_name)
+        new_name.hide()
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        confirm = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        confirm.setText(tr("Continuer", "Continue"))
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("Annuler", "Cancel"))
+        confirm.setEnabled(choices.count() > 0)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        def create_operator():
+            creating = new_name.isHidden()
+            new_name.setVisible(creating)
+            choices.setEnabled(not creating)
+            create.setText(tr("Choisir un opérateur existant", "Choose an existing operator")
+                           if creating else tr("Créer un opérateur", "Create an operator"))
+            confirm.setEnabled(bool(new_name.text().strip()) if creating else choices.count() > 0)
+            if creating:
+                new_name.setFocus()
+
+        create.clicked.connect(create_operator)
+        new_name.textChanged.connect(lambda value: confirm.setEnabled(bool(value.strip())))
+        if not choices.count():
+            create_operator()
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        return (choices.currentText() if new_name.isHidden() else new_name.text()), accepted
+
     def choose_session_operator(self):
-        names = [self.operator.itemText(index) for index in range(1, self.operator.count())]
-        name, accepted = QInputDialog.getItem(
-            self,
-            self.tr_pair("Opérateur de la session", "Session operator"),
-            self.tr_pair("Choisissez un opérateur ou saisissez un nouveau nom.",
-                         "Choose an operator or enter a new name."),
-            names, max(0, self.operator.currentIndex() - 1), True,
-        )
-        if not accepted:
-            return False
-        name = name.strip()
-        if not name or len(name) > 120 or not name.isprintable():
+        while True:
+            name, accepted = self.session_operator_input()
+            if not accepted:
+                return False
+            name = name.strip()
+            if name and len(name) <= 120 and name.isprintable():
+                break
             self.notify("Saisissez un nom lisible de 1 à 120 caractères.",
                         "Enter a printable name of 1 to 120 characters.")
-            return self.choose_session_operator()
         self.add_operator(name)
         if self.operator.currentText() != name or self.operator.currentData() is None:
             return False
@@ -1238,6 +1280,7 @@ class Workspace(QMainWindow):
                 ).fetchone()
                 if case is None:
                     raise ValueError("active case unavailable")
+        self.entity_panel.save()
         self.save_operator()
         self.settings.setValue("language", self.language)
         self.settings.sync()

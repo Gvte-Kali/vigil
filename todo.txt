@@ -91,6 +91,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
     journal et Intégrité dans un sélecteur vertical à droite. Fenêtre maximisée,
     centre des tâches ouvert au démarrage et état de /investigation visible
     dans l’en-tête. Montage et démontage guidés vers l’administrateur.
+    Configuration d’entité Qt compatible avec system.json et les PDF 1.0.
+    Création explicite d’un opérateur depuis la fenêtre de démarrage.
     Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.
     Catalogue des modules intégrés avec fiches et création d’un squelette

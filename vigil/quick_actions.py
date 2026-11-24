@@ -6,6 +6,8 @@ import stat
 import tempfile
 from pathlib import Path
 
+from .entity import data_directory, legacy_base
+
 
 def tool(name):
     path = shutil.which(name)
@@ -77,9 +79,7 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
     }
     if operation not in names or not re.fullmatch(r"[0-9a-f]{32}", case_id):
         raise ValueError("invalid historical mount context")
-    base = Path(__file__).resolve().parents[1]
-    if not (base / "scripts" / names[operation]).is_file():
-        base = Path("/opt/vigil")
+    base = legacy_base()
     script = base / "scripts" / names[operation]
     if not script.is_file():
         raise ValueError(f"legacy script unavailable: {script}")
@@ -91,7 +91,8 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
     def label(value):
         return "".join(character if character.isprintable() else " " for character in value)
 
-    context = [f"VIGIL_BASE={base}", f"VIGIL_LEGACY_PROJECT={label(name)}",
+    context = [f"VIGIL_BASE={base}", f"VIGIL_DATA_DIR={data_directory(base)}",
+               f"VIGIL_LEGACY_PROJECT={label(name)}",
                f"VIGIL_ACTIVE_USER={label(operator)}", f"VIGIL_LEGACY_CASE_DIR={directory}"]
     arguments = []
     if operation == "scan":
