@@ -1,12 +1,34 @@
 #!/bin/bash
 set -euo pipefail
 
+# Les installations existantes doivent retirer la règle héritée manuellement.
+sudo -v
+if sudo test -e /etc/sudoers.d/vigil; then
+    echo "Règle sudoers Vigil existante : faites-la examiner et retirer par l'administrateur."
+    echo "Voir docs/development/phase-01-transition.md."
+    exit 1
+fi
+if findmnt --mountpoint /investigation >/dev/null 2>&1 ||
+   findmnt --mountpoint /stockage >/dev/null 2>&1 ||
+   findmnt -rn -o TARGET | awk '$0 ~ "^/(investigation|stockage)/" { found=1 } END { exit !found }'; then
+    echo "Démontez les supports des zones Vigil avant la maintenance."
+    exit 1
+fi
+
+if [ "$EUID" -eq 0 ]; then
+    echo "Démarrez le post-install depuis la session de l'opérateur, avec sudo interactif."
+    exit 1
+fi
+if [ ! -w /opt/vigil/data ] || [ ! -w /opt/vigil/logs ] || [ ! -w /opt/vigil/rapports ]; then
+    echo "Faites préparer les répertoires de données par l'administrateur."
+    echo "Voir docs/development/phase-01-transition.md."
+    exit 1
+fi
+
 # --- 1. Verifier et creer les repertoires necessaires ---
 echo "Création des répertoires..."
 sudo mkdir -p /investigation /stockage /opt/vigil/{data,scripts,logs,rapports}
-sudo chown -R "$USER:$USER" /investigation /stockage /opt/vigil
-sudo chmod -R 755 /investigation /stockage /opt/vigil
-echo "✅ Répertoires créés avec les droits pour $USER."
+echo "✅ Répertoires de base présents."
 
 # --- 2. Installer les dependances depuis requirements.txt ---
 # Les paquets y sont documentes (un commentaire par paquet).
@@ -63,28 +85,6 @@ EOF
 sudo systemctl daemon-reload
 echo "✅ udisks2 configuré pour ne pas monter automatiquement les périphériques."
 
-# --- 5.1. Purger usbguard s'il est présent (bloque les nouveaux USB) ---
-# usbguard force authorized=0 sur les peripheriques non whitelistes via une
-# regle udev persistante. Masquer le service ne suffit pas : il faut purger
-# le paquet (retire la regle udev) puis recharger udev, sinon les nouveaux USB
-# restent bloques au niveau noyau (dmesg : "Device is not authorized").
-if command -v usbguard-daemon >/dev/null 2>&1 || dpkg -l usbguard >/dev/null 2>&1; then
-    echo "Purge de usbguard (interfère avec la détection USB)..."
-    sudo systemctl disable --now usbguard 2>/dev/null || true
-    sudo apt-get -y purge usbguard 2>/dev/null || true
-    sudo rm -f /etc/udev/rules.d/*usbguard* /lib/udev/rules.d/*usbguard* /usr/lib/udev/rules.d/*usbguard* 2>/dev/null || true
-    sudo udevadm control --reload-rules 2>/dev/null || true
-    sudo udevadm trigger 2>/dev/null || true
-    for dev in /sys/bus/usb/devices/*/authorized; do
-        echo 1 | sudo tee "$dev" >/dev/null 2>&1 || true
-    done
-    echo "✅ usbguard purgé. Les nouveaux périphériques USB seront détectés normalement."
-fi
-
-# --- 5. Configurer les permissions pour /investigation ---
-sudo chmod 755 /investigation
-sudo chown $USER:$USER /investigation
-
 # --- 6. Initialiser les logs et données ---
 mkdir -p /opt/vigil/data/{config/logo,projects,users,scans,usb}
 mkdir -p /opt/vigil/logs
@@ -98,31 +98,6 @@ echo "Création du lien symbolique /usr/local/bin/vigil..."
 sudo ln -sf /opt/vigil/gui/vigil_main_gui.py /usr/local/bin/vigil
 sudo chmod +x /opt/vigil/gui/vigil_main_gui.py
 echo "✅ Lien symbolique /usr/local/bin/vigil créé (pointe vers /opt/vigil/gui/vigil_main_gui.py)."
-
-# --- 7. Configurer sudoers NOPASSWD pour Vigil ---
-echo "Configuration de sudoers (sans mot de passe pour Vigil)..."
-SUDOERS_FILE="/etc/sudoers.d/vigil"
-cat > /tmp/vigil-sudoers << 'SUDOERS_EOF'
-# Vigil : permet aux scripts de monter/demonter des peripheriques USB et de
-# lancer clamscan/freshclam sans mot de passe. Limite aux commandes utilisees
-# par /opt/vigil/scripts/.
-Cmnd_Alias VIGIL_MOUNT = /bin/mount, /bin/umount, /sbin/blkid, /sbin/blockdev, /sbin/findmnt, /usr/bin/eject, /usr/bin/mount, /usr/bin/umount, /usr/sbin/blkid, /usr/sbin/blockdev, /usr/sbin/findmnt
-Cmnd_Alias VIGIL_FS = /bin/mkdir, /bin/rmdir, /bin/rm, /bin/chmod, /bin/chown, /usr/bin/install, /usr/bin/mkdir, /usr/bin/rmdir, /usr/bin/rm, /usr/bin/chmod, /usr/bin/chown
-Cmnd_Alias VIGIL_CLAM = /usr/bin/clamscan, /usr/bin/freshclam, /usr/bin/clamconf
-Cmnd_Alias VIGIL_SYSTEMCTL = /bin/systemctl stop clamav-freshclam, /bin/systemctl start clamav-freshclam, /usr/bin/systemctl stop clamav-freshclam, /usr/bin/systemctl start clamav-freshclam, /usr/sbin/systemctl stop clamav-freshclam, /usr/sbin/systemctl start clamav-freshclam
-Cmnd_Alias VIGIL_LOG = /usr/bin/tee
-Cmnd_Alias VIGIL_UDEV = /usr/bin/udevadm, /bin/udevadm
-Cmnd_Alias VIGIL_MTP = /usr/bin/jmtpfs, /usr/bin/ldmtool
-Cmnd_Alias VIGIL_ALL = VIGIL_MOUNT, VIGIL_FS, VIGIL_CLAM, VIGIL_SYSTEMCTL, VIGIL_LOG, VIGIL_UDEV, VIGIL_MTP
-ALL ALL=(root) NOPASSWD: VIGIL_ALL
-SUDOERS_EOF
-sudo install -m 0440 /tmp/vigil-sudoers "$SUDOERS_FILE" && rm -f /tmp/vigil-sudoers
-if sudo visudo -c -f "$SUDOERS_FILE" >/dev/null 2>&1; then
-    echo "✅ sudoers Vigil configure (NOPASSWD pour les commandes Vigil)."
-else
-    echo "❌ Erreur de syntaxe sudoers, fichier $SUDOERS_FILE supprime."
-    sudo rm -f "$SUDOERS_FILE"
-fi
 
 # --- 8. Créer le raccourci bureau (item 6 du checklist) ---
 echo "Création du raccourci Vigil..."

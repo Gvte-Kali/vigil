@@ -11,11 +11,11 @@ Le script de post-installation configure le système et nécessite les droits ad
 
 ## Installer et lancer
 
-Placer le dépôt dans `/opt/vigil`, puis exécuter :
+Consulter la [procédure de transition des privilèges](../development/phase-01-transition.md), puis placer le dépôt dans `/opt/vigil` et lancer depuis la session opérateur :
 
 ```bash
 cd /opt/vigil
-sudo bash scripts/post-install/post_install_vigil.sh
+bash scripts/post-install/post_install_vigil.sh
 vigil
 ```
 
@@ -27,8 +27,8 @@ Après installation, terminer les réglages KDE décrits dans `post-install-chec
 
 - Installation des paquets de `scripts/post-install/requirements.txt`.
 - Création de `/investigation`, `/stockage` et des dossiers de données, journaux et rapports.
-- Désactivation du montage automatique, masquage d’`udisks2` et suppression d’USBGuard s’il est présent.
-- Initialisation des données et des règles sudo dédiées, validées par `visudo`.
+- Désactivation du montage automatique et masquage d’`udisks2`.
+- Initialisation des données. L’administrateur vérifie la politique sudo du poste.
 - Création de la commande `vigil`, du raccourci et des emplacements Dolphin.
 - Mise à jour initiale des signatures ClamAV.
 - Si accepté : activation de `xrdp` et configuration du port 3389/tcp via UFW.

@@ -9,6 +9,7 @@ import typer
 
 from . import storage
 from .core import BUILTIN_MODULES, discover, doctor
+from .images import inspect_raw
 
 app = typer.Typer(no_args_is_help=True)
 modules = typer.Typer(no_args_is_help=True)
@@ -110,6 +111,12 @@ def verify(evidence_id: str, operator: str = typer.Option(...), db: DatabaseOpti
         emit(result)
         if not result["matches"]:
             raise typer.Exit(2)
+
+
+@evidence.command("inspect-raw")
+def inspect_raw_command(path: Path, sector_size: int = 512):
+    with command():
+        emit(inspect_raw(path, sector_size))
 
 
 if __name__ == "__main__":

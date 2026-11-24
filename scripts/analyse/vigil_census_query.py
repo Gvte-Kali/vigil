@@ -28,15 +28,14 @@ COLUMNS = "path, size, mime_type, extension_mismatch, content_hash"
 def find_latest_index(project_dir):
     """Retourne la base census_*.sqlite la plus récente du dossier projet.
 
-    Les livrables sont horodatés (census_YYYYMMDD_HHMMSS.sqlite) ; le tri
-    lexicographique du suffixe correspond au tri chronologique.
+    Les livrables sont horodatés ; les nouveaux noms ajoutent un suffixe unique.
     """
     if not project_dir or not os.path.isdir(project_dir):
         return ""
     candidates = glob.glob(os.path.join(project_dir, "census_*.sqlite"))
     if not candidates:
         return ""
-    return max(candidates, key=lambda p: p.rsplit("_", 1)[-1])
+    return max(candidates, key=os.path.basename)
 
 
 def query_files(db_path, mismatched=False, octet_stream=False,

@@ -132,28 +132,7 @@ else
     PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
 fi
 
-# --- Purge des recensements precedents du projet ---
-# Un recensement neant se superpose pas : les anciens livrables du meme type
-# sont supprimes et remplaces par les nouveaux (evite l'accumulation de
-# census_*.sqlite/.tsv, traces .sains/.doublons et rapports PDF a chaque
-# montage/demontage). Les autres livrables du projet sont intacts.
-if { [ "$ACTIVE_PROJECT" != "(no-project)" ] || [ "$DO_NO_PROJECT" -eq 1 ]; } \
-   && [ -d "$PROJECT_LOG_DIR" ]; then
-    purge_count=0
-    for _f in "$PROJECT_LOG_DIR"/census_*.sqlite \
-              "$PROJECT_LOG_DIR"/census_*.tsv \
-              "$PROJECT_LOG_DIR"/census_*.sqlite.sha256 \
-              "$PROJECT_LOG_DIR"/.sains.census_* \
-              "$PROJECT_LOG_DIR"/.doublons.census_* \
-              "$PROJECT_LOG_DIR"/rapport_census_*.pdf; do
-        [ -e "$_f" ] || continue
-        rm -f -- "$_f" && purge_count=$((purge_count + 1))
-    done
-    if [ "$purge_count" -gt 0 ]; then
-        echo -e "${GREY}Nettoyage de $purge_count fichier(s) de recensement precedent(s) :" \
-             "les nouveaux livrables les remplacent.${NC}"
-    fi
-fi
+
 
 # --- final_pause : ne ferme jamais le terminal sans lecture ---
 final_pause() {
@@ -304,7 +283,8 @@ EOFJSON
         if [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 2>&1; then
             mkdir -p "$RAPPORTS_DIR" 2>/dev/null || true
             PDF_OUT=$(python3 "$PDF_SCRIPT" --kind census --json "$JSON_FILE" \
-                --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" --dir "$RAPPORTS_DIR" 2>&1)
+                --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" \
+                --fname-prefix "rapport_census_${WORK_DIR##*.}" --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
                 echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
                 log_action "success" "Rapport PDF généré : $PDF_OUT"
@@ -373,7 +353,7 @@ python3 - "$RAW_LIST" "$WORK_DIR/mime_types.txt" "$WORK_DIR/mime_encodings.txt" 
           "$JSON_FILE" "$DATE_ANALYSIS" "$ACTIVE_USER" "$ACTIVE_PROJECT" \
           "$ACTIVE_ENTITY" "$PROJECT_LOG_DIR" "$INVESTIGATION_DIR" \
           "$STOCKAGE_DIR" "$DO_DEDUP" "$DO_CHECKSAFE" "$VIGIL_VERSION" \
-          "$EXT_MAP_FILE" "$DO_NO_PROJECT" "$(dirname -- "$0")" \
+          "$EXT_MAP_FILE" "$DO_NO_PROJECT" "$(dirname -- "$0")" "${WORK_DIR##*.}" \
           <<'PYCENSUS'
 import os
 import sys
@@ -385,7 +365,7 @@ from datetime import datetime, timezone
 (raw_list, mime_types_file, mime_encodings_file, out_json, date_analysis,
  active_user, active_project, active_entity, project_log_dir,
  investigation_dir, stockage_dir, do_dedup, do_checksafe,
- vigil_version, ext_map_file, no_project, script_dir) = sys.argv[1:19]
+ vigil_version, ext_map_file, no_project, script_dir, run_suffix) = sys.argv[1:20]
 sys.path.insert(0, script_dir)
 from vigil_checksafe import is_safe, load_database
 do_dedup = do_dedup == "1"
@@ -641,7 +621,7 @@ if no_project or (active_project and active_project != "(no-project)"):
     os.makedirs(project_dir, exist_ok=True)
     db_path = os.path.join(project_dir, "census.sqlite")
     # On evite d'ecraser une base precedente : suffixe horodate.
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + run_suffix
     db_path = os.path.join(project_dir, f"census_{stamp}.sqlite")
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
@@ -875,6 +855,7 @@ if [ -f "$JSON_FILE" ] && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 
         --json "$JSON_FILE" \
         --user "$ACTIVE_USER" \
         --project "$ACTIVE_PROJECT" \
+        --fname-prefix "rapport_census_${WORK_DIR##*.}" \
         --dir "$RAPPORTS_DIR" 2>&1)
     if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
         echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"

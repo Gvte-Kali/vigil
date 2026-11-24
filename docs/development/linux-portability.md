@@ -25,8 +25,9 @@ Konsole, GNOME Terminal, XFCE Terminal, kitty ou xterm. Installer Tk et un
 terminal utilisable dans la session. Tk repose sur X11, donc XWayland est
 nécessaire dans une session Wayland. Le futur workspace Qt utilisera les
 plugins de plateforme Qt pour X11 ou Wayland selon la session. Il n'aura
-pas de dépendance à un gestionnaire de fenêtres. Le panneau terminal intégré
-reste à implémenter avec le runner PTY et l'émulateur de terminal.
+pas de dépendance à un gestionnaire de fenêtres. Le transport PTY possède un terminal de contrôle, reçoit les frappes et
+le redimensionnement. Son raccordement aux adaptateurs et au futur
+émulateur du panneau Qt reste à réaliser.
 
 ## Recette des phases 02 et 03
 
@@ -41,6 +42,7 @@ vigil2 cases list
 vigil2 cases import /chemin/vers/copie-projet --operator Alice
 vigil2 evidence add ID_AFFAIRE /chemin/vers/fixture.raw --operator Alice
 vigil2 evidence verify ID_PREUVE --operator Alice
+vigil2 evidence inspect-raw /chemin/vers/fixture.raw
 ```
 
 La base v1 est initialisée transactionnellement dans
@@ -53,7 +55,11 @@ Les rapports et la custody restent référencés à leur emplacement historique.
 L'enregistrement calcule SHA-256 sur un fichier régulier ouvert en lecture
 seule et contrôle ses métadonnées pendant le calcul.
 
-Restent ouverts en phase 02 le runner et son contrat événements/résultats,
+L'inspection RAW vérifie SHA-256 et décrit les partitions MBR primaires
+sur un fichier régulier en lecture seule. Elle signale les formats et
+tables qui nécessitent un lecteur dédié.
+
+Restent ouverts en phase 02 l'intégration du runner et son contrat événements/résultats,
 les adaptateurs d'exécution et la recette des presets, multi-scans et chasse
 autonome. Restent ouverts en phase 03 la migration complète des livrables,
 l'historique des runs, et l'ouverture de partitions RAW/E01/AFF avec

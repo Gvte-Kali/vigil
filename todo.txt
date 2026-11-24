@@ -18,22 +18,35 @@ PHASE 00 — AUDIT
 
 PHASE 01 — SECURITE
 [ ] Broker privilégié limité ; suppression NOPASSWD générique.
-[ ] Remplacer pickle checksafe ; protection bloc/montage et MTP distinct.
+    Post-install sans génération NOPASSWD. Transition manuelle administrateur
+    documentée. Broker et recette en VM ouverts.
+[x] Remplacer pickle checksafe par du TSV borné (c5dc118 ; fixtures unittest).
+[ ] Protection bloc/montage et MTP distinct.
 [ ] Validation des destinations et identités ; contexte immuable par run.
 [ ] Préserver custody, résultats et exports ; tests négatifs et rollback.
+    Recensements antérieurs conservés et noms distincts. Isolation des chasses
+    et publication vérifiée des exports ouvertes.
 [ ] Validation humaine.
 
 PHASE 02 — CORE
 [ ] Package Python indépendant de Qt ; contrats résultats/événements.
 [ ] Registre, manifestes YAML validés, capabilities et dépendances.
+    Registre initial de neuf analyses, validation et diagnostic PATH
+    disponibles (381b98f). Schéma complet et contrôle des capacités ouverts.
 [ ] Runner local automatique, adaptateurs scripts, CLI Typer.
+    CLI installable (381b98f) et transport PTY interactif testé sur fixture.
+    Intégration aux adaptateurs et contrats d'exécution ouverts.
 [ ] Préserver presets, multi-scans et recherche autonome ; tests de parité.
 [ ] Validation humaine.
 
 PHASE 03 — AFFAIRES ET PREUVES
 [ ] SQLite migrations, affaires, opérateurs, preuves, runs et audit.
+    Base v1 initialisée transactionnellement, affaires, opérateurs, preuves
+    et audit disponibles (381b98f). Persistance des runs ouverte.
 [ ] Import anciens projets sans perte, SHA-256 et contrôle intégrité.
 [ ] RAW/E01 existants RO, partitions et nettoyage ; AFF selon capacité.
+    Inspection RAW MBR primaire et SHA-256 testés sur image synthétique,
+    sans montage. GPT, E01, AFF et ouverture de partition restent ouverts.
 [ ] Validation humaine.
 
 PHASE 04 — WORKSPACE QT ET MODULES

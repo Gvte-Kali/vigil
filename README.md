@@ -17,12 +17,15 @@ Placer le dépôt dans `/opt/vigil`, puis lancer :
 
 ```bash
 cd /opt/vigil
-sudo bash scripts/post-install/post_install_vigil.sh
+bash scripts/post-install/post_install_vigil.sh
 vigil
 ```
 
-Le script installe les dépendances et configure le poste : montage automatique,
-règles sudo, raccourcis et ClamAV. Le RDP est facultatif.
+L'administrateur doit préparer les répertoires de travail et, sur un poste
+existant, traiter la règle sudoers héritée avant le post-install. Voir la
+[procédure de transition](docs/development/phase-01-transition.md).
+Le script installe les dépendances et configure les raccourcis et ClamAV.
+Le RDP est facultatif.
 Voir [Installation](docs/installation/README.md) et `post-install-checked.txt`.
 
 ## Première analyse
