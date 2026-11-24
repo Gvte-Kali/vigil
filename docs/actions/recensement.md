@@ -49,9 +49,24 @@ Les dates sont normalisées en UTC ; leur interprétation reste liée au systèm
 Les doublons sont groupés par **SHA-256**, marqués et conservés dans l’inventaire.
 Les analyses ciblées peuvent traiter un représentant et documenter les autres emplacements.
 
-Le filtrage checksafe utilise les bases externes `files.safe.name` et `files.safe.hash`
-dans `/stockage`. Ce sont des fichiers pickle : n’utiliser que des bases provenant
-d’une source de confiance. Sans base, aucun fichier n’est filtré comme connu.
+Checksafe lit deux bases facultatives dans `/stockage`, au format TSV UTF-8 à
+une colonne. Utiliser des listes fournies par une autorité de confiance.
+
+| Fichier | En-tête | Une entrée par ligne |
+|---|---|---|
+| `files.safe.name.tsv` | `name` | Nom de fichier sans chemin, comparé sans tenir compte de la casse |
+| `files.safe.hash.tsv` | `sha1` | SHA-1 en 40 caractères hexadécimaux |
+
+Sans liste de noms, le filtre vérifie les empreintes de tous les fichiers. Une
+liste de noms avec le seul en-tête ne retient aucun candidat. Sans empreintes
+valides, ou si une base TSV présente est invalide, aucun fichier n'est marqué
+comme connu. Les erreurs figurent dans la sortie console et le JSON du
+recensement. Les limites par base sont 32 Mio, 500 000 entrées et 4096 octets
+par ligne. SHA-256 reste l'empreinte de référence de l'inventaire.
+
+Pour migrer, demander un export texte des listes à la source de confiance.
+Les anciens fichiers `files.safe.name` et `files.safe.hash` sont ignorés.
+
 
 ## Extensions trompeuses
 

@@ -373,20 +373,21 @@ python3 - "$RAW_LIST" "$WORK_DIR/mime_types.txt" "$WORK_DIR/mime_encodings.txt" 
           "$JSON_FILE" "$DATE_ANALYSIS" "$ACTIVE_USER" "$ACTIVE_PROJECT" \
           "$ACTIVE_ENTITY" "$PROJECT_LOG_DIR" "$INVESTIGATION_DIR" \
           "$STOCKAGE_DIR" "$DO_DEDUP" "$DO_CHECKSAFE" "$VIGIL_VERSION" \
-          "$EXT_MAP_FILE" "$DO_NO_PROJECT" \
+          "$EXT_MAP_FILE" "$DO_NO_PROJECT" "$(dirname -- "$0")" \
           <<'PYCENSUS'
 import os
 import sys
 import json
 import sqlite3
 import hashlib
-import pickle
 from datetime import datetime, timezone
 
 (raw_list, mime_types_file, mime_encodings_file, out_json, date_analysis,
  active_user, active_project, active_entity, project_log_dir,
  investigation_dir, stockage_dir, do_dedup, do_checksafe,
- vigil_version, ext_map_file, no_project) = sys.argv[1:18]
+ vigil_version, ext_map_file, no_project, script_dir) = sys.argv[1:19]
+sys.path.insert(0, script_dir)
+from vigil_checksafe import is_safe, load_database
 do_dedup = do_dedup == "1"
 do_checksafe = do_checksafe == "1"
 
@@ -566,72 +567,37 @@ else:
     for rec in records:
         rec["content_hash"] = ""
 
-# --- checksafe : filtre par base de noms + base de hashes (CONSERVE tel quel) ---
-# Sources externes recherchees dans /stockage (files.safe.name / files.safe.hash)
-# — config de l'operateur/autorite, pas dans Vigil. Bases pickle (set python),
-# comme scalpel/bin/checksafe. Comportement sans base : ne filtre rien.
+# --- checksafe : bases TSV externes et sémantique historique nom/SHA-1 ---
 safe_filtered_count = 0
-checksafe_base_name = 0
-checksafe_base_hash = 0
-name_db = None
-hash_db = None
+name_db = hash_db = None
+checksafe_errors = []
 if do_checksafe:
-    name_path = os.path.join(stockage_dir, "files.safe.name")
-    hash_path = os.path.join(stockage_dir, "files.safe.hash")
-    if os.path.isfile(name_path) and os.path.getsize(name_path) > 0:
-        checksafe_base_name = 1
+    for filename, column in (("files.safe.name.tsv", "name"),
+                             ("files.safe.hash.tsv", "sha1")):
+        path = os.path.join(stockage_dir, filename)
         try:
-            with open(name_path, "rb") as fh:
-                name_db = pickle.load(fh)
-            print(f"  Utilisation d'une base de noms externe : {name_path}")
-        except Exception as exc:
-            print(f"  ⚠️  Base de noms externe inexploitable : {exc}")
-            name_db = None
-    if os.path.isfile(hash_path) and os.path.getsize(hash_path) > 0:
-        checksafe_base_hash = 1
-        try:
-            with open(hash_path, "rb") as fh:
-                hash_db = pickle.load(fh)
-            print(f"  Utilisation d'une base de signatures externe : {hash_path}")
-        except Exception as exc:
-            print(f"  ⚠️  Base de signatures externe inexploitable : {exc}")
-            hash_db = None
-
-# Reproduit la semantique exacte de scalpel/bin/checksafe :
-#   - si la base de noms est vide (None), la signature est systematiquement
-#     verifiee aupres de la base des signatures ;
-#   - si la base de signatures est vide (None), toutes les entrees ressortent
-#     sur stderr (pas de filtre) -> aucun fichier n'est marque sain.
-def is_safe(path):
-    """Retourne True si le fichier est considere sain (a retirer)."""
-    name = os.path.basename(path).lower()
-    if name_db is None or name in name_db:
-        if hash_db is not None:
-            try:
-                with open(path, "rb") as fh:
-                    digest = hashlib.sha1(fh.read()).digest()
-                if digest in hash_db:
-                    return True
-            except OSError:
-                return False
-        # base de signatures vide -> rien n'est sain (pas de filtre)
-        return False
-    return False
-
-if do_checksafe and (checksafe_base_name or checksafe_base_hash):
-    print("  Filtrage checksafe en cours...")
-    for rec in records:
-        if is_safe(rec["path"]):
-            rec["is_safe_filtered"] = 1
-            safe_filtered_count += 1
+            entries = load_database(path, column)
+        except (OSError, ValueError) as exc:
+            checksafe_errors.append(f"{filename}: {exc}")
+            continue
+        if column == "name":
+            name_db = entries
         else:
-            rec["is_safe_filtered"] = 0
-else:
-    for rec in records:
-        rec["is_safe_filtered"] = 0
-    if do_checksafe:
-        print("  Aucune base externe trouvée : checksafe ne filtre rien "
-              "(comportement attendu et documenté).")
+            hash_db = entries
+    for error in checksafe_errors:
+        print(f"  ⚠️  Checksafe désactivé : {error}", file=sys.stderr)
+    if any(os.path.lexists(os.path.join(stockage_dir, name))
+           for name in ("files.safe.name", "files.safe.hash")):
+        print("  ⚠️  Ancienne base checksafe ignorée. Fournissez les bases TSV.",
+              file=sys.stderr)
+
+checksafe_base_name = int(name_db is not None)
+checksafe_base_hash = int(hash_db is not None)
+checksafe_active = bool(do_checksafe and hash_db and not checksafe_errors)
+for rec in records:
+    matched = checksafe_active and is_safe(rec["path"], name_db, hash_db)
+    rec["is_safe_filtered"] = int(matched)
+    safe_filtered_count += int(matched)
 
 # --- Marquage des doublons sur chaque enregistrement (conservation) ---
 # On conserve TOUS les fichiers ; on marque les doublons (le premier fichier
@@ -868,7 +834,8 @@ result = {
     "safe_filtered_count": safe_filtered_count,
     "checksafe_base_name": bool(checksafe_base_name),
     "checksafe_base_hash": bool(checksafe_base_hash),
-    "checksafe_active": bool(do_checksafe and (checksafe_base_name or checksafe_base_hash)),
+    "checksafe_active": checksafe_active,
+    "checksafe_errors": checksafe_errors,
     "mime_stats": mime_stats,
     "mime_ext_stats": mime_ext_stats,
     "dir_stats": dir_stats,
