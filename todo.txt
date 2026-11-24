@@ -77,7 +77,9 @@ PHASE 04 — WORKSPACE QT ET MODULES
     Accueil centré sur les données réelles de l’affaire, inventaire dans
     Diagnostic et centre des tâches rétractable fixé en bas.
     Affaire en cours regroupe Explorateur, Preuves, Analyses, Actions et
-    journal et Intégrité dans un sélecteur vertical à droite.
+    journal et Intégrité dans un sélecteur vertical à droite. Fenêtre maximisée,
+    centre des tâches ouvert au démarrage et état de /investigation visible
+    dans l’en-tête. Montage et démontage guidés vers l’administrateur.
     Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.
     Catalogue des modules intégrés avec fiches et création d’un squelette

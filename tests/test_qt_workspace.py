@@ -282,7 +282,6 @@ class WorkspaceTest(unittest.TestCase):
             )
             window.show()
             self.app.processEvents()
-            window.terminal_toggle.click()
             self.assertTrue(window.terminal_dock.isVisible())
             window.navigation.setCurrentRow(2)
             self.assertTrue(window.terminal_dock.isVisible())
@@ -319,7 +318,29 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(window.terminal_dock.features(),
                              QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
             self.assertEqual(window.terminal_dock.allowedAreas(), Qt.DockWidgetArea.BottomDockWidgetArea)
-            self.assertEqual(window.terminal_toggle.text(), "Afficher le centre des tâches")
+            self.assertEqual(window.terminal_toggle.text(), "Masquer le centre des tâches")
+            self.close_workspace(window)
+
+    def test_case_header_displays_mounted_source_and_clears_it(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            with patch("vigil.desktop.read_zones", return_value={
+                "/investigation": [("/investigation/part", "/dev/loop7p1", "ext4", "ro")],
+            }):
+                window.refresh_case_mount()
+                self.assertIn("Sous-montages", window.investigation_mount.text())
+                self.assertIn("/dev/loop7p1", window.investigation_mount.text())
+                self.assertIn("ro", window.investigation_mount.text())
+            with patch("vigil.desktop.read_zones", return_value={"/investigation": []}):
+                window.refresh_case_mount()
+                self.assertIn("Non monté", window.investigation_mount.text())
+                self.assertNotIn("/dev/loop7p1", window.investigation_mount.text())
             self.close_workspace(window)
 
     def wait_for_task(self, window):

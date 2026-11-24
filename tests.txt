@@ -171,6 +171,14 @@ D. Registre, CLI et compatibilité
     vues utilisent l’affaire confirmée, que les analyses 1.0 ont un
     libellé lisible et que le catalogue reste accessible séparément.
 
+[ ] Au démarrage, vérifier que la fenêtre est maximisée et que le centre
+    des tâches est déjà affiché. Le masquer puis le rouvrir.
+[ ] Dans Affaire en cours, vérifier l’état /investigation sur toutes les
+    vues. En VM synthétique, comparer une source montée et démontée,
+    le point de montage, le système de fichiers et le mode ro/rw.
+    Les boutons indiquent le parcours administrateur tant que le broker
+    reste ouvert. Vérifier la mise à jour de l’état en trois secondes environ.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

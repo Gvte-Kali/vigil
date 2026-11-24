@@ -4,7 +4,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTranslator, Qt, Signal, Slot
+from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTimer, QTranslator, Qt, Signal, Slot
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -23,6 +23,7 @@ from .evidence_panel import EvidencePanel
 from .history import PAGE_SIZE, case_events
 from .reporting import case_report
 from .system_panel import SystemPanel
+from .system_info import read_zones
 from .terminal_panel import TerminalPanel
 from .quick_actions import scan_command, tool, update_command
 
@@ -257,7 +258,22 @@ class Workspace(QMainWindow):
         self.button(case_actions, "Importer un ancien projet", "Import legacy project", self.import_case)
 
         self.navigation_group("INVESTIGATION", "INVESTIGATION")
-        case_workspace = self.page("Affaire en cours", "Current case")
+        case_workspace = self.page("Affaire en cours", "Current case", heading=False)
+        case_header = QHBoxLayout()
+        case_workspace.addLayout(case_header)
+        case_title = QLabel()
+        case_title.setObjectName("pageTitle")
+        self.bind(case_title.setText, "Affaire en cours", "Current case")
+        case_header.addWidget(case_title)
+        case_header.addStretch()
+        self.button(case_header, "Monter périphérique/image", "Mount device/image",
+                    self.request_mount, primary=True)
+        self.button(case_header, "Démonter périphérique/image", "Unmount device/image",
+                    self.request_unmount)
+        self.investigation_mount = QLabel()
+        self.investigation_mount.setTextFormat(Qt.TextFormat.PlainText)
+        self.investigation_mount.setWordWrap(True)
+        case_workspace.addWidget(self.investigation_mount)
         self.case_workspace_page = case_workspace.parentWidget()
         self.module_case = QLabel()
         self.module_case.setObjectName("sectionContext")
@@ -395,7 +411,7 @@ class Workspace(QMainWindow):
         self.task_tabs.addTab(tasks_page, "")
         self.terminal_dock.setWidget(self.task_tabs)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.terminal_dock)
-        self.terminal_dock.hide()
+        self.terminal_dock.show()
         self.terminal_toggle = QPushButton()
         self.terminal_toggle.setCheckable(True)
         self.terminal_toggle.clicked.connect(self.toggle_terminal)
@@ -406,6 +422,9 @@ class Workspace(QMainWindow):
         self.refresh_cases()
         self.navigation.setCurrentRow(1)
         self.case_navigation.setCurrentRow(0)
+        self.mount_timer = QTimer(self)
+        self.mount_timer.timeout.connect(self.refresh_case_mount)
+        self.mount_timer.start(3000)
 
     def tr_pair(self, french, english):
         return english if self.language == "en" else french
@@ -540,7 +559,8 @@ class Workspace(QMainWindow):
         self.refresh_diagnostics()
         self.system_panel.render()
         self.explorer.retranslate()
-        self.update_terminal_toggle(self.terminal_dock.isVisible())
+        self.update_terminal_toggle(not self.terminal_dock.isHidden())
+        self.refresh_case_mount()
         self.update_case_label()
         self.refresh_dashboard()
 
@@ -1008,6 +1028,45 @@ class Workspace(QMainWindow):
         else:
             self.on_success(result)
 
+    def refresh_case_mount(self):
+        try:
+            entries = read_zones()["/investigation"]
+        except OSError:
+            entries = None
+        if entries is None:
+            state = self.tr_pair("État indisponible", "Status unavailable")
+        elif not entries:
+            state = self.tr_pair("Non monté", "Not mounted")
+        elif any(target == "/investigation" for target, *_ in entries):
+            state = self.tr_pair("Monté", "Mounted")
+        else:
+            state = self.tr_pair("Sous-montages", "Submounts")
+        sources = [
+            " · ".join(filter(None, (source, target, filesystem, mode)))
+            for target, source, filesystem, mode in entries or ()
+        ]
+        self.investigation_mount.setText("\n".join([f"/investigation  ·  {state}", *sources]))
+        color = "#80D7A4" if entries and all(row[3] == "ro" for row in entries) else "#EBC47A"
+        self.investigation_mount.setStyleSheet(f"color: {color}; padding: 4px;")
+
+    def request_mount(self):
+        self.refresh_case_mount()
+        self.notify(
+            "Le montage reste réservé à l’administrateur. Après un montage validé sous "
+            "/investigation, la source apparaîtra ici.",
+            "Mounting remains an administrator operation. After a validated mount under "
+            "/investigation, its source will appear here.",
+            self.investigation_mount.text(),
+        )
+
+    def request_unmount(self):
+        self.refresh_case_mount()
+        self.notify(
+            "Le démontage reste réservé à l’administrateur. L’état se met à jour après l’opération.",
+            "Unmounting remains an administrator operation. Status updates after the operation.",
+            self.investigation_mount.text(),
+        )
+
     def update_terminal_toggle(self, visible):
         self.terminal_toggle.setChecked(visible)
         self.terminal_toggle.setText(self.tr_pair("Masquer le centre des tâches", "Hide task centre")
@@ -1125,6 +1184,7 @@ class Workspace(QMainWindow):
             self.notify("La sauvegarde a échoué. Vigil reste ouvert.",
                         "Saving failed. Vigil will stay open.", str(error))
             return
+        self.mount_timer.stop()
         self.system_panel.stop()
         super().closeEvent(event)
 
@@ -1136,7 +1196,8 @@ def main():
         return 1
     app = QApplication(sys.argv)
     window = Workspace(QSettings("Vigil", "Vigil2"), storage.default_database())
-    window.show()
+    window.showMaximized()
+    window.toggle_terminal(True)
     return app.exec()
 
 
