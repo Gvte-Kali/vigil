@@ -94,3 +94,16 @@ class AcquisitionTest(unittest.TestCase):
                          "Bloc : RO", "Bloc : RW", "Disque parent : /dev/sdz"):
             self.assertIn(expected, menu)
         self.assertIn("[1] /dev/sdz1", menu)
+
+
+    def test_palette_is_applied_only_to_interactive_output(self):
+        from unittest.mock import Mock
+
+        style = acquisition["terminal_style"]
+        terminal = Mock()
+        terminal.isatty.return_value = True
+        with patch.dict("os.environ", {"TERM": "xterm-256color"}, clear=True):
+            self.assertEqual(style("Vigil", "96", stream=terminal), "[96mVigil[0m")
+            self.assertEqual(style("Vigil", "96", stream=io.StringIO()), "Vigil")
+        with patch.dict("os.environ", {"TERM": "xterm-256color", "NO_COLOR": ""}, clear=True):
+            self.assertEqual(style("Vigil", "96", stream=terminal), "Vigil")

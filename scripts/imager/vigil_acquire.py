@@ -6,12 +6,14 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import signal
 import stat
 import struct
 import subprocess
 import sys
 import tempfile
+import textwrap
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -76,9 +78,23 @@ def menu_size(size):
         scale /= 1024
 
 
+def terminal_style(text, tone, *, stream=None):
+    stream = stream or sys.stdout
+    if not stream.isatty() or os.environ.get("TERM") == "dumb" or "NO_COLOR" in os.environ:
+        return text
+    return f"\033[{tone}m{text}\033[0m"
+
+
+def section(title):
+    rule = "━" * min(52, shutil.get_terminal_size((80, 24)).columns)
+    print()
+    for line in (rule, f"  {title}", rule):
+        print(terminal_style(line, "96"))
+
+
 def describe_device(row):
     is_disk = row["type"] == "disk"
-    fields = [f"Taille : {menu_size(row['size'])}"]
+    fields = []
     if is_disk:
         fields.extend((f"Modèle : {menu_text(row.get('model')) or 'inconnu'}",
                        f"Série : {menu_text(row.get('serial')) or 'inconnue'}",
@@ -96,31 +112,61 @@ def describe_device(row):
     fields.append(f"Bloc : {mode}")
     mounts = ", ".join(menu_text(mount) for mount in (row.get("mountpoints") or ()) if mount)
     fields.append(f"Montage : {mounts or 'aucun'}")
-    return f"{menu_text(row['name'])} · " + " · ".join(fields)
+    return fields
+
+
+def print_device(row, indent, prefix=""):
+    name = menu_text(row["name"])
+    label = f"{prefix} {name}" if prefix else name
+    print(f"{indent}{terminal_style(label, '1;96')}  {terminal_style(menu_size(row['size']), '1')}")
+    width = max(20, shutil.get_terminal_size((80, 24)).columns - len(indent) - 2)
+    line = []
+    length = 0
+    for field in describe_device(row):
+        if line and length + len(field) + 7 > width:
+            print(f"{indent}  " + "   •   ".join(line))
+            line, length = [], 0
+        key, _, value = field.partition(" : ")
+        if len(field) > width:
+            for chunk in textwrap.wrap(field, width=width, break_long_words=False, break_on_hyphens=False):
+                print(f"{indent}  {chunk}")
+            continue
+        tone = "92" if key == "Bloc" and value == "RO" else "93" if key == "Bloc" and value == "RW" else "1"
+        line.append(f"{terminal_style(key + ' :', '90')} {terminal_style(value, tone)}")
+        length += len(field) + (7 if len(line) > 1 else 0)
+    if line:
+        print(f"{indent}  " + "   •   ".join(line))
 
 
 def choose(rows, title, *, parents=None):
     if not rows:
         raise ValueError(f"Aucun périphérique admissible : {title}")
-    print(f"\n=== {title} ===")
+    section(title)
+    print()
     previous_parent = None
     for index, row in enumerate(rows, 1):
         parent = parents.get(row["name"]) if parents else None
         if parent and parent is not previous_parent:
-            print(f"  Disque parent : {describe_device(parent)}")
+            if previous_parent is not None:
+                print()
+            print_device(parent, "  ", "Disque parent :")
             previous_parent = parent
         indent = "    " if parent else "  "
-        print(f"{indent}[{index}] {describe_device(row)}")
+        print_device(row, indent, f"[{index}]")
         if row["type"] == "disk":
             for part in row.get("children", ()):
                 if part["type"] == "part":
-                    print(f"      └─ {describe_device(part)}")
+                    print_device(part, "      ", "└─")
+            print()
+    if previous_parent is not None:
+        print()
     while True:
-        choice = input("Numéro ou q pour annuler : ").strip()
+        choice = input(terminal_style("Numéro ou q pour annuler : ", "1;93")).strip()
         if choice.lower() == "q":
             raise InterruptedError("Opération annulée.")
         if choice.isdecimal() and len(choice) <= 8 and 1 <= int(choice) <= len(rows):
             return rows[int(choice) - 1]
+        print(terminal_style("Numéro invalide.", "91"))
 
 
 def block_mode(fd):
@@ -176,7 +222,7 @@ def checksum(stream, size, *, output=None, label):
                 pending = pending[written:]
         remaining -= len(payload)
         if time.monotonic() - last >= 2 or not remaining:
-            print(f"{label} : {size - remaining}/{size} octets", flush=True)
+            print(terminal_style(f"{label} : {size - remaining}/{size} octets", "96"), flush=True)
             last = time.monotonic()
     return digest.hexdigest()
 
@@ -287,14 +333,17 @@ def run(operation, local_default, *, local_directory=None, external=False):
     if operation == "clone":
         target = choose([row for row in targets if row["size"] >= size], "Cible USB à écraser")
         target_sequence = disk_sequence(target)
-        print(f"Source : {source['name']} · {size} octets → Cible : {target['name']} · {target['size']} octets")
-        print("Les données de la cible seront écrasées sur la longueur de la source.")
-        if input(f"Saisissez ECRASER {target['name']} : ").strip() != f"ECRASER {target['name']}":
+        section("Confirmation du clonage")
+        print(f"\n  Source : {menu_text(source['name'])} · {menu_size(size)}")
+        print(f"  Cible  : {menu_text(target['name'])} · {menu_size(target['size'])}\n")
+        print(terminal_style("Les données de la cible seront écrasées sur la longueur de la source.", "1;91"))
+        confirmation = f"ECRASER {target['name']}"
+        if input(terminal_style(f"\nSaisissez {confirmation} : ", "1;93")).strip() != confirmation:
             raise InterruptedError("Clonage annulé.")
         with block_device(source, sequence, source=True) as origin:
             with block_device(target, target_sequence, source=False) as output:
                 digest = transfer(origin, output, size)
-        print(f"Clone vérifié · SHA-256 : {digest}")
+        print(terminal_style(f"\nClone vérifié · SHA-256 : {digest}", "92"))
         return
 
     if local_directory is not None:
@@ -302,7 +351,9 @@ def run(operation, local_default, *, local_directory=None, external=False):
     elif external:
         mode = "2"
     else:
-        mode = input("Destination : [1] locale, [2] partition USB externe, [q] annuler : ").strip()
+        section("Destination de l’image")
+        print("  [1] Dossier local\n  [2] Partition USB externe\n  [q] Annuler\n")
+        mode = input(terminal_style("Choix : ", "1;93")).strip()
     if mode not in {"1", "2"}:
         raise InterruptedError("Imagerie annulée.")
     owner = int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
@@ -321,8 +372,12 @@ def run(operation, local_default, *, local_directory=None, external=False):
         target_sequence = disk_sequence(target)
         if selected["fstype"] == "vfat" and size >= 2**32:
             raise ValueError("Cette image dépasse la taille maximale d’un fichier FAT32.")
-    filename = input("Nom de l’image [acquisition.raw] : ").strip() or "acquisition.raw"
-    if input("Saisissez COPIER pour lancer l’acquisition : ").strip() != "COPIER":
+    section("Confirmation de l’imagerie")
+    print(f"\n  Source : {menu_text(source['name'])} · {menu_size(size)}")
+    destination = local if mode == "1" else selected["name"]
+    print(f"  Destination : {menu_text(destination)}\n")
+    filename = input(terminal_style("Nom de l’image [acquisition.raw] : ", "1;93")).strip() or "acquisition.raw"
+    if input(terminal_style("Saisissez COPIER pour lancer l’acquisition : ", "1;93")).strip() != "COPIER":
         raise InterruptedError("Imagerie annulée.")
     with block_device(source, sequence, source=True) as origin:
         if mode == "1":
@@ -331,8 +386,8 @@ def run(operation, local_default, *, local_directory=None, external=False):
             with external_directory(target, target_sequence, selected, owner) as directory:
                 digest = create_image(origin, size, directory, filename,
                                       owner if selected["fstype"] == "ext4" else None)
-            print(f"Destination démontée : {selected['name']}")
-    print(f"Image vérifiée : {filename} · SHA-256 : {digest}")
+            print(terminal_style(f"Destination démontée : {selected['name']}", "92"))
+    print(terminal_style(f"\nImage vérifiée : {filename} · SHA-256 : {digest}", "92"))
 
 
 def main():
@@ -355,14 +410,15 @@ def main():
 
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGHUP, interrupt)
-    print(VIGIL_BANNER)
-    print("Vigil - Clonage bit à bit" if args.operation == "clone" else "Vigil - Acquisition d’une image RAW")
+    print()
+    print(terminal_style(VIGIL_BANNER, "96"))
+    section("Vigil - Clonage bit à bit" if args.operation == "clone" else "Vigil - Acquisition d’une image RAW")
     try:
         run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external)
         return 0
     except (OSError, ValueError, KeyError, subprocess.SubprocessError, KeyboardInterrupt, EOFError) as error:
         diagnostic = getattr(error, "stderr", None) or str(error)
-        print(f"Acquisition non validée : {diagnostic}", file=sys.stderr)
+        print(terminal_style(f"\nAcquisition non validée : {diagnostic}", "91", stream=sys.stderr), file=sys.stderr)
         return 1
 
 
