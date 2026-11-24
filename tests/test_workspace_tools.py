@@ -46,6 +46,31 @@ class WorkspaceToolsTest(unittest.TestCase):
             self.assertEqual(argv[-4:], ["--user", "Bob", "--log", "--pdf"])
             self.assertFalse(any("VIGIL_CASE_CENSUS" in item for item in argv))
 
+    def test_explorer_batch_deduplicates_and_preserves_baseline(self):
+        from vigil.storage import create_case, database, process_explorer_selection
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "cases.sqlite"
+            with database(state) as connection:
+                case = create_case(connection, "Investigation", "Alice")
+            target = root / "note.txt"
+            target.write_text("first")
+            source = (str(target), None, False)
+            missing = (str(root / "missing"), None, False)
+            rows, errors = process_explorer_selection(
+                state, case, "Alice", [source, source, missing], register=True)
+            self.assertEqual([row[2] for row in rows], ["added"])
+            self.assertEqual([row[0] for row in errors], [missing[0]])
+            original = rows[0][1]
+            target.write_text("changed")
+            rows, _ = process_explorer_selection(state, case, "Alice", [source], register=True)
+            self.assertEqual(rows[0][2], "existing")
+            rows, _ = process_explorer_selection(state, case, "Alice", [source], register=False)
+            self.assertEqual(rows[0][2:], ("changed", [original]))
+            with database(state) as connection:
+                self.assertEqual(connection.execute("SELECT sha256 FROM evidence").fetchall()[0][0], original)
+
     def test_mounted_explorer_requires_a_read_only_matching_mount_and_skips_symlinks(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

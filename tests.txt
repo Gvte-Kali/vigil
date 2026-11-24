@@ -167,6 +167,10 @@ D. Registre, CLI et compatibilité
 [ ] Simuler des erreurs de lecture pendant le census. Vérifier qu’aucun
     nouvel index incomplet n’est publié et que les dossiers lisibles restent
     parcourables dans Explorateur.
+[ ] Dans Explorateur, essayer Ctrl+clic, Maj+clic et le clic droit sur la
+    sélection. Ajouter un dossier et un fichier qu’il contient aux preuves
+    et vérifier une seule référence par fichier. Calculer l’intégrité d’un
+    fichier enregistré, d’un fichier inconnu et d’un fichier illisible.
 [ ] Dans Explorateur, ouvrir un fichier enregistré et comparer métadonnées,
     hex et chaînes ASCII. Vérifier la limite 4 Kio et le refus d’un lien.
 [ ] Dans Intégrité, comparer un fichier inchangé puis modifié et exporter

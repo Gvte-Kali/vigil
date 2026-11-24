@@ -305,7 +305,7 @@ class Workspace(QMainWindow):
         self.case_navigation.currentRowChanged.connect(self.open_case_view)
 
         explorer = self.case_view("Explorateur", "Evidence explorer")
-        self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence)
+        self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence, self.process_explorer_selection)
         explorer.addWidget(self.explorer)
 
         evidence = self.case_view("Preuves", "Evidence")
@@ -1105,6 +1105,43 @@ class Workspace(QMainWindow):
         self.run_task(
             lambda: storage.register_file(self.database_path, case_id, Path(path), operator),
             lambda _: self.refresh_evidence(),
+        )
+
+    def process_explorer_selection(self, sources, register):
+        if self.busy is not None or not self.active_case_id:
+            return
+        operator = self.require_operator()
+        if not operator:
+            return
+        case_id = self.active_case_id
+
+        def show(result):
+            rows, errors = result
+            if register and self.active_case_id == case_id:
+                self.refresh_evidence()
+            tr = self.tr_pair
+            labels = {
+                "added": tr("Ajouté", "Added"),
+                "existing": tr("Déjà enregistré", "Already registered"),
+                "calculated": tr("Empreinte calculée", "Fingerprint calculated"),
+                "matches": tr("Conforme", "Matches"),
+                "changed": tr("Différent", "Changed"),
+            }
+            details = []
+            for path, digest, status, expected in rows:
+                details.append(f"{labels[status]} · {path}\nSHA-256  {digest}")
+                if status == "changed":
+                    details.append(tr("Empreintes enregistrées", "Recorded fingerprints")
+                                   + "  " + ", ".join(expected))
+            details.extend(f"{tr('Erreur', 'Error')} · {path}\n{error}" for path, error in errors)
+            self.notify(f"{len(rows)} fichier(s) traité(s), {len(errors)} erreur(s).",
+                        f"{len(rows)} file(s) processed, {len(errors)} error(s).",
+                        "\n\n".join(details))
+
+        self.run_task(
+            lambda: storage.process_explorer_selection(
+                self.database_path, case_id, operator, sources, register=register),
+            show,
         )
 
     def verify_file(self):

@@ -6,16 +6,17 @@ from .inspection import list_evidence_directory
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QLabel, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
+    QAbstractItemView, QLabel, QMenu, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QWidget,
 )
 
 
 class EvidencePanel(QWidget):
-    def __init__(self, translate, request_preview):
+    def __init__(self, translate, request_preview, selection_action):
         super().__init__()
         self.tr_pair = translate
         self.request_preview = request_preview
+        self.selection_action = selection_action
         self.mounts = None
         self.live_items = {}
         layout = QVBoxLayout(self)
@@ -28,6 +29,9 @@ class EvidencePanel(QWidget):
         layout.addWidget(split)
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
+        self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self.open_context_menu)
         self.tree.itemActivated.connect(self.inspect)
         self.tree.itemExpanded.connect(self.expand_directory)
         split.addWidget(self.tree)
@@ -134,6 +138,43 @@ class EvidencePanel(QWidget):
             file_item = data and (len(data) == 2 or not data[3])
             item.setHidden(bool(file_item and query not in item.toolTip(0).casefold()))
             stack.extend(item.child(index) for index in range(item.childCount()))
+
+    def registered_source(self, name):
+        roots = [root for root in self.mounts or {} if Path(name).is_relative_to(root)]
+        root = max(roots, key=len, default=None)
+        return name, (root, self.mounts[root]) if root else None, False
+
+    def selected_sources(self):
+        sources = []
+        for item in self.tree.selectedItems():
+            if item.isHidden():
+                continue
+            data = item.data(0, Qt.ItemDataRole.UserRole)
+            if data:
+                sources.append((data[0], *data[2:]) if len(data) == 4 else self.registered_source(data[0]))
+            else:
+                sources.extend(self.registered_source(child.data(0, Qt.ItemDataRole.UserRole)[0])
+                               for child in (item.child(index) for index in range(item.childCount()))
+                               if not child.isHidden())
+        return sources
+
+    def open_context_menu(self, position):
+        item = self.tree.itemAt(position)
+        if item is None:
+            return
+        if not item.isSelected():
+            self.tree.setCurrentItem(item)
+        sources = self.selected_sources()
+        if not sources:
+            return
+        tr = self.tr_pair
+        menu = QMenu(self)
+        add = menu.addAction(tr("Ajouter aux preuves", "Add to evidence"))
+        verify = menu.addAction(tr("Calculer l’intégrité des fichiers", "Calculate file integrity"))
+        selected = menu.exec(self.tree.viewport().mapToGlobal(position))
+        if selected in (add, verify):
+            self.selection_action(sources, selected == add)
+        menu.deleteLater()
 
     def inspect(self, item, _column):
         data = item.data(0, Qt.ItemDataRole.UserRole)

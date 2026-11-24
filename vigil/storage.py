@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from .inspection import list_evidence_directory, open_evidence_path
+
 ANTIVIRUS_CASE_NAME = "Scan antivirus"
 SCHEMA_VERSION = 1
 APPLICATION_ID = 0x5649474C
@@ -139,18 +141,28 @@ def read_legacy_project(path):
     return parsed.get("name", path.name), raw
 
 
-def fingerprint(path):
-    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+def fingerprint(path, *, mount=None):
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
+    if mount is None:
+        return fingerprint_descriptor(os.open(path, flags), lambda: path.stat(follow_symlinks=False))
+    with open_evidence_path(path, *mount) as source:
+        descriptor = os.open(f"/proc/self/fd/{source}", os.O_RDONLY | os.O_CLOEXEC)
+        return fingerprint_descriptor(descriptor, lambda: mounted_file_stat(path, mount))
+
+
+def mounted_file_stat(path, mount):
+    with open_evidence_path(path, *mount) as descriptor:
+        return os.fstat(descriptor)
+
+
+def fingerprint_descriptor(descriptor, current_stat):
     with os.fdopen(descriptor, "rb") as stream:
         before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode):
             raise ValueError("evidence must be a regular file")
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
         after = os.fstat(stream.fileno())
-        current = path.stat(follow_symlinks=False)
-        if not (
-            file_identity(before) == file_identity(after) == file_identity(current)
-        ):
+        if not (file_identity(before) == file_identity(after) == file_identity(current_stat())):
             raise ValueError("evidence changed during hashing")
     return before.st_size, digest
 
@@ -195,3 +207,53 @@ def verify_file(state, evidence_id, operator):
     with database(state) as connection:
         audit(connection, operator, record["case_id"], "evidence.verify", result)
     return result
+
+
+def process_explorer_selection(state, case_id, operator, sources, *, register):
+    pending = [(Path(path), tuple(mount) if mount else None, directory)
+               for path, mount, directory in reversed(sources)]
+    seen = set()
+    results, errors = [], []
+    while pending:
+        path, mount, directory = pending.pop()
+        key = path, mount
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            if directory:
+                children = list_evidence_directory(path, *mount)
+                pending.extend((path / name, mount, is_dir) for name, is_dir in reversed(children))
+                continue
+            if path.is_relative_to("/investigation") and mount is None:
+                raise ValueError("no verified read-only mount covers this evidence path")
+            if state.exists() and state.samefile(path):
+                raise ValueError("database and evidence must be separate files")
+            size, digest = fingerprint(path, mount=mount)
+        except (OSError, ValueError) as error:
+            errors.append((str(path), str(error)))
+            continue
+        with database(state) as connection:
+            records = connection.execute(
+                "SELECT id, size, sha256 FROM evidence WHERE case_id = ? AND path = ?",
+                (case_id, str(path)),
+            ).fetchall()
+            if register and not records:
+                add_evidence(connection, case_id, path, size, digest, operator)
+            elif not register:
+                if not records:
+                    audit(connection, operator, case_id, "evidence.hash",
+                          {"path": str(path), "sha256": digest, "size": size})
+                for record in records:
+                    audit(connection, operator, case_id, "evidence.verify", {
+                        "id": record["id"], "expected_sha256": record["sha256"], "sha256": digest,
+                        "matches": size == record["size"] and digest == record["sha256"],
+                    })
+        expected = [record["sha256"] for record in records]
+        status = ("existing" if records else "added") if register else (
+            "calculated" if not records else
+            "matches" if all(size == row["size"] and digest == row["sha256"] for row in records)
+            else "changed"
+        )
+        results.append((str(path), digest, status, expected))
+    return results, errors
