@@ -153,7 +153,7 @@ final_pause() {
         read -r
         exit 1
     else
-        echo -e "${GREEN}✅ Recensement terminé sans erreur.${NC}"
+        echo -e "${GREEN}Recensement terminé. Consultez le statut de l’index ci-dessus.${NC}"
     fi
 }
 
@@ -281,19 +281,27 @@ RAW_LIST="$WORK_DIR/raw_list.tsv"
 # %C* ctime. Le champ btime reste vide : GNU find ne fournit pas %w.
 # (vide si absent).
 FIND_FORMAT="%p\t%s\t%AY%Am%Ad%AH%AM\t%TY%Tm%Td%TH%TM\t%CY%Cm%Cd%CH%CM\t\t%m\t%u\t%g\n"
+FIND_LOG="$WORK_DIR/find-errors.log"
+FIND_STATUS=0
 if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
-    if ! find "${CENSUS_ROOTS[@]}" -xdev -type f -printf "$FIND_FORMAT" > "$RAW_LIST"; then
-        fail "Recensement automatique incomplet : erreurs de parcours listées ci-dessus. Aucun nouvel index produit."
-    fi
+    find "${CENSUS_ROOTS[@]}" -xdev -type f -printf "$FIND_FORMAT" > "$RAW_LIST" 2>"$FIND_LOG" || FIND_STATUS=$?
 else
-    find "$INVESTIGATION_DIR" -type f -printf "$FIND_FORMAT" 2>/dev/null > "$RAW_LIST"
+    find "$INVESTIGATION_DIR" -type f -printf "$FIND_FORMAT" > "$RAW_LIST" 2>"$FIND_LOG" || FIND_STATUS=$?
+fi
+if [ "$FIND_STATUS" -gt 1 ]; then
+    cat "$FIND_LOG" >&2
+    fail "Recensement interrompu : find a quitté avec le code $FIND_STATUS."
+fi
+if [ "$FIND_STATUS" -ne 0 ] || [ -s "$FIND_LOG" ]; then
+    cat "$FIND_LOG" >&2
+    echo -e "${YELLOW}⚠️  Parcours incomplet : conservation des entrées lisibles et des diagnostics dans SQLite.${NC}"
 fi
 
 TOTAL_FILES=$(wc -l < "$RAW_LIST")
 echo -e "${GREEN}✅ ${TOTAL_FILES} fichier(s) recensé(s).${NC}"
 echo ""
 
-if [ "$TOTAL_FILES" -eq 0 ]; then
+if [ "$TOTAL_FILES" -eq 0 ] && [ "$FIND_STATUS" -eq 0 ] && [ ! -s "$FIND_LOG" ]; then
     echo -e "${YELLOW}⚠️  Aucun fichier à recenser.${NC}"
     log_action "success" "Aucun fichier recensé"
     JSON_FILE="$WORK_DIR/resultat.json"
@@ -342,7 +350,7 @@ echo -e "${YELLOW}Analyse des types MIME via file...${NC}"
 echo ""
 
 MIME_LIST="$WORK_DIR/mime_list.tsv"
-cut -f 1 "$RAW_LIST" | file --mime-type -b -e compress -e tar -e elf -f - 2>/dev/null \
+cut -f 1 "$RAW_LIST" | LC_ALL=C file --mime-type -b -e compress -e tar -e elf -f - 2>/dev/null \
     > "$WORK_DIR/mime_types.txt"
 # Normalisation des types office (identique a scalpel/bin/census).
 sed -i \
@@ -354,12 +362,12 @@ sed -i \
     "$WORK_DIR/mime_types.txt"
 
 # Encodage MIME (optionnel, informatif) via file --mime.
-cut -f 1 "$RAW_LIST" | file --mime -b -e compress -e tar -e elf -f - 2>/dev/null \
+cut -f 1 "$RAW_LIST" | LC_ALL=C file --mime -b -e compress -e tar -e elf -f - 2>/dev/null \
     | sed 's/.*; charset=//' > "$WORK_DIR/mime_encodings.txt"
 
 MIME_COUNT=$(wc -l < "$WORK_DIR/mime_types.txt")
 echo -e "${GREEN}✅ ${MIME_COUNT} type(s) MIME déterminé(s).${NC}"
-[ "$TOTAL_FILES" -ne "$MIME_COUNT" ] && fail "Les journaux n'ont pas le même nombre d'entrées ($TOTAL_FILES vs $MIME_COUNT)."
+
 echo ""
 
 # --- Etape 3 : dedoublonnage + checksafe + stockage SQLite (Python) ---
@@ -378,7 +386,7 @@ python3 - "$RAW_LIST" "$WORK_DIR/mime_types.txt" "$WORK_DIR/mime_encodings.txt" 
           "$ACTIVE_ENTITY" "$PROJECT_LOG_DIR" "$INVESTIGATION_DIR" \
           "$STOCKAGE_DIR" "$DO_DEDUP" "$DO_CHECKSAFE" "$VIGIL_VERSION" \
           "$EXT_MAP_FILE" "$DO_NO_PROJECT" "$(dirname -- "$0")" "${WORK_DIR##*.}" \
-          <<'PYCENSUS'
+          "$FIND_LOG" "$FIND_STATUS" <<'PYCENSUS'
 import os
 import sys
 import json
@@ -389,11 +397,16 @@ from datetime import datetime, timezone
 (raw_list, mime_types_file, mime_encodings_file, out_json, date_analysis,
  active_user, active_project, active_entity, project_log_dir,
  investigation_dir, stockage_dir, do_dedup, do_checksafe,
- vigil_version, ext_map_file, no_project, script_dir, run_suffix) = sys.argv[1:20]
+ vigil_version, ext_map_file, no_project, script_dir, run_suffix, find_log, find_status) = sys.argv[1:]
 sys.path.insert(0, script_dir)
 from vigil_checksafe import is_safe, load_database
 do_dedup = do_dedup == "1"
 do_checksafe = do_checksafe == "1"
+find_status = int(find_status)
+with open(find_log, encoding="utf-8", errors="backslashreplace") as fh:
+    inventory_errors = [("find", None, line.rstrip("\n")) for line in fh if line.strip()]
+if find_status and not inventory_errors:
+    inventory_errors.append(("find", None, f"find: code de sortie {find_status}"))
 
 # --- Audit extension vs format reel (extensions trompeuses) ---
 # Charge la table extension -> MIME attendus (data/config/ext_mime_map.json).
@@ -479,7 +492,8 @@ def content_hash(path):
             for chunk in iter(lambda: fh.read(1 << 20), b""):
                 h.update(chunk)
         return h.hexdigest()
-    except OSError:
+    except OSError as exc:
+        inventory_errors.append(("sha256", path, str(exc)))
         return ""
 
 
@@ -523,6 +537,14 @@ try:
         mime_encodings = [ln.rstrip("\n") for ln in fh]
 except OSError:
     mime_encodings = [""] * len(records)
+for stage, values in (("mime_type", mime_types), ("mime_encoding", mime_encodings)):
+    if len(values) != len(records):
+        inventory_errors.append((stage, None, f"{len(values)} résultat(s) pour {len(records)} entrée(s)"))
+        values.clear()
+    for i, (rec, value) in enumerate(zip(records, values)):
+        if value.startswith(("cannot open ", "cannot read ", "ERROR:")):
+            inventory_errors.append((stage, rec["path"], value))
+            values[i] = ""
 if len(mime_types) < len(records):
     mime_types += [""] * (len(records) - len(mime_types))
 if len(mime_encodings) < len(records):
@@ -659,7 +681,8 @@ if no_project or (active_project and active_project != "(no-project)"):
             total_files INTEGER, duplicate_count INTEGER,
             safe_filtered_count INTEGER,
             checksafe_base_name INTEGER, checksafe_base_hash INTEGER,
-            tool_versions TEXT, vigil_version TEXT
+            tool_versions TEXT, vigil_version TEXT,
+            scan_status TEXT, error_count INTEGER, find_exit_code INTEGER
         )
     """)
     cur.execute("""
@@ -679,6 +702,13 @@ if no_project or (active_project and active_project != "(no-project)"):
             FOREIGN KEY (inventory_id) REFERENCES inventory_meta(id)
         )
     """)
+    cur.execute("""
+        CREATE TABLE inventory_errors (
+            id INTEGER PRIMARY KEY,
+            inventory_id INTEGER NOT NULL REFERENCES inventory_meta(id),
+            stage TEXT NOT NULL, path TEXT, message TEXT NOT NULL
+        )
+    """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_files_mime ON files(inventory_id, mime_type)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_files_mtime ON files(inventory_id, mtime)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files(content_hash)")
@@ -694,14 +724,19 @@ if no_project or (active_project and active_project != "(no-project)"):
             blockdev_ro, operator, project, entity, started_at, ended_at,
             duration, total_files, duplicate_count, safe_filtered_count,
             checksafe_base_name, checksafe_base_hash, tool_versions,
-            vigil_version)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            vigil_version, scan_status, error_count, find_exit_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (investigation_dir, "", "", "", "", "", "", active_user,
           active_project, active_entity, started_at, ended_at, "",
           len(records), duplicate_count, safe_filtered_count,
           checksafe_base_name, checksafe_base_hash, tool_versions,
-          vigil_version))
+          vigil_version, "partial" if inventory_errors else "complete",
+          len(inventory_errors), find_status))
     inv_id = cur.lastrowid
+    cur.executemany("""
+        INSERT INTO inventory_errors (inventory_id, stage, path, message)
+        VALUES (?, ?, ?, ?)
+    """, ((inv_id, *entry) for entry in inventory_errors))
 
     rows = []
     for i, rec in enumerate(records):
@@ -833,6 +868,8 @@ dir_stats = [
 result = {
     "date": date_analysis,
     "total_files": len(records),
+    "scan_status": "partial" if inventory_errors else "complete",
+    "error_count": len(inventory_errors),
     "duplicate_count": duplicate_count,
     "duplicate_groups": len([g for g in dup_groups.values() if len(g) > 1]),
     "safe_filtered_count": safe_filtered_count,
@@ -854,6 +891,8 @@ with open(out_json, "w", encoding="utf-8") as fh:
     json.dump(result, fh, ensure_ascii=False, indent=2)
 
 print(f"  Fichiers recensés : {len(records)}")
+if inventory_errors:
+    print(f"  ⚠️ Index partiel : {len(inventory_errors)} diagnostic(s) dans inventory_errors.")
 print(f"  Extensions trompeuses : {mismatch_count}")
 print(f"  Doublons marqués : {duplicate_count} (dans "
       f"{result['duplicate_groups']} groupe(s))")
@@ -907,7 +946,14 @@ if [ -n "$JSON_OUT" ] && [ -f "$JSON_FILE" ]; then
 fi
 
 # --- Nettoyage du dossier temporaire ---
+if [ "$ERRORS" -gt 0 ]; then
+    log_action "error" "Recensement terminé avec erreur (${TOTAL_FILES} entrées de parcours)"
+elif grep -q '^  "scan_status": "partial",' "$JSON_FILE"; then
+    log_action "warning" "Recensement partiel (${TOTAL_FILES} entrées de parcours)"
+else
+    log_action "success" "Recensement terminé (${TOTAL_FILES} entrées de parcours)"
+fi
+
 rm -rf "$WORK_DIR" 2>/dev/null || true
-log_action "success" "Recensement terminé (${TOTAL_FILES} fichiers)"
 
 final_pause

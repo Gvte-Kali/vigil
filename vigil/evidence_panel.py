@@ -17,8 +17,8 @@ class EvidencePanel(QWidget):
         self.tr_pair = translate
         self.request_preview = request_preview
         self.selection_action = selection_action
-        self.mounts = None
-        self.live_items = {}
+        self.mounts = {}
+        self.registered_files = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.filter = QLineEdit()
@@ -64,13 +64,22 @@ class EvidencePanel(QWidget):
         self.tabs.setTabText(2, tr("Chaînes ASCII", "ASCII strings"))
 
     def set_files(self, rows):
+        self.registered_files = {name: digest for _, name, digest in rows}
+        self.rebuild_tree()
+
+    def set_mounts(self, mounts):
+        if mounts != self.mounts:
+            self.mounts = dict(mounts)
+            self.rebuild_tree()
+
+    def rebuild_tree(self):
         self.tree.clear()
-        self.mounts = None
-        self.live_items.clear()
         for view in self.views:
             view.clear()
         groups = {}
-        for _, name, digest in rows:
+        for name, digest in self.registered_files.items():
+            if self.registered_source(name)[1] is not None:
+                continue
             path = Path(name)
             parent = str(path.parent)
             if parent not in groups:
@@ -80,20 +89,8 @@ class EvidencePanel(QWidget):
             item.setToolTip(0, name)
         for group in groups.values():
             group.setExpanded(True)
-        self.apply_filter(self.filter.text())
-
-    def set_mounts(self, mounts):
-        if mounts == self.mounts:
-            return
-        for item in self.live_items.values():
-            self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
-        self.live_items.clear()
-        self.mounts = dict(mounts)
-        for root, mount_id in sorted(mounts.items()):
-            item = self.add_live_item(self.tree, root, Path(root), (root, mount_id), True)
-            self.live_items[root] = item
-        for view in self.views:
-            view.clear()
+        for root, mount_id in sorted(self.mounts.items()):
+            self.add_live_item(self.tree, root, Path(root), (root, mount_id), True)
         self.retranslate()
         self.apply_filter(self.filter.text())
 
@@ -107,7 +104,7 @@ class EvidencePanel(QWidget):
     def add_live_item(self, parent, label, path, mount, directory):
         item = QTreeWidgetItem(parent, [label])
         item.setToolTip(0, str(path))
-        item.setData(0, Qt.ItemDataRole.UserRole, (str(path), None, mount, directory))
+        item.setData(0, Qt.ItemDataRole.UserRole, (str(path), self.registered_files.get(str(path)), mount, directory))
         if directory:
             item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
         return item

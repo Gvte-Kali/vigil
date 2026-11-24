@@ -31,7 +31,8 @@ PHASE 01 — SECURITE
     réussi et vérification d’identité et des protections RO. Le montage
     d’affaire verrouille et vérifie aussi le disque parent avant une
     partition, et refuse un disque déjà monté. Aucun index
-    de recensement dans le parcours antivirus rapide.
+    de recensement dans le parcours antivirus rapide. Les erreurs de lecture
+    sont conservées dans l’index partiel avec les entrées accessibles.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
     Le post-install prépare /investigation vide et démonté en root:root 0755.
@@ -131,6 +132,8 @@ PHASE 06 — INVESTIGATION
     /investigation, dossiers chargés à l’ouverture et aperçus inertes.
     Sélection multiple et menu contextuel pour enregistrer les preuves
     ou calculer et comparer leur SHA-256, y compris dans les dossiers montés.
+    Lorsqu’un montage est visible, une preuve enregistrée y apparaît une
+    seule fois dans l’explorateur et reste listée dans Preuves.
     L’index census reste consultable séparément dans Analyses.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.

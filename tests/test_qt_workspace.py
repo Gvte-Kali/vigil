@@ -125,6 +125,8 @@ class WorkspaceTest(unittest.TestCase):
             window.change_language("en")
             with patch("vigil.desktop.investigation_mounts", return_value={"/investigation/sdb1": 42}):
                 window.refresh_case_mount()
+            window.explorer.set_files([("id", "/investigation/sdb1/note.txt", "fixture-digest")])
+            self.assertEqual(window.explorer.tree.topLevelItemCount(), 1)
             root_item = window.explorer.tree.topLevelItem(0)
             self.assertEqual(root_item.text(0), "/investigation/sdb1")
             with patch("vigil.evidence_panel.list_evidence_directory",
@@ -133,10 +135,11 @@ class WorkspaceTest(unittest.TestCase):
             list_directory.assert_called_once_with("/investigation/sdb1", "/investigation/sdb1", 42)
             with patch.object(window.explorer, "request_preview") as preview:
                 window.explorer.inspect(root_item.child(1), 0)
-            preview.assert_called_once_with("/investigation/sdb1/note.txt", None, ("/investigation/sdb1", 42))
+            preview.assert_called_once_with("/investigation/sdb1/note.txt", "fixture-digest", ("/investigation/sdb1", 42))
             with patch("vigil.desktop.investigation_mounts", return_value={}):
                 window.refresh_case_mount()
-            self.assertEqual(window.explorer.tree.topLevelItemCount(), 0)
+            self.assertEqual(window.explorer.tree.topLevelItemCount(), 1)
+            self.assertEqual(window.explorer.tree.topLevelItem(0).child(0).text(0), "note.txt")
             self.assertNotEqual(window.active_case_id, first)
             self.close_workspace(window)
 

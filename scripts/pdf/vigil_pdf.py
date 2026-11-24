@@ -1427,6 +1427,8 @@ def _section_census(story, styles, data):
         ("Groupes de doublons", str(duplicate_groups)),
         ("Fichiers sains filtrés (checksafe)", str(safe_filtered_count)),
     ]
+    if data.get("scan_status") == "partial":
+        result_rows.insert(0, ("Couverture", f"Inventaire partiel ({int(data['error_count'])} diagnostics dans SQLite)"))
     story.append(info_table(result_rows))
 
     story.append(Paragraph("Filtrage checksafe", styles["SectionTitle"]))
