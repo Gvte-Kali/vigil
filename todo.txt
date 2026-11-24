@@ -64,6 +64,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
     activée par confirmation à chaque clic, avec restauration au lancement.
     Les détails de partition sont repliés par défaut et l’inventaire
     distingue disques, partitions et états de montage par couleur.
+    Fermeture confirmée et sauvegarde contrôlée. Les futurs modules
+    doivent enregistrer leurs modifications dans leur affaire avant fermeture.
     Parité historique et panneau terminal ouverts.
     Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.

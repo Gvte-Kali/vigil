@@ -62,6 +62,13 @@ B. Langue et navigation Qt
     l’affaire active puis sur une autre et vérifier la confirmation à
     chaque clic, les preuves et la restauration après relance.
 
+[ ] Avec une affaire active, fermer Vigil et annuler la confirmation.
+    Vérifier que la fenêtre et l’affaire restent ouvertes. Fermer à
+    nouveau et confirmer, puis vérifier affaire, preuves, opérateur et
+    langue après relance. Refaire la confirmation sans affaire active.
+[ ] Pendant un calcul, tenter de fermer. Vérifier que Vigil demande
+    d’attendre, puis affiche la confirmation après la fin du calcul.
+
 C. Affaires et fichiers de preuve
 [ ] Cliquer sur Opérateurs…, créer Alice et un second opérateur. Vérifier
     que les deux apparaissent dans le sélecteur et que recréer Alice

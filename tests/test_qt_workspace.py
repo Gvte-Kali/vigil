@@ -45,14 +45,14 @@ class WorkspaceTest(unittest.TestCase):
             window.language_buttons["en"].click()
             self.assertEqual(window.tabs.tabText(1), "Cases")
             self.assertEqual(window.case_label.text(), "Locked case  ·  Test & preuve")
-            window.close()
+            self.close_workspace(window)
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertEqual(reopened.tabs.tabText(1), "Cases")
             self.assertEqual(reopened.operator.currentText(), "Alice")
             self.assertTrue(reopened.language_buttons["en"].isChecked())
             reopened.language_buttons["fr"].click()
             self.assertEqual(reopened.tabs.tabText(2), "Preuves")
-            reopened.close()
+            self.close_workspace(reopened)
 
     def test_background_file_registration_and_verification(self):
         from vigil.desktop import Workspace
@@ -79,7 +79,7 @@ class WorkspaceTest(unittest.TestCase):
                 window.verify_file()
                 self.wait_for_task(window)
                 self.assertEqual(notify.call_args.args[1], "The fingerprint matches.")
-            window.close()
+            self.close_workspace(window)
 
     def test_active_case_requires_confirmation_for_switch(self):
         from vigil.desktop import Workspace
@@ -119,12 +119,12 @@ class WorkspaceTest(unittest.TestCase):
                 window.case_clicked(window.cases.currentItem())
             self.assertIn("Second", window.active_case.text())
             self.assertNotEqual(window.active_case_id, first)
-            window.close()
+            self.close_workspace(window)
 
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertIn("Second", reopened.active_case.text())
             self.assertEqual(len(reopened.system_panel.cards), 4)
-            reopened.close()
+            self.close_workspace(reopened)
 
     def test_inventory_keeps_partition_details_collapsed(self):
         from vigil.system_panel import SystemPanel
@@ -146,6 +146,30 @@ class WorkspaceTest(unittest.TestCase):
         partition.setExpanded(True)
         self.assertIn("ext4", partition.child(1).text(0))
         panel.close()
+
+    def close_workspace(self, window):
+        with patch.object(window, "confirm_close", return_value=True):
+            self.assertTrue(window.close())
+
+    def test_close_confirmation_and_failed_save_keep_workspace_open(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            with patch.object(window, "confirm_close", return_value=False):
+                with patch.object(window, "save_before_close") as save:
+                    self.assertFalse(window.close())
+                    save.assert_not_called()
+            with patch.object(window, "confirm_close", return_value=True):
+                with patch.object(window, "save_before_close", side_effect=OSError("fixture")):
+                    with patch.object(window, "notify") as notify:
+                        self.assertFalse(window.close())
+                        self.assertIn("Saving failed", notify.call_args.args[1])
+            self.close_workspace(window)
 
     def wait_for_task(self, window):
         for _ in range(200):

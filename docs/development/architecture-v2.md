@@ -52,3 +52,20 @@ PR testées sur fixtures, validation schéma et archive, build CI isolé sans se
 5. Valider sur VM jetable avec images synthétiques, vérifier différences de manifests et hashes source avant/après ; retenir les anciennes entrées le temps de comparer les sorties. Toute politique permissive historique doit rester désactivée si une régression impose un retour.
 
 Rollback de phase 01 à tester en VM via snapshot d'installation et sauvegarde vérifiée des données/configurations, restauration de la version applicative et accès en lecture aux résultats nouveaux. Désactiver les parcours privilégiés dont le retour réintroduirait les risques identifiés ; restaurer les mécanismes autorisés uniquement après nouvelle recette et accord. Validation humaine avant mise en service.
+
+
+## Sauvegarde à la fermeture de Qt
+
+La fermeture ordinaire demande une confirmation en FR ou EN. Les opérations
+en cours doivent aboutir et terminer leurs transactions avant la fermeture.
+Les mutations des affaires et preuves sont déjà enregistrées dans SQLite
+au moment de l’action. La fermeture vérifie l’affaire active et synchronise
+les préférences locales. Une erreur conserve le workspace ouvert.
+
+Tout futur éditeur ou module Qt qui garde des données modifiées en mémoire
+doit les enregistrer via la frontière `Workspace.save_before_close`,
+en les liant aux identifiants d’affaire capturés au début de l’édition
+ou du run. Les résultats et brouillons doivent être enregistrés dans les
+emplacements de travail et avec les transactions prévues, en respectant
+la custody. Un échec doit remonter à la fenêtre et permettre de réessayer.
+Ne jamais transférer les données d’une autre affaire vers celle affichée.

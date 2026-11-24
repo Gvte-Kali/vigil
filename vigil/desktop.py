@@ -623,13 +623,62 @@ class Workspace(QMainWindow):
         else:
             self.on_success(result)
 
+    def confirm_close(self):
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(self.tr_pair("Fermer Vigil", "Close Vigil"))
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        case = self.active_case_item()
+        if case is not None:
+            name = case.text()
+            dialog.setText(self.tr_pair(
+                f"Enregistrer l’état de l’affaire « {name} » et fermer Vigil ?",
+                f"Save the state of case “{name}” and close Vigil?",
+            ))
+        else:
+            dialog.setText(self.tr_pair("Fermer Vigil ?", "Close Vigil?"))
+        accept = dialog.addButton(self.tr_pair("Fermer", "Close"), QMessageBox.ButtonRole.AcceptRole)
+        cancel = dialog.addButton(self.tr_pair("Annuler", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+        dialog.setDefaultButton(cancel)
+        dialog.setEscapeButton(cancel)
+        dialog.exec()
+        return dialog.clickedButton() == accept
+
+    def save_before_close(self):
+        """Commit future pending case edits before synchronizing preferences."""
+        if self.active_case_id:
+            if not self.database_path.is_file():
+                raise ValueError("case database unavailable")
+            with storage.database(self.database_path) as connection:
+                case = connection.execute(
+                    "SELECT 1 FROM cases WHERE id = ?", (self.active_case_id,)
+                ).fetchone()
+                if case is None:
+                    raise ValueError("active case unavailable")
+            self.settings.setValue("active_case_id", self.active_case_id)
+        self.save_operator()
+        self.settings.setValue("language", self.language)
+        self.settings.sync()
+        if self.settings.status() != QSettings.Status.NoError:
+            raise ValueError("could not save workspace preferences")
+
     def closeEvent(self, event):
         if self.busy is not None:
             event.ignore()
-            self.notify("Une opération est en cours.", "An operation is in progress.")
-        else:
-            self.system_panel.stop()
-            super().closeEvent(event)
+            self.notify("Attendez la fin de l’opération avant de fermer Vigil.",
+                        "Wait for the operation to finish before closing Vigil.")
+            return
+        if not self.confirm_close():
+            event.ignore()
+            return
+        try:
+            self.save_before_close()
+        except (OSError, ValueError, sqlite3.Error) as error:
+            event.ignore()
+            self.notify("La sauvegarde a échoué. Vigil reste ouvert.",
+                        "Saving failed. Vigil will stay open.", str(error))
+            return
+        self.system_panel.stop()
+        super().closeEvent(event)
 
 
 def main():
