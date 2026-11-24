@@ -1,4 +1,79 @@
 ================================================================================
+VIGIL 2.0 — ROADMAP PRINCIPALE
+================================================================================
+[ ] à faire / [x] validé avec preuve. Une phase à la fois, validation humaine
+avant la suivante. SPECIFICATIONS.md et AGENTS.md définissent la cible.
+Logo original obligatoire. Qt Widgets FR/EN Graphite/Cyan. Aucun daemon
+permanent : processus locaux démarrés automatiquement. Catalogue communautaire
+GitHub officiel séparé (Gvte-Kali/vigil-modules, nom proposé).
+Les anciennes règles d'intégration GUI statique ci-dessous sont historiques :
+la cible utilise des manifestes et adaptateurs, sans supprimer les acquis.
+
+PHASE 00 — AUDIT
+[ ] Inventaire scripts, GUI, CLI, dépendances, privilèges, formats, logo/hash.
+[ ] Matrice de parité et 27 exigences, risques, architecture, migration.
+[ ] Baseline de tests sûrs, décisions recensement/index/formats inconnus.
+[ ] Plan catalogue communautaire, signature et isolation ; plan phase 01.
+[ ] Validation humaine.
+
+PHASE 01 — SECURITE
+[ ] Broker privilégié limité ; suppression NOPASSWD générique.
+[ ] Remplacer pickle checksafe ; protection bloc/montage et MTP distinct.
+[ ] Validation des destinations et identités ; contexte immuable par run.
+[ ] Préserver custody, résultats et exports ; tests négatifs et rollback.
+[ ] Validation humaine.
+
+PHASE 02 — CORE
+[ ] Package Python indépendant de Qt ; contrats résultats/événements.
+[ ] Registre, manifestes YAML validés, capabilities et dépendances.
+[ ] Runner local automatique, adaptateurs scripts, CLI Typer.
+[ ] Préserver presets, multi-scans et recherche autonome ; tests de parité.
+[ ] Validation humaine.
+
+PHASE 03 — AFFAIRES ET PREUVES
+[ ] SQLite migrations, affaires, opérateurs, preuves, runs et audit.
+[ ] Import anciens projets sans perte, SHA-256 et contrôle intégrité.
+[ ] RAW/E01 existants RO, partitions et nettoyage ; AFF selon capacité.
+[ ] Validation humaine.
+
+PHASE 04 — WORKSPACE QT ET MODULES
+[ ] QMainWindow, navigation, logo original, FR/EN, Graphite/Cyan, densité.
+[ ] Dashboard, Cases, Evidence, Modules, Settings ; migration progressive.
+[ ] Gestionnaire local : import, activation, désactivation, versions.
+[ ] Catalogue officiel séparé : index, recherche, cache, revue et CI.
+[ ] Téléchargement vérifié, signature, staging, rollback, isolation ;
+    aucune exécution communautaire tant que les protections sont absentes.
+[ ] Validation humaine.
+
+PHASE 05 — TACHES
+[ ] File persistante, progression réelle ou indéterminée, logs, annulation.
+[ ] Historique, reprise/checkpoints ou nouvelle tentative, crash recovery.
+[ ] CPU/RAM/I/O/espace disque ; fermeture contrôlée sans daemon.
+[ ] Validation humaine.
+
+PHASE 06 — INVESTIGATION
+[ ] Explorer paginé, index census validé, aperçu inerte, export contrôlé.
+[ ] Recherche FTS5, tags, annotations, favoris, collections.
+[ ] Tableaux avancés, filtres, tri, colonnes, export.
+[ ] Validation humaine.
+
+PHASE 07 — ARTEFACTS
+[ ] Registre, USB, EVTX, MFT, USN, LNK, thumbs, PE, BOOTSTAT.
+[ ] Timeline interactive, provenance, fuseaux et corrélation explicable.
+[ ] Carving guidé séparé, destination contrôlée, hashes, custody.
+[ ] Validation humaine.
+
+PHASE 08 — RAPPORTS ET RELEASE
+[ ] Rapports personnalisables module/preuve/affaire ; manifeste SHA-256.
+[ ] Export figé et vérifié ; tests intégration, sécurité, GUI et installation.
+[ ] Vérifier F01–F27, parité, logo, docs, migration et rollback.
+[ ] Retirer Tkinter seulement après parité et accord ; release sur accord.
+[ ] Validation humaine.
+
+BACKLOG HISTORIQUE : conservé intégralement ci-dessous. Les axes non retenus
+dans les 27 fonctionnalités restent à arbitrer, pas à implémenter d'office.
+
+================================================================================
 VIGIL — RESTE À FAIRE
 ================================================================================
 
