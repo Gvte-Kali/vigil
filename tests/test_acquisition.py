@@ -107,3 +107,16 @@ class AcquisitionTest(unittest.TestCase):
             self.assertEqual(style("Vigil", "96", stream=io.StringIO()), "Vigil")
         with patch.dict("os.environ", {"TERM": "xterm-256color", "NO_COLOR": ""}, clear=True):
             self.assertEqual(style("Vigil", "96", stream=terminal), "Vigil")
+
+    def test_external_image_requires_a_separate_usb_disk(self):
+        from contextlib import redirect_stdout
+
+        run = acquisition["run"]
+        source = {"name": "/dev/sdb", "type": "disk", "size": 8192, "tran": "usb",
+                  "maj:min": "8:16", "children": [{"name": "/dev/sdb1", "fstype": "ntfs"}]}
+        with patch.dict(run.__globals__, {
+            "devices": lambda: [source], "idle": lambda _: True, "disk_sequence": lambda _: "42",
+            "choose": lambda rows, _: rows[0],
+        }), patch.dict("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000"}), redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, "disque source /dev/sdb"):
+                run("image", "/tmp", external=True)

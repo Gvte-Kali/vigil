@@ -372,3 +372,8 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 
 [ ] Ouvrir Actions rapides à deux tailles de fenêtre. Vérifier les panneaux
     en colonnes puis empilés, les libellés FR/EN et les sept boutons.
+
+
+[ ] Choisir la seule clé USB comme source d’une image vers USB externe.
+    Vérifier que le message identifie la source et propose un second
+    support USB démonté ou une destination locale.

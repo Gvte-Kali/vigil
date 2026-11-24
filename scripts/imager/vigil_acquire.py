@@ -366,6 +366,13 @@ def run(operation, local_default, *, local_directory=None, external=False):
     else:
         partitions = [(disk, part) for disk in targets for part in disk.get("children", ())
                       if part["type"] == "part" and part["fstype"] in FILESYSTEMS]
+        if not partitions:
+            formats = ", ".join(sorted(FILESYSTEMS))
+            raise ValueError(
+                f"Aucune partition USB de destination disponible en dehors du disque source {source['name']}.\n"
+                "    Branchez un second support USB démonté avec une partition compatible "
+                f"({formats}), ou relancez l’action en choisissant « Dossier local »."
+            )
         parents = {part["name"]: disk for disk, part in partitions}
         selected = choose([part for _, part in partitions], "Partition USB de destination", parents=parents)
         target = parents[selected["name"]]

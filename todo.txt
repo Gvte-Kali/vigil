@@ -47,6 +47,7 @@ PHASE 01 — SECURITE
     de l’affaire et diagnostic des outils. Ressources à 5 s, inventaire à 2 s.
     Les actions rapides sont regroupées en panneaux adaptatifs.
     Le choix du dossier RAW local se fait dans la boîte de dialogue système.
+    Le diagnostic USB indique quand une destination distincte manque.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
     Le post-install prépare /investigation vide et démonté en root:root 0755.
