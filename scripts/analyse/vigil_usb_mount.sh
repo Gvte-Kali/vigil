@@ -1097,6 +1097,17 @@ fi
     # --- Helper : calcul du hash SHA-256 d'un point de montage ---
     _compute_hash() {
         local dev="$1" mnt="$2" tag="$3"
+        if [ "${VIGIL_CASE_INTEGRITY:-}" = "1" ]; then
+            local result
+            if result=$(python3 "$VIGIL_BASE/scripts/analyse/vigil_mount_integrity.py" record "$mnt" "$PROJECT_LOG_DIR" 2>&1); then
+                echo "$result"
+                log_action "hash_calculation" "$dev" "$mnt" "success" "$result"
+            else
+                echo "$result" >&2
+                log_action "hash_calculation" "$dev" "$mnt" "warning" "$result"
+            fi
+            return 0
+        fi
         local hash_file
         hash_file="$PROJECT_LOG_DIR/device_${tag}.sha256"
         sudo rm -f "$hash_file"
@@ -1249,6 +1260,9 @@ display_usb_devices() {
                 fi
                 if _mount_single_ro "$_dev" "$_mnt"; then
                     _ok=$((_ok + 1))
+                    if [ "${VIGIL_CASE_INTEGRITY:-}" = "1" ]; then
+                        _compute_hash "$_dev" "$_mnt" "$_part"
+                    fi
                 else
                     _fail=$((_fail + 1))
                 fi
@@ -1263,7 +1277,9 @@ display_usb_devices() {
             fi
 
             # Hash global du disque (union de toutes les partitions montées)
-            _compute_hash "/dev/$SELECTED_DEVICE" "/investigation/$SELECTED_DEVICE" "$SELECTED_DEVICE"
+            if [ "${VIGIL_CASE_INTEGRITY:-}" != "1" ]; then
+                _compute_hash "/dev/$SELECTED_DEVICE" "/investigation/$SELECTED_DEVICE" "$SELECTED_DEVICE"
+            fi
 
         else
             # Montage d'un device unique (partition ou disque sans table)

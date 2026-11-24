@@ -224,7 +224,20 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     fi
 
     # --- 2.2. Calcul du hash actuel (vérification d'intégrité) ---
-    if [ -n "$DEVICE" ]; then
+    if [ "${VIGIL_CASE_INTEGRITY:-}" = "1" ]; then
+        echo "=== Vérification de l’intégrité de $MOUNT_POINT ==="
+        status=0
+        result=$(python3 "$VIGIL_BASE/scripts/analyse/vigil_mount_integrity.py" verify "$MOUNT_POINT" "$PROJECT_LOG_DIR" 2>&1) || status=$?
+        echo "$result"
+        case "$status" in
+            0) log_action "integrity_check" "$DEVICE" "$MOUNT_POINT" "success" "$result" ;;
+            2)
+                log_action "integrity_check" "$DEVICE" "$MOUNT_POINT" "mismatch" "$result"
+                ERRORS=$((ERRORS + 1))
+                ;;
+            *) log_action "integrity_check" "$DEVICE" "$MOUNT_POINT" "warning" "$result" ;;
+        esac
+    elif [ -n "$DEVICE" ]; then
         echo -e "${BLUE}=== Vérification de l'intégrité pour $DEVICE ($MOUNT_POINT) ===${NC}"
         CURRENT_HASH=$(find "$MOUNT_POINT" -type f -exec sha256sum {} + 2>/dev/null | sort | sha256sum | awk '{print $1}' 2>/dev/null || true)
         HASH_FILE="$PROJECT_LOG_DIR/device_$(basename "$DEVICE").sha256"

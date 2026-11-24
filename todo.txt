@@ -33,6 +33,9 @@ PHASE 01 — SECURITE
     partition, et refuse un disque déjà monté. Aucun index
     de recensement dans le parcours antivirus rapide. Les erreurs de lecture
     sont conservées dans l’index partiel avec les entrées accessibles.
+    Au démontage depuis Qt, comparaison SHA-256 par montage des chemins
+    relatifs et des contenus lisibles. Une lecture incomplète ou une
+    référence d’un autre montage donne un résultat non vérifiable.
     Actions rapides : montage et démontage du stockage 1.0 dans le
     terminal par défaut avec opérateur Qt et journal local. Confirmation
     avant montage RW et refus d’un disque déjà utilisé.
@@ -141,7 +144,7 @@ PHASE 06 — INVESTIGATION
     seule fois dans l’explorateur et reste listée dans Preuves.
     L’explorateur conserve l’arborescence et la sélection après ajout.
     Copies privées mode 0400, SHA-256, export complet tar.gz et manifestes.
-    Sélecteur depuis le titre, avec la recherche et la gestion des affaires.
+    La recherche et la gestion des affaires sont dans le sélecteur du titre.
     L’index census reste consultable séparément dans Analyses.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.

@@ -27,7 +27,7 @@ class WorkspaceTest(unittest.TestCase):
             database = Path(tmp) / "cases.sqlite"
             window = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertFalse(window.windowIcon().pixmap(40, 40).isNull())
-            self.assertEqual(window.navigation.item(2).text(), "Affaires")
+            self.assertNotIn("Affaires", [window.navigation.item(i).text() for i in range(window.navigation.count())])
             for language in ("fr", "en"):
                 self.assertFalse(window.language_buttons[language].icon().isNull())
             flag = window.language_buttons["fr"].icon().pixmap(QSize(24, 16), 2).toImage()
@@ -43,11 +43,11 @@ class WorkspaceTest(unittest.TestCase):
             window.case_search.setText("PREUVE")
             self.assertFalse(window.cases.item(0).isHidden())
             window.language_buttons["en"].click()
-            self.assertEqual(window.navigation.item(2).text(), "Cases")
+            self.assertNotIn("Cases", [window.navigation.item(i).text() for i in range(window.navigation.count())])
             self.assertEqual(window.case_title.text(), "Current case · Test & preuve")
             self.close_workspace(window)
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
-            self.assertEqual(reopened.navigation.item(2).text(), "Cases")
+            self.assertEqual(reopened.case_title.text(), "Current case")
             self.assertEqual(reopened.operator.currentText(), "Alice")
             self.assertTrue(reopened.language_buttons["en"].isChecked())
             reopened.language_buttons["fr"].click()
@@ -76,7 +76,8 @@ class WorkspaceTest(unittest.TestCase):
                     patch.object(QDialog, "exec", autospec=True, side_effect=select):
                 window.choose_case()
             self.assertTrue(window.active_case_id)
-            self.assertIs(window.case_controls.parentWidget(), window.cases_page_layout.parentWidget())
+            self.assertIs(window.case_controls.parentWidget(), window)
+            self.assertTrue(window.case_controls.isHidden())
             self.close_workspace(window)
 
     def test_background_file_registration_and_verification(self):
@@ -247,11 +248,11 @@ class WorkspaceTest(unittest.TestCase):
             )
             self.assertEqual(window.navigation.currentItem().text(), "Accueil")
             self.assertEqual(window.pages.currentIndex(), 0)
-            window.navigation.setCurrentRow(2)
+            window.navigation.setCurrentRow(3)
             self.assertEqual(window.pages.currentIndex(), 1)
             window.language_buttons["en"].click()
             self.assertEqual(window.navigation.item(0).text(), "WORKSPACE")
-            self.assertEqual(window.navigation.currentItem().text(), "Cases")
+            self.assertEqual(window.navigation.currentItem().text(), "Current case")
             self.assertEqual(window.pages.currentIndex(), 1)
             self.close_workspace(window)
 

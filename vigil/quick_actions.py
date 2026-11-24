@@ -95,6 +95,8 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
                f"VIGIL_LEGACY_PROJECT={label(name)}",
                f"VIGIL_ACTIVE_USER={label(operator)}", f"VIGIL_LEGACY_CASE_DIR={directory}"]
     arguments = []
+    if operation in {"mount", "unmount"}:
+        context.append("VIGIL_CASE_INTEGRITY=1")
     if operation == "scan":
         if not run_id or not re.fullmatch(r"[0-9a-f]{32}", run_id):
             raise ValueError("invalid scan execution ID")

@@ -298,3 +298,11 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 [ ] Depuis Exporter l’affaire, publier l’archive complète. Vérifier l’empreinte
     externe puis SHA256SUMS après extraction, le dossier preuves et le mode
     0400 de son contenu. Essayer une copie manquante ou altérée.
+
+
+[ ] En VM, monter un disque de test à deux partitions et vérifier deux
+    références distinctes. Démonter et vérifier deux résultats concordants.
+    Simuler une référence absente, une erreur de lecture et un changement
+    réel de contenu. Vérifier les trois diagnostics et le démontage.
+[ ] Vérifier que la recherche, la création et l’import restent accessibles
+    via Affaire en cours → Choisir l’affaire après le retrait de l’onglet.

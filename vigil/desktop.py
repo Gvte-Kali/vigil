@@ -250,9 +250,8 @@ class Workspace(QMainWindow):
         home.addWidget(self.dashboard_events)
 
 
-        self.cases_page_layout = self.page("Affaires", "Cases")
-        self.case_controls = QWidget()
-        self.cases_page_layout.addWidget(self.case_controls)
+        self.case_controls = QWidget(self)
+        self.case_controls.hide()
         cases = QVBoxLayout(self.case_controls)
         cases.setContentsMargins(0, 0, 0, 0)
         self.case_picker = None
@@ -746,8 +745,8 @@ class Workspace(QMainWindow):
             dialog.exec()
         finally:
             self.case_picker = None
-            self.cases_page_layout.addWidget(self.case_controls)
-            self.case_controls.show()
+            self.case_controls.setParent(self)
+            self.case_controls.hide()
             dialog.deleteLater()
 
     def case_clicked(self, item):
@@ -977,8 +976,8 @@ class Workspace(QMainWindow):
     def export_case_report(self):
         case_id = self.active_case_id
         if not case_id:
-            self.notify("Confirmez une affaire dans l’onglet Affaires.",
-                        "Confirm a case in the Cases tab.")
+            self.notify("Choisissez une affaire depuis Affaire en cours.",
+                        "Choose a case from Current case.")
             return
         self.run_task(
             lambda: case_report(self.database_path, case_id),
@@ -1147,7 +1146,7 @@ class Workspace(QMainWindow):
     def add_file(self):
         case = self.active_case_item()
         if case is None:
-            self.notify("Confirmez une affaire dans l’onglet Affaires.", "Confirm a case in the Cases tab.")
+            self.notify("Choisissez une affaire depuis Affaire en cours.", "Choose a case from Current case.")
             return
         operator = self.require_operator()
         if not operator or not (path := self.choose_file()):
@@ -1236,7 +1235,7 @@ class Workspace(QMainWindow):
     def query_index(self):
         case = self.active_case_item()
         if case is None:
-            self.notify("Confirmez une affaire dans l’onglet Affaires.", "Confirm a case in the Cases tab.")
+            self.notify("Choisissez une affaire depuis Affaire en cours.", "Choose a case from Current case.")
             return
         operator = self.require_operator()
         if not operator or not (path := self.choose_file()):
