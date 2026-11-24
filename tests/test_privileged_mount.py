@@ -1,3 +1,4 @@
+import errno
 import importlib.machinery
 import importlib.util
 import tempfile
@@ -14,6 +15,14 @@ LOADER.exec_module(HELPER)
 
 
 class MountPolicyTest(unittest.TestCase):
+    def test_ioctl_and_mount_errors_include_the_failed_operation(self):
+        with patch.object(HELPER.fcntl, "ioctl", side_effect=OSError(errno.EINVAL, "Invalid argument")):
+            with self.assertRaisesRegex(OSError, "set partition fixture RO: Invalid argument"):
+                HELPER.block_ioctl(3, HELPER.BLOCK_RO_SET, bytes(4), "set partition fixture RO")
+        with patch.object(HELPER.ctypes, "get_errno", return_value=errno.EINVAL):
+            with self.assertRaisesRegex(OSError, "mount ext4 ro,noload: Invalid argument"):
+                HELPER.checked_call(-1, "mount ext4 ro,noload")
+
     def test_target_permission_error_identifies_path_and_mode(self):
         with self.assertRaisesRegex(ValueError, r"/investigation:.*uid=1000, mode=0775"):
             HELPER.check_root_owned(SimpleNamespace(st_uid=1000, st_mode=0o775),

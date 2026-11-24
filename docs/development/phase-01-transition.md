@@ -81,3 +81,21 @@ montage étranger, sous-montage, succès sur ext4 synthétique, vérification
 des flags, des empreintes avant/après et du journal, puis démontage.
 Rollback : retirer la délégation et le helper après réconciliation
 des montages, conserver les journaux et les preuves.
+
+
+### Dev : reproduire depuis un terminal
+
+Le parcours historique peut être reproduit dans une VM dédiée, après avoir
+vérifié que seules les fixtures synthétiques sont visibles. Le script
+historique pilote aussi le triage USB et certains chemins continuent après
+un échec de verrouillage bloc. Ne pas utiliser ce parcours pour une preuve.
+
+```bash
+cd /opt/vigil
+sudo -v && bash scripts/analyse/vigil_usb_mount.sh
+```
+
+Le helper Qt affiche séparément les erreurs d’ioctl bloc et du montage
+ext4. En cas d’EINVAL au montage, comparer le système de fichiers avec
+`lsblk -o NAME,PATH,TYPE,FSTYPE,RO,MOUNTPOINTS` et consulter le journal
+noyau. Une erreur de montage peut laisser le verrouillage bloc appliqué.

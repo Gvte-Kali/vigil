@@ -111,7 +111,7 @@ def require_ro_partition(descriptor):
     node = usb_partition(device)
     if (node.parent / "ro").read_text().strip() != "1":
         raise ValueError("parent device is not read-only")
-    result = fcntl.ioctl(descriptor, BLOCK_RO_GET, bytes(4))
+    result = block_ioctl(descriptor, BLOCK_RO_GET, bytes(4), f"verify partition {device} RO")
     if struct.unpack("i", result)[0] != 1:
         raise ValueError("partition is not read-only")
     return device
@@ -128,17 +128,24 @@ def lock_partition(block, node):
         if device_number(os.fstat(disk)) != (parent / "dev").read_text().strip():
             raise ValueError("parent device identity changed")
         readonly = struct.pack("i", 1)
-        fcntl.ioctl(disk, BLOCK_RO_SET, readonly)
-        fcntl.ioctl(block, BLOCK_RO_SET, readonly)
+        block_ioctl(disk, BLOCK_RO_SET, readonly, f"set disk {parent.name} RO")
+        block_ioctl(block, BLOCK_RO_SET, readonly, f"set partition {node.name} RO")
         require_ro_partition(block)
     finally:
         os.close(disk)
 
 
-def checked_call(result):
+def block_ioctl(descriptor, request, data, operation):
+    try:
+        return fcntl.ioctl(descriptor, request, data)
+    except OSError as error:
+        raise OSError(error.errno, f"{operation}: {error.strerror}") from error
+
+
+def checked_call(result, operation):
     if result != 0:
         code = ctypes.get_errno()
-        raise OSError(code, os.strerror(code))
+        raise OSError(code, f"{operation}: {os.strerror(code)}")
 
 
 def mount_partition(receipt):
@@ -163,7 +170,7 @@ def mount_partition(receipt):
                 f"/proc/self/fd/{block.fileno()}".encode(),
                 f"/proc/self/fd/{target}".encode(), b"ext4",
                 ctypes.c_ulong(MOUNT_FLAGS), b"noload",
-            ))
+            ), f"mount ext4 ro,noload on {TARGET} from {source.name}")
             current = mounts()
             if (len(current) != 1 or current[0][1:3] != (device, str(TARGET))
                     or current[0][4] != "ext4"
@@ -181,7 +188,7 @@ def unmount_partition(receipt):
     if (len(current) != 1 or current[0][2] != str(TARGET)
             or " ".join(current[0][:2]) != expected):
         raise ValueError("mount was not created by Vigil or has nested mounts")
-    checked_call(LIBC.umount2(os.fsencode(TARGET), 0))
+    checked_call(LIBC.umount2(os.fsencode(TARGET), 0), f"unmount {TARGET}")
     receipt.unlink()
     print(f"{TARGET}: unmounted")
 

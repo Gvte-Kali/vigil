@@ -194,6 +194,9 @@ D. Registre, CLI et compatibilité
     un ancrage non vide ou un lien symbolique. Vérifier que le helper
     affiche le chemin, l’UID et le mode si l’ancrage est mal configuré.
 
+[ ] En VM, reproduire un échec bloc et un échec de montage ext4. Vérifier
+    que la sortie du terminal nomme l’opération et le support ou la cible.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,
