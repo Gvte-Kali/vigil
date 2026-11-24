@@ -220,6 +220,13 @@ D. Registre, CLI et compatibilité
     Vérifier les valeurs dans config/system.json et un PDF de test.
     Modifier un champ puis confirmer la fermeture pour tester sa sauvegarde.
 
+[ ] En VM synthétique, confirmer la fermeture avec un montage direct ou
+    imbriqué sous /investigation ou /stockage. Vérifier le blocage et la
+    source indiquée. Après démontage, vérifier que la fermeture reste
+    bloquée si un mode bloc diffère de l’instantané initial.
+[ ] Vérifier la fenêtre de contrôle à la fermeture, la sauvegarde de
+    l’affaire et la présence du JSON system-snapshots créé au lancement.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

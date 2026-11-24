@@ -71,3 +71,19 @@ ou du run. Les résultats et brouillons doivent être enregistrés dans les
 emplacements de travail et avec les transactions prévues, en respectant
 la custody. Un échec doit remonter à la fenêtre et permettre de réessayer.
 Ne jamais transférer les données d’une autre affaire vers celle affichée.
+
+
+### État système de la session Qt
+
+Au lancement, Vigil conserve un instantané JSON dans `system-snapshots`
+à côté de la base SQLite. Il contient les états RO/RW visibles dans sysfs,
+les identités bloc et les montages des deux zones. À la fermeture, les
+zones /investigation et /stockage doivent être démontées, sous-montages
+compris, y compris en présence d’un montage qui précédait Vigil. Toute
+différence de mode ou d’identité bloc, ou toute erreur de lecture, empêche
+la fermeture. La vérification est répétée après la sauvegarde.
+
+Cette vérification observe l’espace de montage de la GUI et les modes
+du noyau. La réconciliation se fait hors GUI sous la responsabilité de
+l’administrateur. Vigil ne remet jamais un périphérique en écriture pour
+quitter.

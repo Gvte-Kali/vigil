@@ -394,6 +394,24 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(json.loads(config.read_text())["logo"], "")
             panel.close()
 
+    def test_close_does_not_save_while_a_vigil_zone_is_mounted(self):
+        from vigil.desktop import Workspace
+        from vigil.shutdown_state import ShutdownBlocked
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            with patch.object(window, "confirm_close", return_value=True), \
+                    patch("vigil.desktop.check_shutdown_state", side_effect=ShutdownBlocked("/investigation")), \
+                    patch.object(window, "save_before_close") as save, patch.object(window, "notify") as notify:
+                self.assertFalse(window.close())
+                save.assert_not_called()
+                self.assertIn("Close blocked", notify.call_args.args[1])
+            self.close_workspace(window)
+
     def wait_for_task(self, window):
         for _ in range(200):
             self.app.processEvents()

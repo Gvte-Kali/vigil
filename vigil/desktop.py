@@ -10,7 +10,7 @@ from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShort
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QStackedWidget, QTabWidget,
+    QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QStackedWidget, QTabWidget,
     QVBoxLayout, QWidget,
 )
 
@@ -27,6 +27,7 @@ from .history import PAGE_SIZE, case_events
 from .reporting import case_report
 from .system_panel import SystemPanel
 from .system_info import read_zones
+from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
 from .terminal_panel import TerminalPanel
 from .quick_actions import legacy_mount_command, tool, update_command
 from .external_terminal import launch_action, launch_terminal
@@ -138,6 +139,12 @@ class Workspace(QMainWindow):
         super().__init__()
         self.settings = settings
         self.database_path = database_path
+        self.closing_checks = False
+        self.startup_state_error = None
+        try:
+            self.startup_block_modes, self.startup_snapshot_path = capture_startup_state(database_path)
+        except (OSError, ValueError) as error:
+            self.startup_state_error = error
         self.active_case_id = ""
         self.settings.remove("active_case_id")
         self.language = "en" if settings.value("language") == "en" else "fr"
@@ -1288,6 +1295,9 @@ class Workspace(QMainWindow):
             raise ValueError("could not save workspace preferences")
 
     def closeEvent(self, event):
+        if self.closing_checks:
+            event.ignore()
+            return
         if self.busy is not None or self.terminal.session is not None:
             event.ignore()
             self.notify("Attendez la fin de l’opération avant de fermer Vigil.",
@@ -1296,12 +1306,49 @@ class Workspace(QMainWindow):
         if not self.confirm_close():
             event.ignore()
             return
+
+        self.closing_checks = True
+        progress = QProgressDialog(
+            self.tr_pair("Vérification des montages et des modes bloc…",
+                         "Checking mounts and block-device modes…"),
+            "", 0, 0, self,
+        )
+        progress.setWindowTitle(self.tr_pair("Vérification avant fermeture", "Shutdown checks"))
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+        QApplication.processEvents()
+        error = None
+        stage = "system"
         try:
+            if self.startup_state_error is not None:
+                raise self.startup_state_error
+            check_shutdown_state(self.startup_block_modes)
+            stage = "save"
             self.save_before_close()
-        except (OSError, ValueError, sqlite3.Error) as error:
+            stage = "system"
+            check_shutdown_state(self.startup_block_modes)
+        except (OSError, ValueError, sqlite3.Error) as failure:
+            error = failure
+        finally:
+            progress.hide()
+            progress.deleteLater()
+            self.closing_checks = False
+
+        if error is not None:
             event.ignore()
-            self.notify("La sauvegarde a échoué. Vigil reste ouvert.",
-                        "Saving failed. Vigil will stay open.", str(error))
+            if isinstance(error, ShutdownBlocked):
+                self.notify(
+                    "Fermeture bloquée. Démontez les zones Vigil et vérifiez les écarts d’état.",
+                    "Close blocked. Unmount the Vigil zones and check state differences.", str(error),
+                )
+            elif stage == "save":
+                self.notify("La sauvegarde a échoué. Vigil reste ouvert.",
+                            "Saving failed. Vigil will stay open.", str(error))
+            else:
+                self.notify("L’état système n’a pas pu être vérifié. Vigil reste ouvert.",
+                            "System state could not be verified. Vigil will stay open.", str(error))
             return
         self.mount_timer.stop()
         self.system_panel.stop()
@@ -1315,6 +1362,11 @@ def main():
         return 1
     app = QApplication(sys.argv)
     window = Workspace(QSettings("Vigil", "Vigil2"), storage.default_database())
+    if window.startup_state_error is not None:
+        window.notify("Impossible d’enregistrer l’état système initial.",
+                      "Could not record the initial system state.", str(window.startup_state_error))
+        window.system_panel.stop()
+        return 1
     if not window.choose_session_operator():
         window.system_panel.stop()
         return 0
