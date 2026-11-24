@@ -1,0 +1,9 @@
+schema_version: 1
+api_version: 1
+id: vigil.entropy
+version: 1.0.0
+name: entropy
+category: analysis
+entrypoint: scripts/analyse/vigil_entropy.sh
+dependencies: [bash, file]
+capabilities: [evidence.read, results.write]

@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vigil-dfir"
+version = "2.0.0a1"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2,<3", "PyYAML>=6,<7", "typer>=0.12,<1"]
+
+[project.scripts]
+vigil2 = "vigil.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["vigil"]
+
+[tool.setuptools.package-data]
+vigil = ["modules/*.yaml"]

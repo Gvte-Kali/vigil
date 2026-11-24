@@ -22,6 +22,7 @@ pre-enregistrees) sont gérés dans une fenetre dediee.
 
 import os
 import subprocess
+from vigil_terminal import MISSING_TERMINAL, launch_script, launch_terminal
 import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
 
@@ -222,8 +223,8 @@ def device_key_for_label(device_filters, label):
 #  Lancement des scripts
 # --------------------------------------------------------------------------- #
 
-def _run_script_in_konsole(script_path, user, project, extra_args=None):
-    """Lance un script shell dans Konsole en enregistrant l'etat actif."""
+def _run_script_in_terminal(script_path, user, project, extra_args=None):
+    """Lance un script shell dans un terminal en enregistrant l'etat actif."""
     if not os.path.exists(script_path):
         messagebox.showerror("Erreur", f"Script introuvable : {script_path}")
         return
@@ -231,20 +232,11 @@ def _run_script_in_konsole(script_path, user, project, extra_args=None):
     if project:
         vigil_data.append_custody(user, project, "lancement_outil",
                                   detail=os.path.basename(script_path))
-    args_str = " ".join(extra_args) if extra_args else ""
     try:
-        subprocess.Popen([
-            "konsole", "-e", "bash", "-c",
-            f"bash {script_path} {args_str}; rc=$?; "
-            f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-            f"✓ Outil terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
-            f"else echo -e '\\n\\e[91m"
-            f"✕ Outil terminé avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-            f"read"
-        ])
+        launch_script(script_path, *(extra_args or []))
     except FileNotFoundError:
         messagebox.showerror("Erreur",
-                             "Konsole absent. Installez-le : sudo apt install konsole")
+                             MISSING_TERMINAL)
     except Exception as exc:
         messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 
@@ -368,7 +360,7 @@ def show_tools_view():
         """Lance un script sans bloquer sur l'utilisateur/projet (montage USB)."""
         user, project = current_selection()
         script_path = os.path.join(vigil_data.SCRIPTS_DIR, script_name)
-        _run_script_in_konsole(script_path, user or "(no-user)",
+        _run_script_in_terminal(script_path, user or "(no-user)",
                                project if project else "(no-project)")
 
     def launch(script_name, extra_args):
@@ -376,7 +368,7 @@ def show_tools_view():
         if user is None:
             return
         script_path = os.path.join(vigil_data.SCRIPTS_DIR, script_name)
-        _run_script_in_konsole(script_path, user, project, extra_args)
+        _run_script_in_terminal(script_path, user, project, extra_args)
 
     # --- Section montage / demontage USB ---
     usb_section = Section(page, "Monter / démonter le périphérique USB",
@@ -1164,8 +1156,8 @@ def show_tools_view():
             'rm -rf "$COLLECT_DIR" 2>/dev/null'
         )
         try:
-            subprocess.Popen([
-                "konsole", "-e", "bash", "-c",
+            launch_terminal([
+                "bash", "-c",
                 f"{cmd}; rc=$?; "
                 f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
                 f"✓ Scans terminés. Appuyez sur Entrée pour fermer...\\e[0m'; "
@@ -1175,7 +1167,7 @@ def show_tools_view():
             ])
         except FileNotFoundError:
             messagebox.showerror("Erreur",
-                                 "Konsole absent. Installez-le : sudo apt install konsole")
+                                 MISSING_TERMINAL)
         except Exception as exc:
             messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 

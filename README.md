@@ -6,7 +6,12 @@ Pensée pour un poste dédié sous ParrotOS / Debian, avec une interface Python 
 
 [Lire la documentation](https://gvte-kali.github.io/vigil/) · [Documentation dans le dépôt](docs/index.md)
 
-## Installer
+## Vigil 2.0 sur Linux
+
+La [CLI en développement](docs/development/linux-portability.md) s'installe
+dans un environnement Python utilisateur et fonctionne sans session graphique.
+
+## Installer la version historique
 
 Placer le dépôt dans `/opt/vigil`, puis lancer :
 

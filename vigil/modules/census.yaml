@@ -1,0 +1,9 @@
+schema_version: 1
+api_version: 1
+id: vigil.census
+version: 1.0.0
+name: census
+category: analysis
+entrypoint: scripts/analyse/vigil_census.sh
+dependencies: [bash, file]
+capabilities: [evidence.read, results.write]

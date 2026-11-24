@@ -1,0 +1,9 @@
+schema_version: 1
+api_version: 1
+id: vigil.office
+version: 1.0.0
+name: office
+category: analysis
+entrypoint: scripts/analyse/vigil_office.sh
+dependencies: [bash, file]
+capabilities: [evidence.read, results.write]

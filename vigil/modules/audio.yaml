@@ -1,0 +1,9 @@
+schema_version: 1
+api_version: 1
+id: vigil.audio
+version: 1.0.0
+name: audio
+category: analysis
+entrypoint: scripts/analyse/vigil_audio.sh
+dependencies: [bash, file]
+capabilities: [evidence.read, results.write]

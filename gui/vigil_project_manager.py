@@ -8,7 +8,7 @@ selectionner une entite ni un utilisateur.
 """
 
 import os
-import subprocess
+from vigil_terminal import MISSING_TERMINAL, launch_script
 import sys
 import tkinter as tk
 from datetime import datetime
@@ -143,18 +143,10 @@ def show_projects_view():
             return
         vigil_data.set_active(None, name)
         try:
-            subprocess.Popen([
-                "konsole", "-e", "bash", "-c",
-                f"bash {script} --dest {dest_dir}; rc=$?; "
-                f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-                f"\u2713 Export terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
-                f"else echo -e '\\n\\e[91m"
-                f"\u2715 Export terminé avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-                f"read"
-            ])
+            launch_script(script, "--dest", dest_dir)
         except FileNotFoundError:
             messagebox.showerror("Erreur",
-                                 "Konsole absent. Installez-le : sudo apt install konsole")
+                                 MISSING_TERMINAL)
         except Exception as exc:
             messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 
