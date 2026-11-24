@@ -386,3 +386,7 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 [ ] En acquisition, choisir la source puis brancher la cible à l’invite.
     Vérifier qu’elle apparaît après Entrée, qu’elle ne passe en RW qu’après
     confirmation, puis que son mode initial est restauré à la sortie.
+
+
+[ ] Vérifier que la copie et la vérification SHA-256 affichent le
+    pourcentage et les octets, avec 100 % seulement en fin de chaque étape.

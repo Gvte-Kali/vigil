@@ -18,7 +18,12 @@ class AcquisitionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             create_image = acquisition["create_image"]
-            digest = create_image(io.BytesIO(data), len(data), root, "test.raw")
+            from contextlib import redirect_stdout
+
+            with redirect_stdout(io.StringIO()) as progress:
+                digest = create_image(io.BytesIO(data), len(data), root, "test.raw")
+            self.assertIn("Copie : 100.0 % · 20/20 octets", progress.getvalue())
+            self.assertIn("Vérification SHA-256 : 100.0 % · 20/20 octets", progress.getvalue())
             self.assertEqual(digest, hashlib.sha256(data).hexdigest())
             self.assertEqual((root / "test.raw").read_bytes(), data)
             self.assertEqual((root / "test.raw.sha256").read_text(), f"{digest}  test.raw\n")

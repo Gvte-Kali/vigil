@@ -222,7 +222,10 @@ def checksum(stream, size, *, output=None, label):
                 pending = pending[written:]
         remaining -= len(payload)
         if time.monotonic() - last >= 2 or not remaining:
-            print(terminal_style(f"{label} : {size - remaining}/{size} octets", "96"), flush=True)
+            processed = size - remaining
+            percent = (processed * 1000 // size) / 10
+            progress = f"{label} : {percent:.1f} % · {processed}/{size} octets"
+            print(terminal_style(progress, "96"), flush=True)
             last = time.monotonic()
     return digest.hexdigest()
 
