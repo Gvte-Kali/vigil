@@ -22,12 +22,12 @@ class AcquisitionTest(unittest.TestCase):
 
             with redirect_stdout(io.StringIO()) as progress:
                 digest = create_image(io.BytesIO(data), len(data), root, "test.raw")
-            self.assertIn("Copie : 100.0 % · 20/20 octets", progress.getvalue())
-            self.assertIn("Vérification SHA-256 : 100.0 % · 20/20 octets", progress.getvalue())
+            self.assertIn("Copie 100.0 % · 20.0 o / 20.0 o (20/20 octets)", progress.getvalue())
+            self.assertIn("Vérification SHA-256 100.0 % · 20.0 o / 20.0 o (20/20 octets)", progress.getvalue())
             lines = progress.getvalue()
-            self.assertLess(lines.index("Copie : 100.0 %"), lines.index("Synchronisation des écritures"))
+            self.assertLess(lines.index("Copie 100.0 %"), lines.index("Synchronisation des écritures"))
             self.assertLess(lines.index("Synchronisation des écritures"), lines.index("Relecture de la destination"))
-            self.assertLess(lines.index("Relecture de la destination"), lines.index("Vérification SHA-256 : 100.0 %"))
+            self.assertLess(lines.index("Relecture de la destination"), lines.index("Vérification SHA-256 100.0 %"))
             self.assertEqual(digest, hashlib.sha256(data).hexdigest())
             self.assertEqual((root / "test.raw").read_bytes(), data)
             self.assertEqual((root / "test.raw.sha256").read_text(), f"{digest}  test.raw\n")

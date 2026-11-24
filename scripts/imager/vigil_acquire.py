@@ -14,10 +14,13 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from threading import Event, Thread
 import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
+
+# The launcher uses isolated Python. Load the companion module from this script's directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vigil_progress import Progress, SYNC_NOTICE, duration, human_size, indeterminate
 
 BLOCK_RO_SET = 0x125D
 BLOCK_RO_GET = 0x125E
@@ -208,67 +211,70 @@ def block_device(row, sequence, *, source):
 def checksum(stream, size, *, output=None, label):
     digest = hashlib.sha256()
     remaining = size
-    last = time.monotonic()
-    while remaining:
-        payload = stream.read(min(remaining, CHUNK_SIZE))
-        if not payload:
-            raise OSError(f"Lecture incomplète : {remaining} octets manquants.")
-        digest.update(payload)
-        if output is not None:
-            pending = memoryview(payload)
-            while pending:
-                written = output.write(pending)
-                if not written:
-                    raise OSError("Écriture incomplète.")
-                pending = pending[written:]
-        remaining -= len(payload)
-        if time.monotonic() - last >= 2 or not remaining:
-            processed = size - remaining
-            percent = (processed * 1000 // size) / 10
-            progress = f"{label} : {percent:.1f} % · {processed}/{size} octets"
-            print(terminal_style(progress, "96"), flush=True)
-            last = time.monotonic()
+    progress = Progress(label, size)
+    try:
+        while remaining:
+            payload = stream.read(min(remaining, CHUNK_SIZE))
+            if not payload:
+                raise OSError(f"Lecture incomplète : {remaining} octets manquants.")
+            digest.update(payload)
+            if output is not None:
+                pending = memoryview(payload)
+                while pending:
+                    written = output.write(pending)
+                    if not written:
+                        raise OSError("Écriture incomplète.")
+                    pending = pending[written:]
+            remaining -= len(payload)
+            progress.update(size - remaining)
+    finally:
+        progress.finish()
     return digest.hexdigest()
 
 
-@contextmanager
-def io_stage(label):
-    """Keep the terminal informed while a disk operation waits on the kernel."""
-    print(terminal_style(f"\n{label}…", "96"), flush=True)
-    done = Event()
-    started = time.monotonic()
-
-    def report_wait():
-        while not done.wait(15):
-            elapsed = int(time.monotonic() - started)
-            print(terminal_style(f"{label} · en cours depuis {elapsed} s", "93"), flush=True)
-
-    reporter = Thread(target=report_wait, daemon=True)
-    reporter.start()
-    try:
-        yield
-    finally:
-        done.set()
-        reporter.join()
-
-
-def transfer(source, target, size):
+def transfer(source, target, size, timings=None):
+    timings = {} if timings is None else timings
+    start = time.monotonic()
     reference = checksum(source, size, output=target, label="Copie")
-    with io_stage("Synchronisation des écritures sur la destination"):
+    timings["copy"] = time.monotonic() - start
+    print(f"\n{SYNC_NOTICE}", flush=True)
+    start = time.monotonic()
+    with indeterminate("Synchronisation des écritures sur la destination"):
         target.flush()
         os.fsync(target.fileno())
+    timings["sync"] = time.monotonic() - start
     if hasattr(os, "posix_fadvise"):
-        with io_stage("Préparation de la relecture (cache de la destination)"):
+        with indeterminate("Préparation de la relecture (cache de la destination)"):
             try:
                 os.posix_fadvise(target.fileno(), 0, size, os.POSIX_FADV_DONTNEED)
             except OSError:
                 pass
     target.seek(0)
-    with io_stage("Relecture de la destination et calcul du SHA-256"):
-        actual = checksum(target, size, label="Vérification SHA-256")
+    print("\nRelecture de la destination et calcul du SHA-256", flush=True)
+    start = time.monotonic()
+    actual = checksum(target, size, label="Vérification SHA-256")
+    timings["verify"] = time.monotonic() - start
     if actual != reference:
         raise ValueError(f"Écart SHA-256 : source {reference}, relecture {actual}")
+    timings["destination_hash"] = actual
     return reference
+
+
+def acquisition_summary(kind, source, destination, size, digest, timings, started, *, manifest=None, unmounted=False):
+    section("Acquisition terminée")
+    print(terminal_style("Intégrité : vérifiée · SHA-256 identiques", "1;92"))
+    print(f"  Type : {kind}\n  Source : {source}\n  Destination : {destination}")
+    print(f"  Volume : {human_size(size)} ({size} octets)")
+    print(f"  SHA-256 source : {digest}\n  SHA-256 destination : {timings['destination_hash']}")
+    print(f"  Copie : {duration(timings['copy'])} · Synchronisation : {duration(timings['sync'])}"
+          f" · Vérification : {duration(timings['verify'])} · Total : {duration(time.monotonic() - started)}")
+    if timings["copy"] >= 3:
+        print(f"  Débit moyen de copie : {human_size(size / timings['copy'])}/s")
+    if manifest:
+        print(f"  Manifeste : {manifest}")
+    if unmounted:
+        print("  Destination USB démontée.")
+    print("  Code de sortie : 0")
 
 
 @contextmanager
@@ -300,13 +306,13 @@ def external_directory(disk, sequence, partition, owner):
         yield Path(directory)
     finally:
         if mounted:
-            with io_stage("Démontage de la destination USB"):
+            with indeterminate("Démontage de la destination USB"):
                 command("/usr/bin/umount", "--", directory)
         # Never recursively remove a mountpoint, even when unmounting fails.
         os.rmdir(directory)
 
 
-def create_image(source, size, directory, filename, owner=None):
+def create_image(source, size, directory, filename, owner=None, timings=None):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,170}\.raw", filename):
         raise ValueError("Nom attendu : nom-image.raw (lettres, chiffres, points, tirets).")
     folder = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -327,7 +333,7 @@ def create_image(source, size, directory, filename, owner=None):
         fd = os.open(filename, flags, 0o600, dir_fd=folder)
         created.append((filename, os.fstat(fd)))
         with os.fdopen(fd, "w+b", buffering=0) as target:
-            digest = transfer(source, target, size)
+            digest = transfer(source, target, size, timings)
             if owner is not None:
                 os.fchown(target.fileno(), *owner)
         fd = os.open(sums, flags, 0o600, dir_fd=folder)
@@ -337,7 +343,7 @@ def create_image(source, size, directory, filename, owner=None):
             manifest.flush()
             if owner is not None:
                 os.fchown(manifest.fileno(), *owner)
-            with io_stage("Synchronisation du manifeste SHA-256"):
+            with indeterminate("Synchronisation du manifeste SHA-256"):
                 os.fsync(manifest.fileno())
                 os.fsync(folder)
         return digest
@@ -418,11 +424,12 @@ def run(operation, local_default, *, local_directory=None, external=False):
         confirmation = f"ECRASER {target['name']}"
         if input(terminal_style(f"\nSaisissez {confirmation} : ", "1;93")).strip() != confirmation:
             raise InterruptedError("Clonage annulé.")
+        timings, started = {}, time.monotonic()
         with block_device(source, sequence, source=True) as origin:
             with writable_target(target, target_sequence):
                 with block_device(target, target_sequence, source=False) as output:
-                    digest = transfer(origin, output, size)
-        print(terminal_style(f"\nClone vérifié · SHA-256 : {digest}", "92"))
+                    digest = transfer(origin, output, size, timings)
+        acquisition_summary("Clonage bloc", source["name"], target["name"], size, digest, timings, started)
         return
 
     if local_directory is not None:
@@ -466,16 +473,19 @@ def run(operation, local_default, *, local_directory=None, external=False):
     filename = input(terminal_style("Nom de l’image [acquisition.raw] : ", "1;93")).strip() or "acquisition.raw"
     if input(terminal_style("Saisissez COPIER pour lancer l’acquisition : ", "1;93")).strip() != "COPIER":
         raise InterruptedError("Imagerie annulée.")
+    timings, started = {}, time.monotonic()
     with block_device(source, sequence, source=True) as origin:
         if mode == "1":
-            digest = create_image(origin, size, local, filename, owner)
+            digest = create_image(origin, size, local, filename, owner, timings)
         else:
             with writable_target(target, target_sequence, selected):
                 with external_directory(target, target_sequence, selected, owner) as directory:
                     digest = create_image(origin, size, directory, filename,
-                                          owner if selected["fstype"] == "ext4" else None)
+                                          owner if selected["fstype"] == "ext4" else None, timings)
             print(terminal_style(f"Destination démontée : {selected['name']}", "92"))
-    print(terminal_style(f"\nImage vérifiée : {filename} · SHA-256 : {digest}", "92"))
+    image_path = str(local / filename) if mode == "1" else f"{selected['name']} : /{filename}"
+    acquisition_summary("Image RAW", source["name"], image_path, size, digest, timings, started,
+                        manifest=image_path + ".sha256", unmounted=mode == "2")
 
 
 def main():
