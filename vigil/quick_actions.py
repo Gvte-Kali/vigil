@@ -1,5 +1,6 @@
 """Command builders for Qt actions that do not require elevated privileges."""
 import os
+import re
 import shutil
 import stat
 import tempfile
@@ -66,3 +67,29 @@ def mount_command(operation):
     if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
         raise ValueError("untrusted mount helper")
     return ["/usr/bin/sudo", "-k", "--", str(helper), operation]
+
+
+def legacy_mount_command(operation, state, case_id, name, operator):
+    names = {"mount": "vigil_usb_mount.sh", "unmount": "vigil_usb_umount.sh"}
+    if operation not in names or not re.fullmatch(r"[0-9a-f]{32}", case_id):
+        raise ValueError("invalid historical mount context")
+    base = Path(__file__).resolve().parents[1]
+    if not (base / "scripts/analyse" / names[operation]).is_file():
+        base = Path("/opt/vigil")
+    script = base / "scripts/analyse" / names[operation]
+    if not script.is_file():
+        raise ValueError(f"legacy script unavailable: {script}")
+    directory = state.parent / "legacy-custody" / case_id
+    if directory.resolve() != directory.absolute() or directory.resolve().is_relative_to("/investigation"):
+        raise ValueError("invalid legacy custody directory")
+    directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+
+    def label(value):
+        return "".join(character if character.isprintable() else " " for character in value)
+
+    return [
+        "/usr/bin/env", f"VIGIL_BASE={base}", f"VIGIL_LEGACY_PROJECT={label(name)}",
+        f"VIGIL_ACTIVE_USER={label(operator)}", f"VIGIL_LEGACY_CASE_DIR={directory}",
+        "/usr/bin/bash", "-c", '/usr/bin/sudo -v && exec /usr/bin/bash "$@"',
+        "vigil", str(script),
+    ]

@@ -99,3 +99,15 @@ Le helper Qt affiche séparément les erreurs d’ioctl bloc et du montage
 ext4. En cas d’EINVAL au montage, comparer le système de fichiers avec
 `lsblk -o NAME,PATH,TYPE,FSTYPE,RO,MOUNTPOINTS` et consulter le journal
 noyau. Une erreur de montage peut laisser le verrouillage bloc appliqué.
+
+
+### Parcours de développement Qt actuel
+
+Les boutons de montage/démontage ouvrent provisoirement les scripts
+historiques dans le terminal du bureau. Le lancement utilise sudo interactif
+et transmet l’affaire et l’opérateur choisis sans écrire les sélections
+globales de la 1.0. Les livrables et journaux produits par ces scripts
+restent dans `legacy-custody/<id-affaire>` à côté de la base SQLite.
+Le journal Qt enregistre la demande, et le terminal externe affiche le
+résultat du script. Le helper expérimental reste disponible pour sa
+recette séparée. Les limites du parcours historique s’appliquent.

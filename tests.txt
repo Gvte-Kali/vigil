@@ -197,6 +197,13 @@ D. Registre, CLI et compatibilité
 [ ] En VM, reproduire un échec bloc et un échec de montage ext4. Vérifier
     que la sortie du terminal nomme l’opération et le support ou la cible.
 
+[ ] Dans une VM avec uniquement des supports synthétiques, lancer le montage
+    et le démontage depuis Affaire en cours. Vérifier le terminal externe,
+    les invites historiques et le dossier legacy-custody de l’affaire.
+    Les observations du terminal restent la source du résultat.
+[ ] Vérifier que les actions rapides ouvrent le terminal externe et que
+    le centre des tâches reste masqué au démarrage.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

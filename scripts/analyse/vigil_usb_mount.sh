@@ -47,10 +47,12 @@ ERRORS=0
 
 ACTIVE_USER="(no-user)"
 [ -f "$ACTIVE_USER_FILE" ] && ACTIVE_USER=$(cat "$ACTIVE_USER_FILE" 2>/dev/null)
+[ -n "${VIGIL_LEGACY_CASE_DIR:-}" ] && ACTIVE_USER="${VIGIL_ACTIVE_USER:-}"
 [ -z "$ACTIVE_USER" ] && ACTIVE_USER="(no-user)"
 
 ACTIVE_PROJECT="(no-project)"
 [ -f "$ACTIVE_PROJECT_FILE" ] && ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
+[ -n "${VIGIL_LEGACY_CASE_DIR:-}" ] && ACTIVE_PROJECT="${VIGIL_LEGACY_PROJECT:-}"
 [ -z "$ACTIVE_PROJECT" ] && ACTIVE_PROJECT="(no-project)"
 
 ACTIVE_ENTITY="(non configuree)"
@@ -59,7 +61,11 @@ if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     [ -z "$ACTIVE_ENTITY" ] && ACTIVE_ENTITY="(non configuree)"
 fi
 
-if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
+PROJECT_TEE=(sudo tee)
+if [ -n "${VIGIL_LEGACY_CASE_DIR:-}" ]; then
+    PROJECT_TEE=(tee)
+    PROJECT_LOG_DIR="$VIGIL_LEGACY_CASE_DIR"
+elif [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     PROJECT_LOG_DIR="/tmp"
 else
     PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
@@ -129,7 +135,7 @@ log_action() {
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S.%6NZ")
     local log_entry="[$timestamp] User:$ACTIVE_USER | Entity:$ACTIVE_ENTITY | Project:$ACTIVE_PROJECT | Action:$action | Device:$device | File:$file_path | Status:$status | Message:$message"
 
-    echo "$log_entry" | sudo tee -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
+    echo "$log_entry" | "${PROJECT_TEE[@]}" -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
 
     if command -v jq >/dev/null 2>&1; then
         jq -n \
@@ -143,7 +149,7 @@ log_action() {
             --arg status "$status" \
             --arg message "$message" \
             '{timestamp: $timestamp, user: $user, entity: $entity, project: $project, action: $action, device: $device, file_path: $file_path, status: $status, message: $message}' \
-        | sudo tee -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
+        | "${PROJECT_TEE[@]}" -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
     fi
 }
 

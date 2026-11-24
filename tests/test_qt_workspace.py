@@ -282,6 +282,8 @@ class WorkspaceTest(unittest.TestCase):
             )
             window.show()
             self.app.processEvents()
+            self.assertFalse(window.terminal_dock.isVisible())
+            window.terminal_toggle.click()
             self.assertTrue(window.terminal_dock.isVisible())
             window.navigation.setCurrentRow(2)
             self.assertTrue(window.terminal_dock.isVisible())
@@ -318,7 +320,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(window.terminal_dock.features(),
                              QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
             self.assertEqual(window.terminal_dock.allowedAreas(), Qt.DockWidgetArea.BottomDockWidgetArea)
-            self.assertEqual(window.terminal_toggle.text(), "Masquer le centre des tâches")
+            self.assertEqual(window.terminal_toggle.text(), "Afficher le centre des tâches")
             self.close_workspace(window)
 
     def test_case_header_displays_mounted_source_and_clears_it(self):

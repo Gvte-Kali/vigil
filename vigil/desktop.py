@@ -26,7 +26,8 @@ from .reporting import case_report
 from .system_panel import SystemPanel
 from .system_info import read_zones
 from .terminal_panel import TerminalPanel
-from .quick_actions import mount_command, scan_command, tool, update_command
+from .quick_actions import legacy_mount_command, scan_command, tool, update_command
+from .external_terminal import launch_action, launch_terminal
 
 ANALYSIS_LABELS = {
     "archives": ("Archives", "Archives"),
@@ -412,7 +413,7 @@ class Workspace(QMainWindow):
         self.task_tabs.addTab(tasks_page, "")
         self.terminal_dock.setWidget(self.task_tabs)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.terminal_dock)
-        self.terminal_dock.show()
+        self.terminal_dock.hide()
         self.terminal_toggle = QPushButton()
         self.terminal_toggle.setCheckable(True)
         self.terminal_toggle.clicked.connect(self.toggle_terminal)
@@ -423,7 +424,6 @@ class Workspace(QMainWindow):
         self.refresh_cases()
         self.navigation.setCurrentRow(1)
         self.case_navigation.setCurrentRow(0)
-        self.mount_task = None
         self.mount_timer = QTimer(self)
         self.mount_timer.timeout.connect(self.refresh_case_mount)
         self.mount_timer.start(3000)
@@ -1070,22 +1070,12 @@ class Workspace(QMainWindow):
         operator = self.require_operator()
         if not operator:
             return
-        try:
-            arguments = mount_command(operation)
-        except FileNotFoundError:
-            self.notify("L’outil de montage privilégié n’est pas installé.",
-                        "The privileged mount helper is not installed.",
-                        "docs/development/phase-01-transition.md")
-            return
-        except (OSError, ValueError) as error:
-            self.fail(error)
-            return
         response = QMessageBox.question(
             self, "Vigil",
-            (self.tr_pair("Ouvrir la sélection de la partition USB dans le terminal ?",
-                          "Open USB partition selection in the terminal?")
+            (self.tr_pair("Ouvrir le montage Vigil 1.0 dans le terminal par défaut ?",
+                          "Open Vigil 1.0 mounting in the default terminal?")
              if operation == "mount" else
-             self.tr_pair("Démonter la partition montée par Vigil ?", "Unmount the partition mounted by Vigil?")),
+             self.tr_pair("Ouvrir le démontage Vigil 1.0 dans le terminal par défaut ?", "Open Vigil 1.0 unmounting in the default terminal?")),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -1098,22 +1088,18 @@ class Workspace(QMainWindow):
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
             return
-        self.mount_task = (case_id, operator, details)
-        if not self.start_quick_action(lambda: arguments):
-            self.finish_mount_audit("mount.launch_error")
-
-    def finish_mount_audit(self, action, code=None):
-        context = self.mount_task
-        self.mount_task = None
-        if context is None:
-            return
-        case_id, operator, details = context
         try:
-            with storage.database(self.database_path) as connection:
-                storage.audit(connection, operator, case_id, action, {**details, "exit_code": code})
-        except (OSError, ValueError, sqlite3.Error) as error:
+            case = self.active_case_item()
+            launch_terminal(legacy_mount_command(
+                operation, self.database_path, case_id, case.text(), operator,
+            ))
+        except (OSError, ValueError) as error:
             self.fail(error)
-        self.refresh_case_mount()
+            return
+        self.statusBar().showMessage(self.tr_pair(
+            "Script historique ouvert dans le terminal.",
+            "Legacy script opened in the terminal.",
+        ), 10000)
 
     def update_terminal_toggle(self, visible):
         self.terminal_toggle.setChecked(visible)
@@ -1127,23 +1113,10 @@ class Workspace(QMainWindow):
             self.resizeDocks([self.terminal_dock], [270], Qt.Orientation.Vertical)
 
     def start_quick_action(self, command):
-        if self.terminal.session is not None:
-            self.terminal_dock.show()
-            self.notify("Une commande est déjà en cours.", "A command is already running.")
-            return
         try:
-            self.terminal_dock.show()
-            self.resizeDocks([self.terminal_dock], [270], Qt.Orientation.Vertical)
-            arguments = command()
-            self.task_tabs.setCurrentIndex(0)
-            self.terminal.start(arguments)
-            self.cancel_task_button.setEnabled(True)
-            self.tasks.insertItem(0, Path(arguments[0]).name)
-            self.refresh_dashboard()
-            return True
+            launch_action(command())
         except (OSError, ValueError) as error:
             self.fail(error)
-            return False
 
     def quick_scan(self):
         file = self.choose_file()
@@ -1172,7 +1145,6 @@ class Workspace(QMainWindow):
         ), 10000)
 
     def quick_finished(self, code):
-        self.finish_mount_audit("mount.success" if code == 0 else "mount.error", code)
         self.cancel_task_button.setEnabled(False)
         status = self.tr_pair(f"Code de sortie : {code}", f"Exit code: {code}")
         self.terminal.appendPlainText(status)
@@ -1257,7 +1229,6 @@ def main():
     app = QApplication(sys.argv)
     window = Workspace(QSettings("Vigil", "Vigil2"), storage.default_database())
     window.showMaximized()
-    window.toggle_terminal(True)
     return app.exec()
 
 
