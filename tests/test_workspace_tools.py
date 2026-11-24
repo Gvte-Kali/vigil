@@ -7,9 +7,16 @@ from vigil.core import discover
 from vigil.inspection import PREVIEW_BYTES, inspect_file
 from vigil.module_scaffold import create_module_draft
 from vigil.quick_actions import update_command
+from vigil.storage import default_database
 
 
 class WorkspaceToolsTest(unittest.TestCase):
+    def test_site_launcher_state_is_separate_from_development(self):
+        with patch.dict("os.environ", {
+            "VIGIL_STATE_DIR": "/opt/vigil/data/state", "XDG_STATE_HOME": "/tmp/development",
+        }):
+            self.assertEqual(default_database(), Path("/opt/vigil/data/state/cases.sqlite"))
+
     def test_refresh_config_ignores_stale_configuration_and_handles_spaces(self):
         with tempfile.TemporaryDirectory(prefix="vigil test ") as tmp:
             directory = Path(tmp)

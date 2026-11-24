@@ -19,6 +19,13 @@ bash scripts/post-install/post_install_vigil.sh
 vigil
 ```
 
+Le post-install place le venv Qt dans `/opt/vigil/.venv` et le lanceur
+`vigil` démarre Qt avec les données de travail dans `/opt/vigil/data/state`.
+La configuration des signatures se trouve dans le sous-dossier `clamav`.
+Le lanceur utilise une base distincte de la base de développement sous XDG.
+Sauvegarder et migrer séparément des données existantes si nécessaire.
+La langue et les préférences d’interface restent propres au compte utilisateur.
+
 L’accès RDP est proposé pendant l’installation et désactivé par défaut.
 Après installation, terminer les réglages KDE décrits dans `post-install-checked.txt`
 à la racine du dépôt, puis [configurer l’entité et les utilisateurs](../configuration/systeme.md).
@@ -30,7 +37,7 @@ Après installation, terminer les réglages KDE décrits dans `post-install-chec
 - Désactivation du montage automatique et masquage d’`udisks2`.
 - Initialisation des données. L’administrateur vérifie la politique sudo du poste.
 - Création de la commande `vigil`, du raccourci et des emplacements Dolphin.
-- Mise à jour initiale des signatures ClamAV.
+- Configuration de l’accès FreshClam aux signatures sous /opt/vigil. La mise à jour est lancée depuis Qt.
 - Si accepté : activation de `xrdp` et configuration du port 3389/tcp via UFW.
 
 ## Dépendances principales

@@ -181,6 +181,12 @@ D. Registre, CLI et compatibilité
     Les boutons indiquent le parcours administrateur tant que le broker
     reste ouvert. Vérifier la mise à jour de l’état en trois secondes environ.
 
+[ ] Sur une VM cible avec AppArmor, exécuter le post-install depuis
+    /opt/vigil. Vérifier le venv, le lanceur Qt, les données dans data/state,
+    l’exception limitée à data/state/clamav et l’absence de doublons après
+    une deuxième installation. Tester FreshClam --version puis la mise à
+    jour dans Qt.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

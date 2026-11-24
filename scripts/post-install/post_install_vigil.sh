@@ -19,7 +19,7 @@ if [ "$EUID" -eq 0 ]; then
     echo "Démarrez le post-install depuis la session de l'opérateur, avec sudo interactif."
     exit 1
 fi
-if [ ! -w /opt/vigil/data ] || [ ! -w /opt/vigil/logs ] || [ ! -w /opt/vigil/rapports ]; then
+if [ ! -w /opt/vigil ] || [ ! -w /opt/vigil/data ] || [ ! -w /opt/vigil/logs ] || [ ! -w /opt/vigil/rapports ]; then
     echo "Faites préparer les répertoires de données par l'administrateur."
     echo "Voir docs/development/phase-01-transition.md."
     exit 1
@@ -35,7 +35,7 @@ echo "✅ Répertoires de base présents."
 # La liste ci-dessous reste synchronisee avec ce fichier : elle sert de
 # secours si requirements.txt est introuvable.
 REQUIREMENTS_FILE="/opt/vigil/scripts/post-install/requirements.txt"
-FALLBACK_PKGS="util-linux coreutils jq eject cryptsetup clamav clamav-daemon clamav-freshclam xrdp xorgxrdp udisks2 ufw konsole kdialog zenity jmtpfs ntfs-3g exfat-fuse dc3dd ewf-tools afflib-tools sleuthkit autopsy yara guymager gnupg ldmtool exiftool ffmpeg p7zip-full zstd binwalk pv file gdisk cloud-guest-utils parted imagemagick feh python3 python3-tk python3-pil python3-pip python3-reportlab python3-cairosvg libcairo2 facedetect python3-opencv"
+FALLBACK_PKGS="util-linux coreutils jq eject cryptsetup clamav clamav-daemon clamav-freshclam xrdp xorgxrdp udisks2 ufw konsole kdialog zenity jmtpfs ntfs-3g exfat-fuse dc3dd ewf-tools afflib-tools sleuthkit autopsy yara guymager gnupg ldmtool exiftool ffmpeg p7zip-full zstd binwalk pv file gdisk cloud-guest-utils parted imagemagick feh python3 python3-venv python3-tk python3-pil python3-pip python3-reportlab python3-cairosvg libcairo2 facedetect python3-opencv"
 if [ -f "$REQUIREMENTS_FILE" ]; then
     echo "Installation des dépendances depuis $REQUIREMENTS_FILE..."
     sudo apt update
@@ -93,11 +93,39 @@ touch /opt/vigil/data/active_user
 touch /opt/vigil/data/active_project
 touch /opt/vigil/data/usb/whitelist.txt /opt/vigil/data/usb/blacklist.txt
 
-# --- 6.1. Lien symbolique vigil -> vigil_main_gui.py ---
-echo "Création du lien symbolique /usr/local/bin/vigil..."
-sudo ln -sf /opt/vigil/gui/vigil_main_gui.py /usr/local/bin/vigil
-sudo chmod +x /opt/vigil/gui/vigil_main_gui.py
-echo "✅ Lien symbolique /usr/local/bin/vigil créé (pointe vers /opt/vigil/gui/vigil_main_gui.py)."
+# --- 6.1. Installer Qt dans /opt/vigil ---
+python3 -m venv /opt/vigil/.venv
+/opt/vigil/.venv/bin/python -m pip install -e '/opt/vigil[desktop]'
+signature_dir=/opt/vigil/data/state/clamav
+if [ "$(realpath -m -- "$signature_dir")" != "$signature_dir" ]; then
+    echo "Le répertoire des signatures traverse un lien symbolique : $signature_dir" >&2
+    exit 1
+fi
+install -d -m 0700 /opt/vigil/data/state "$signature_dir"
+
+# --- 6.2. Autoriser seulement le répertoire de signatures dans AppArmor ---
+profile=/etc/apparmor.d/usr.bin.freshclam
+local_profile=/etc/apparmor.d/local/usr.bin.freshclam
+if [ -f "$profile" ] && command -v apparmor_parser >/dev/null; then
+    if ! grep -Eq '^[[:space:]]*#?include([[:space:]]+if exists)?[[:space:]]+<local/usr.bin.freshclam>' "$profile"; then
+        echo "Le profil FreshClam n’inclut pas $local_profile. Consultez docs/configuration/clamav.md." >&2
+        exit 1
+    fi
+    sudo install -d -m 0755 /etc/apparmor.d/local
+    sudo touch "$local_profile"
+    for rule in "owner $signature_dir/ rw," "owner $signature_dir/** rwk,"; do
+        if ! sudo grep -Fxq -- "$rule" "$local_profile"; then
+            printf '\n%s\n' "$rule" | sudo tee -a "$local_profile" >/dev/null
+        fi
+    done
+    if [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null || true)" = Y ]; then
+        sudo apparmor_parser -r "$profile"
+    fi
+elif [ -f "$profile" ]; then
+    echo "apparmor_parser indisponible : configuration FreshClam à valider par l’administrateur." >&2
+fi
+
+sudo ln -sf /opt/vigil/scripts/post-install/vigil-qt /usr/local/bin/vigil
 
 # --- 8. Créer le raccourci bureau (item 6 du checklist) ---
 echo "Création du raccourci Vigil..."
@@ -119,7 +147,7 @@ sudo tee /usr/share/applications/vigil.desktop >/dev/null <<DESKTOP_EOF
 [Desktop Entry]
 Name=Vigil
 Comment=Outil d'analyse forensique pour périphériques USB
-Exec=python3 /opt/vigil/gui/vigil_main_gui.py
+Exec=/usr/local/bin/vigil
 Icon=$VIGIL_ICON
 Terminal=false
 Type=Application
@@ -181,10 +209,8 @@ _add_dolphin_place "/stockage" "Stockage"
 _add_dolphin_place "/rapports" "Rapports"
 echo "✅ Emplacements ajoutés à Dolphin : /investigation /stockage /rapports"
 
-# --- 10. Mettre a jour les bases de donnees ClamAV ---
-echo "Mise à jour des bases de données ClamAV..."
-sudo freshclam
-echo "✅ Bases de données ClamAV mises à jour."
+# Les signatures du profil Vigil sont téléchargées sur demande depuis Qt.
+echo "Pour initialiser les signatures locales, ouvrez Vigil puis Actions rapides > Mettre à jour l’antivirus."
 
 echo "Script de post-installation terminé."
 

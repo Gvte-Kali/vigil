@@ -32,12 +32,35 @@ par le scanner système, utiliser `systemctl status clamav-freshclam`
 et `clamscan --version`. Vigil utilise les bases système en l’absence
 de bases personnalisées dans son profil.
 
-Pour permettre la mise à jour dans Qt, l’administrateur peut ajouter au
-fichier local inclus par le profil FreshClam une règle limitée au
-répertoire de signatures Vigil de l’opérateur, puis recharger le profil.
-Conserver AppArmor actif et les permissions utilisateur existantes.
-Tester d’abord la configuration avec `freshclam --config-file=CHEMIN --version`,
-qui ne télécharge pas de signatures.
+Sur la cible installée sous `/opt/vigil`, le post-install confine les
+signatures à `/opt/vigil/data/state/clamav` et enregistre une exception
+AppArmor pour ce seul répertoire dans le fichier local du profil
+FreshClam, en conservant les règles existantes.
+
+Pour un poste de développement qui lance directement le venv, vérifier
+l’inclusion du fichier local puis l’ouvrir avec `sudoedit`.
+
+```bash
+grep -n 'local/usr.bin.freshclam' /etc/apparmor.d/usr.bin.freshclam
+sudoedit /etc/apparmor.d/local/usr.bin.freshclam
+```
+
+Si l’inclusion est présente, ajouter ces règles en remplaçant `clsi`
+par l’opérateur concerné.
+
+```text
+owner /home/clsi/.local/state/vigil/clamav/ rw,
+owner /home/clsi/.local/state/vigil/clamav/** rwk,
+```
+
+Recharger le profil puis tester sans sudo. L’option `--version` lit la
+configuration sans télécharger de signatures.
+
+```bash
+sudo apparmor_parser -r /etc/apparmor.d/usr.bin.freshclam
+cfg="$HOME/.local/state/vigil/clamav/vigil-freshclam.conf"
+freshclam --config-file="$cfg" --version
+```
 
 Les procédures En ligne et Par clé USB ci-dessous décrivent Vigil 1.0.
 
