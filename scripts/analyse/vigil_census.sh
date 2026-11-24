@@ -65,7 +65,7 @@ INVESTIGATION_DIR="${VIGIL_INVESTIGATION_DIR:-/investigation}"
 STOCKAGE_DIR="${VIGIL_STOCKAGE_DIR:-/stockage}"
 STAMP=$(date +"%Y%m%d_%H%M%S")
 WORK_DIR=$(mktemp -d -t "vigil_census_${STAMP}.XXXXXX")
-RAPPORTS_DIR="$VIGIL_BASE/rapports"
+RAPPORTS_DIR="${VIGIL_ANALYSIS_RESULTS:-$VIGIL_BASE/rapports}"
 
 # --- Parsing des arguments ---
 # --pdf          : forcer la generation du rapport PDF (comportement par defaut)
@@ -150,7 +150,7 @@ final_pause() {
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Recensement terminé avec $ERRORS erreur(s).${NC}"
         echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     else
         echo -e "${GREEN}Recensement terminé. Consultez le statut de l’index ci-dessus.${NC}"
@@ -320,7 +320,7 @@ EOFJSON
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
                 echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
                 log_action "success" "Rapport PDF généré : $PDF_OUT"
-                if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+                if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
                     cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                         echo -e "${GREEN}   Rapport copié dans le dossier du projet${NC}"
                 fi
@@ -924,7 +924,7 @@ if [ -f "$JSON_FILE" ] && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 
         echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
         log_action "success" "Rapport PDF généré : $PDF_OUT"
         # Copie du rapport PDF dans le dossier du projet (pour l'export).
-        if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+        if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
             cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                 echo -e "${GREEN}   Rapport copié dans le dossier du projet : ${PROJECT_LOG_DIR}/$(basename "$PDF_OUT")${NC}"
         fi

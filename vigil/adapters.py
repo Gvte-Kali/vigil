@@ -40,3 +40,46 @@ def query_census(state, case_id, operator, index):
     with storage.database(state) as connection:
         storage.audit(connection, operator, case_id, "module.success", details)
     return completed.stdout
+
+
+def analysis_command(state, case_id, operator, module_id):
+    """Build a non-privileged command for a trusted built-in case adapter."""
+    from .core import BUILTIN_MODULES, discover
+    from .entity import data_directory, legacy_base
+
+    manifests, _ = discover(BUILTIN_MODULES)
+    module = manifests.get(module_id)
+    if module is None or module.category != "analysis" or set(module.capabilities) != {
+        "evidence.read", "results.write",
+    }:
+        raise ValueError("unsupported built-in analysis")
+    base = legacy_base()
+    script = (base / module.entrypoint).resolve(strict=True)
+    if script.parent != base / "scripts" / "analyse":
+        raise ValueError("invalid built-in analysis entrypoint")
+    run_id = uuid4().hex
+    root = storage.evidence_copy_path(state, case_id, "0" * 32).parents[2] / "analyses"
+    if root.resolve() != root.absolute():
+        raise ValueError("invalid analysis output directory")
+    output = root / f"{module_id}-{run_id}"
+    with storage.database(state) as connection:
+        case = storage.require_active_case(connection, case_id)
+        storage.audit(connection, operator, case_id, "analysis.request",
+                      {"module": module_id, "run_id": run_id, "results": str(output)})
+    output.mkdir(mode=0o700, parents=True)
+    args = ["--json-out", str(output)]
+    if module_id == "vigil.census":
+        args.extend(("--user", operator))
+    # Preserve the script exit code through tee. The terminal launcher keeps diagnostics visible.
+    wrapper = (
+        'umask 077; set -o pipefail; /usr/bin/bash "$@" 2>&1 | tee "$VIGIL_ANALYSIS_RESULTS/terminal.log"; '
+        'rc=$?; printf "%s\\n" "$rc" > "$VIGIL_ANALYSIS_RESULTS/exit-code"; exit "$rc"'
+    )
+    return [
+        "/usr/bin/env", f"VIGIL_BASE={base}", f"VIGIL_DATA_DIR={data_directory(base)}",
+        "VIGIL_CASE_ANALYSIS=1", f"VIGIL_CASE_CENSUS={int(module_id == 'vigil.census')}",
+        "VIGIL_INVESTIGATION_DIR=/investigation", f"VIGIL_LEGACY_PROJECT={case['name']}",
+        f"VIGIL_ACTIVE_USER={operator}", f"VIGIL_ANALYSIS_RESULTS={output}",
+        f"VIGIL_LEGACY_CASE_DIR={output}", "/usr/bin/bash", "-c", wrapper,
+        "vigil", str(script), *args,
+    ]

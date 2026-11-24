@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from . import storage
 from .case_export import export_case
-from .adapters import CENSUS_LIMIT, query_census
+from .adapters import CENSUS_LIMIT, analysis_command, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 from .inspection import inspect_file, investigation_mounts
@@ -319,6 +319,7 @@ class Workspace(QMainWindow):
         evidence.addLayout(evidence_actions)
         self.button(evidence_actions, "Ajouter un fichier à l’affaire", "Add a file to the case",
                     self.add_file, primary=True)
+        self.button(evidence_actions, "Supprimer la preuve", "Delete evidence", self.delete_selected_evidence)
         self.button(evidence_actions, "Vérifier SHA-256", "Verify SHA-256", self.verify_file)
         self.button(evidence_actions, "Inspecter une image RAW", "Inspect a RAW image", self.inspect_image)
         evidence_actions.addStretch()
@@ -329,16 +330,17 @@ class Workspace(QMainWindow):
         self.analysis_hint.setWordWrap(True)
         self.bind(
             self.analysis_hint.setText,
-            "La consultation d’un index est disponible ici. Les autres scripts sont répertoriés "
-            "pour référence et restent accessibles via Vigil 1.0.",
-            "Index queries are available here. The other scripts are listed for reference "
-            "and remain accessible through Vigil 1.0.",
+            "Sélectionnez un module pour analyser les supports montés en lecture seule dans /investigation.",
+            "Select a module to analyse read-only mounts under /investigation.",
         )
         modules.addWidget(self.analysis_hint)
         self.modules = QListWidget()
         modules.addWidget(self.modules)
+        self.modules.itemActivated.connect(lambda _: self.run_selected_analysis())
         module_actions = QHBoxLayout()
         modules.addLayout(module_actions)
+        self.button(module_actions, "Lancer l’analyse", "Run analysis", self.run_selected_analysis, primary=True)
+        self.button(module_actions, "Ouvrir les résultats", "Open results", self.open_analysis_results)
         self.button(module_actions, "Consulter un index de recensement",
                     "Query a census index", self.query_index, primary=True)
         module_actions.addStretch()
@@ -687,7 +689,7 @@ class Workspace(QMainWindow):
         manifests, errors = discover(BUILTIN_MODULES)
         for module in manifests.values():
             names = ANALYSIS_LABELS.get(module.id.removeprefix("vigil."), (module.name, module.name))
-            self.modules.addItem(f"{self.tr_pair(*names)}  ·  {module.entrypoint.rsplit('/', 1)[-1]}")
+            self.add_row(self.modules, f"{self.tr_pair(*names)}  ·  {module.entrypoint.rsplit('/', 1)[-1]}", module.id)
             self.add_row(self.catalogue, f"{module.id}  ·  {module.version}", module.id)
         self.filter_catalogue(self.catalogue_filter.text())
         for path in errors:
@@ -1187,6 +1189,31 @@ class Workspace(QMainWindow):
         )
         return path
 
+    def delete_selected_evidence(self):
+        item = self.evidence.currentItem()
+        case_id = self.active_case_id
+        if not case_id or item is None:
+            self.notify("Sélectionnez une preuve.", "Select evidence first.")
+            return
+        operator = self.require_operator()
+        if not operator:
+            return
+        dialog = QMessageBox(self)
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(self.tr_pair(
+            "Supprimer cette preuve et sa copie locale ? Le fichier original sera conservé.",
+            "Delete this evidence and its local copy? The original file will be retained.",
+        ))
+        dialog.setInformativeText(item.text())
+        dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        dialog.setDefaultButton(QMessageBox.StandardButton.No)
+        if dialog.exec() == QMessageBox.StandardButton.Yes:
+            evidence_id = item.data(Qt.ItemDataRole.UserRole)
+            self.run_task(
+                lambda: storage.delete_evidence(self.database_path, case_id, evidence_id, operator),
+                lambda _: self.refresh_evidence(),
+            )
+
     def add_file(self):
         case = self.active_case_item()
         if case is None:
@@ -1275,6 +1302,42 @@ class Workspace(QMainWindow):
             "Inspection RAW terminée.", "RAW inspection complete.",
             "\n".join([summary, *partitions, f"SHA-256\n{result['sha256']}"]),
         )
+
+    def run_selected_analysis(self):
+        if self.busy is not None or self.terminal.session is not None:
+            return
+        item = self.modules.currentItem()
+        if item is None or not (module_id := item.data(Qt.ItemDataRole.UserRole)) or not self.active_case_id:
+            self.notify("Choisissez une affaire et un module d’analyse.",
+                        "Choose a case and an analysis module.")
+            return
+        operator = self.require_operator()
+        if not operator:
+            return
+        try:
+            mounts = read_zones()["/investigation"]
+            if not mounts or any(mode != "ro" for _, _, _, mode in mounts):
+                self.notify("Montez les supports d’investigation en lecture seule.",
+                            "Mount the investigation volumes read-only.")
+                return
+            launch_action(analysis_command(self.database_path, self.active_case_id, operator, module_id))
+        except (OSError, sqlite3.Error, ValueError) as error:
+            self.fail(error)
+
+    def open_analysis_results(self):
+        case_id = self.active_case_id
+        if not case_id:
+            self.notify("Choisissez d’abord une affaire.", "Choose a case first.")
+            return
+        try:
+            root = storage.evidence_copy_path(self.database_path, case_id, "0" * 32).parents[2] / "analyses"
+            if root.is_dir() and root.resolve() == root.absolute() and QDesktopServices.openUrl(
+                    QUrl.fromLocalFile(str(root))):
+                return
+        except (OSError, ValueError) as error:
+            self.fail(error)
+            return
+        self.notify("Aucun dossier de résultats accessible.", "No accessible results folder.")
 
     def query_index(self):
         case = self.active_case_item()

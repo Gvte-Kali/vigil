@@ -68,20 +68,24 @@ while [ $# -gt 0 ]; do
 done
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+CONFIG_FILE="${VIGIL_DATA_DIR:-$VIGIL_BASE/data}/config/system.json"
 INVESTIGATION_DIR="${VIGIL_INVESTIGATION_DIR:-/investigation}"
 STAMP=$(date +"%Y%m%d_%H%M%S")
 WORK_DIR=$(mktemp -d -t "vigil_audio_${STAMP}.XXXXXX")
-RAPPORTS_DIR="$VIGIL_BASE/rapports"
+RAPPORTS_DIR="${VIGIL_ANALYSIS_RESULTS:-$VIGIL_BASE/rapports}"
 
 # --- Verifier qu'un utilisateur (obligatoire) est actif ---
-if [ ! -f "$ACTIVE_USER_FILE" ]; then
-    echo -e "${RED}❌ Aucun utilisateur actif sélectionné.${NC}"
-    echo "Sélectionnez un utilisateur via l'interface GUI."
+if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+    ACTIVE_USER="${VIGIL_ACTIVE_USER:?opérateur Vigil requis}"
+    ACTIVE_PROJECT="${VIGIL_LEGACY_PROJECT:?affaire Vigil requise}"
+    source "$VIGIL_BASE/scripts/analyse/vigil_case_analysis.sh" || exit 1
+elif [ -f "$ACTIVE_USER_FILE" ]; then
+    ACTIVE_USER=$(cat "$ACTIVE_USER_FILE")
+    ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
+else
+    echo "Sélectionnez un utilisateur via l’interface Vigil."
     exit 1
 fi
-ACTIVE_USER=$(cat "$ACTIVE_USER_FILE")
-ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
 ACTIVE_ENTITY="(non configurée)"
 if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     ACTIVE_ENTITY=$(jq -r '.entity_name // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
@@ -94,7 +98,7 @@ final_pause() {
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Analyse terminée avec $ERRORS erreur(s).${NC}"
         echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     else
         echo -e "${GREEN}✅ Analyse terminée sans erreur.${NC}"
@@ -122,7 +126,7 @@ if [ -z "$ACTIVE_PROJECT" ] || [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     echo -e "${RED}(chaîne de custody). Sélectionnez un projet via la GUI.${NC}"
     exit 1
 fi
-PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
+PROJECT_LOG_DIR="${VIGIL_LEGACY_CASE_DIR:-$PROJECTS_DIR/$ACTIVE_PROJECT}"
 if [ ! -d "$PROJECT_LOG_DIR" ] || [ ! -w "$PROJECT_LOG_DIR" ]; then
     echo -e "${RED}❌ Le dossier du projet est introuvable ou non inscriptible : $PROJECT_LOG_DIR${NC}"
     exit 1
@@ -161,12 +165,16 @@ echo ""
 
 # --- Verifier que /investigation contient des peripheriques montes ---
 echo -e "${BLUE}=== Vérification des périphériques montés ===${NC}"
-MOUNTED_DIRS=0
-while IFS= read -r -d '' dir; do
-    if mountpoint -q "$dir" 2>/dev/null; then
-        MOUNTED_DIRS=$((MOUNTED_DIRS + 1))
-    fi
-done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+    case_analysis_prepare
+else
+    MOUNTED_DIRS=0
+    while IFS= read -r -d '' dir; do
+        if mountpoint -q "$dir" 2>/dev/null; then
+            MOUNTED_DIRS=$((MOUNTED_DIRS + 1))
+        fi
+    done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+fi
 
 if [ "$MOUNTED_DIRS" -eq 0 ]; then
     echo -e "${YELLOW}⚠️  Aucun périphérique monté dans /investigation/.${NC}"
@@ -205,7 +213,13 @@ while IFS= read -r -d '' f; do
             AUDIO_COUNT=$((AUDIO_COUNT + 1))
             ;;
     esac
-done < <(find "$INVESTIGATION_DIR" -type f -print0 2>/dev/null)
+done < <(
+    if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+        cat "$WORK_DIR/files"
+    else
+        find "$INVESTIGATION_DIR" -type f -print0 2>/dev/null
+    fi
+)
 
 echo -e "${GREEN}✅ ${AUDIO_COUNT} fichier(s) audio détecté(s) sur ${TOTAL_FILES} fichier(s) total.${NC}"
 if [ "$AUDIO_COUNT" -eq 0 ]; then
@@ -227,7 +241,7 @@ EOFJSON
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
                 echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
                 log_action "success" "Rapport PDF généré : $PDF_OUT"
-                if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+                if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
                     cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                         echo -e "${GREEN}   Rapport copié dans le dossier du projet${NC}"
                 fi
@@ -311,8 +325,8 @@ if [ -n "$FFPROBE" ]; then
     echo -e "${YELLOW}Extraction des métadonnées via ffprobe...${NC}"
     while IFS=$'\t' read -r path mime size mtime rel; do
         # duree (secondes) + debit (bit_rate en bits/s)
-        dur=$(ffprobe -v quiet -of csv=p=0 -show_entries format=duration "$path" 2>/dev/null | tr -d '[:space:]')
-        br=$(ffprobe -v quiet -of csv=p=0 -show_entries format=bit_rate "$path" 2>/dev/null | tr -d '[:space:]')
+        dur=$(ffprobe -protocol_whitelist file -v quiet -of csv=p=0 -show_entries format=duration "$path" 2>/dev/null | tr -d '[:space:]')
+        br=$(ffprobe -protocol_whitelist file -v quiet -of csv=p=0 -show_entries format=bit_rate "$path" 2>/dev/null | tr -d '[:space:]')
         if [ -z "$dur" ] || [ "$dur" = "N/A" ]; then
             DURATION_BUCKETS["sans"]=$(( ${DURATION_BUCKETS["sans"]} + 1 ))
             DURATION_FAIL=$((DURATION_FAIL + 1))
@@ -466,7 +480,7 @@ if [ -f "$JSON_FILE" ] && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 
         echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
         log_action "success" "Rapport PDF généré : $PDF_OUT"
         # Copie du rapport PDF dans le dossier du projet (pour l'export).
-        if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+        if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
             cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                 echo -e "${GREEN}   Rapport copié dans le dossier du projet : ${PROJECT_LOG_DIR}/$(basename "$PDF_OUT")${NC}"
         fi

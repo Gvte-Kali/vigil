@@ -292,6 +292,45 @@ def register_file(state, case_id, path, operator, *, mount=None):
     return {"id": evidence_id, "size": size, "sha256": digest, "existing": bool(records)}
 
 
+def delete_evidence(state, case_id, evidence_id, operator):
+    source = evidence_copy_path(state, case_id, evidence_id)
+    staged = None
+    try:
+        with database(state) as connection:
+            require_active_case(connection, case_id)
+            record = connection.execute(
+                "SELECT path, sha256 FROM evidence WHERE id = ? AND case_id = ?",
+                (evidence_id, case_id),
+            ).fetchone()
+            if record is None:
+                raise ValueError("unknown evidence in this case")
+            try:
+                info = source.lstat()
+            except FileNotFoundError:
+                info = None
+            if info is not None:
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError("invalid local evidence copy")
+                temporary = source.with_name(f".removed-{uuid4().hex}")
+                source.rename(temporary)
+                staged = temporary
+            connection.execute("DELETE FROM evidence WHERE id = ?", (evidence_id,))
+            audit(connection, operator, case_id, "evidence.delete", {
+                "evidence_id": evidence_id, "path": record["path"],
+                "sha256": record["sha256"], "had_local_copy": staged is not None,
+            })
+    except BaseException:
+        if staged is not None:
+            staged.rename(source)
+        raise
+    if staged is not None:
+        staged.unlink()
+        try:
+            source.parent.rmdir()
+        except OSError:
+            pass
+
+
 def verify_file(state, evidence_id, operator, *, use_copy=False):
     with database(state) as connection:
         record = connection.execute(

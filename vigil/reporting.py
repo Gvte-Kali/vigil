@@ -67,6 +67,10 @@ def case_pdf_reports(state, case_id, legacy_path=None):
             folder for folder in custody.glob("scan-*")
             if folder.is_dir() and not folder.is_symlink()
         )
+        analyses = custody / "analyses"
+        if analyses.is_dir() and not analyses.is_symlink():
+            directories.extend(folder for folder in analyses.iterdir()
+                               if folder.is_dir() and not folder.is_symlink())
     if legacy_path:
         imported = Path(legacy_path)
         if imported.is_dir() and imported.resolve() == imported:

@@ -310,3 +310,11 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
     réel de contenu. Vérifier les trois diagnostics et le démontage.
 [ ] Vérifier que la recherche, la création et l’import restent accessibles
     via Affaire en cours → Choisir l’affaire après le retrait de l’onglet.
+
+[ ] Dans Preuves, annuler puis confirmer la suppression d’une preuve.
+    Vérifier la disparition de sa copie locale, la présence de l’original,
+    la trace d’audit et l’absence de la preuve dans un nouvel export.
+[ ] Dans Analyses, tester chaque module intégré sur un support synthétique
+    monté en lecture seule. Vérifier la sélection, le terminal, les
+    dépendances, le code de sortie et le dossier isolé de résultats.
+    Vérifier le refus sans montage et le signalement d’une lecture incomplète.
