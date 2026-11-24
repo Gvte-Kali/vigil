@@ -53,6 +53,10 @@ class CaseActionsTest(unittest.TestCase):
                 output = Path(argv[argv.index("--json-out") + 1])
                 self.assertEqual(output.parent.name, "analyses")
                 paths.add(output)
+                if name == "vigil.clamav":
+                    self.assertIn(f"VIGIL_LEGACY_SCAN_DIR={output}", argv)
+                    self.assertIn("--all", argv)
+                    self.assertNotIn("/usr/bin/sudo", argv)
             self.assertEqual(len(paths), len(manifests))
             with self.assertRaises(ValueError):
                 analysis_command(state, case, "Alice", "vigil.unknown")

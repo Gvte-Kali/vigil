@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .history import case_events
+from .report_copies import sync_report_copies
 from .storage import database, require_active_case, utc_now
 
 
@@ -62,23 +63,15 @@ def case_pdf_reports(state, case_id, legacy_path=None):
     if not re.fullmatch(r"[0-9a-f]{32}", case_id):
         raise ValueError("invalid case ID")
     custody = state.parent / "legacy-custody" / case_id
-    directories = []
-    if custody.is_dir() and custody.resolve() == custody.absolute():
-        directories.append(custody)
-        directories.extend(
-            folder for folder in custody.glob("scan-*")
-            if folder.is_dir() and not folder.is_symlink()
-        )
-        analyses = custody / "analyses"
-        if analyses.is_dir() and not analyses.is_symlink():
-            directories.extend(folder for folder in analyses.iterdir()
-                               if folder.is_dir() and not folder.is_symlink())
-    if legacy_path:
-        imported = Path(legacy_path)
-        if imported.is_dir() and imported.resolve() == imported:
-            directories.append(imported)
-    files = {
-        path for directory in directories for path in directory.glob("*.pdf")
-        if not path.is_symlink() and path.is_file()
-    }
-    return sorted(files, key=lambda path: (path.name.casefold(), str(path)))
+    return sync_report_copies(custody, Path(legacy_path) if legacy_path else None)
+
+
+def pdf_analysis_kind(path):
+    """Use the run ID first, then the naming convention of legacy PDFs."""
+    run = path.parent.name
+    if run.startswith("vigil."):
+        return run.removeprefix("vigil.").split("-", 1)[0]
+    if run.startswith("scan-"):
+        return "clamav" if path.name.startswith("rapport_clamav") else "usbhid"
+    match = re.match(r"rapport_([a-z0-9-]+)", path.name.casefold())
+    return match.group(1) if match else ""

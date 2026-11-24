@@ -1,0 +1,9 @@
+schema_version: 1
+api_version: 1
+id: vigil.clamav
+version: 1.0.0
+name: ClamAV
+category: analysis
+entrypoint: scripts/clamav/vigil_clamav_scan.sh
+dependencies: [bash, clamscan, python3]
+capabilities: [evidence.read, results.write]

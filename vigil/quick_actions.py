@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 from .entity import data_directory, legacy_base
+from .report_copies import SYNC_REPORTS, report_sync_context
 
 
 def tool(name):
@@ -110,11 +111,17 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
         wrapper = (
             '/usr/bin/python3 -I "$VIGIL_BASE/scripts/analyse/vigil_census_mount_guard.py" '
             '--before-mount && /usr/bin/sudo -v && /usr/bin/env VIGIL_CASE_CENSUS=1 /usr/bin/bash "$@" && '
-            'exec /usr/bin/env VIGIL_CASE_CENSUS=1 /usr/bin/bash '
-            '"$VIGIL_BASE/scripts/analyse/vigil_census.sh" --user "$VIGIL_ACTIVE_USER"'
+            '/usr/bin/env VIGIL_CASE_CENSUS=1 /usr/bin/bash '
+            '"$VIGIL_BASE/scripts/analyse/vigil_census.sh" --user "$VIGIL_ACTIVE_USER"; '
+            f'rc=$?; {SYNC_REPORTS} || {{ [ "$rc" -ne 0 ] || rc=1; }}; exit "$rc"'
+        )
+    if operation == "scan":
+        wrapper = (
+            '/usr/bin/sudo -v && /usr/bin/bash "$@"; '
+            f'rc=$?; {SYNC_REPORTS} || {{ [ "$rc" -ne 0 ] || rc=1; }}; exit "$rc"'
         )
     return [
-        "/usr/bin/env", *context, "/usr/bin/bash", "-c", wrapper,
+        "/usr/bin/env", *report_sync_context(directory), *context, "/usr/bin/bash", "-c", wrapper,
         "vigil", str(script), *arguments,
     ]
 

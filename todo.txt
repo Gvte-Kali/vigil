@@ -150,8 +150,9 @@ PHASE 06 — INVESTIGATION
     Export partiel signalé pour les preuves anciennes sans copie locale.
     L’index census reste consultable séparément dans Analyses.
     Suppression ciblée des copies de preuve avec confirmation et audit.
-    Les neuf analyses intégrées lancent les scripts historiques en lecture
-    seule et écrivent dans un dossier distinct par exécution et par affaire.
+    Les analyses intégrées, dont le scan ClamAV, lancent les scripts
+    historiques en lecture seule et écrivent dans un dossier par exécution.
+    Les PDF sont copiés sous rapports/ et listés par date et analyse.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.
 [ ] Validation humaine.

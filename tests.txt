@@ -320,3 +320,11 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
     monté en lecture seule. Vérifier la sélection, le terminal, les
     dépendances, le code de sortie et le dossier isolé de résultats.
     Vérifier le refus sans montage et le signalement d’une lecture incomplète.
+
+
+[ ] Dans Analyses, lancer Scan antivirus sur un montage RO. Vérifier
+    l’absence de démontage, l’utilisation des signatures Vigil si présentes
+    et le PDF consolidé. Vérifier que les anciens PDF et les nouveaux sont
+    copiés dans rapports/ par exécution, sans écrasement.
+[ ] Dans Rapports PDF, vérifier l’ordre du plus récent au plus ancien,
+    les dates, les noms d’analyse et la présence des copies dans l’export.

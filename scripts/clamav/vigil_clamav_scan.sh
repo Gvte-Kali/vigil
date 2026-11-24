@@ -175,12 +175,12 @@ final_pause() {
         echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s) d'exécution.${NC}"
         [ "$INFECTED_TOTAL" -gt 0 ] && echo -e "${RED}  ($INFECTED_TOTAL fichier(s) infecté(s) détecté(s)).${NC}"
         echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     elif [ "$INFECTED_TOTAL" -gt 0 ]; then
         echo -e "${RED}❌ Scan terminé : $INFECTED_TOTAL fichier(s) infecté(s) détecté(s).${NC}"
         echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
     else
         echo -e "${GREEN}✅ Scan terminé sans erreur, aucun fichier infecté.${NC}"
     fi
@@ -298,6 +298,16 @@ fi
 # Vérifier que les bases virales existent
 DB_DIR=$(clamconf 2>/dev/null | sed -nE 's/^\s*DatabaseDirectory\s*=\s*"?([^"]*)"?\s*$/\1/p' | tail -1)
 [ -z "$DB_DIR" ] && DB_DIR="/var/lib/clamav"
+CASE_DB=()
+if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ] && [ -n "${VIGIL_CLAMAV_DB_DIR:-}" ]; then
+    for local_db in "$VIGIL_CLAMAV_DB_DIR"/*.cvd "$VIGIL_CLAMAV_DB_DIR"/*.cld; do
+        if [ -f "$local_db" ]; then
+            DB_DIR="$VIGIL_CLAMAV_DB_DIR"
+            CASE_DB=(--database="$DB_DIR")
+            break
+        fi
+    done
+fi
 HAS_DB=0
 for db in main.cvd main.cld daily.cvd daily.cld; do
     if [ -f "$DB_DIR/$db" ]; then HAS_DB=1; break; fi
@@ -306,7 +316,10 @@ if [ "$HAS_DB" = "0" ]; then
     echo ""
     echo -e "${YELLOW}⚠️  ${BOLD}Aucune base virale trouvée${NC} ${GREY}dans $DB_DIR${NC}"
     echo -e "  ${GREY}Mettez à jour les bases :${NC} ${BOLD}sudo bash $(dirname "$0")/vigil_clamav_update.sh${NC}"
-    if [ "$AUTO_YES" = "1" ]; then
+    if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+        echo "Mettez à jour les signatures ClamAV dans Actions rapides." >&2
+        exit 1
+    elif [ "$AUTO_YES" = "1" ]; then
         echo -e "${GREY}--yes : continuation automatique sans base virale.${NC}"
     else
         echo -ne "\n${BOLD}${YELLOW}Voulez-vous continuer quand même ? (o/n) : ${NC}"
@@ -331,7 +344,15 @@ if [ ! -d "$INVESTIGATION_DIR" ]; then
 fi
 
 SCAN_DIRS=()
-if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+    mount_list=$(mktemp) || exit 1
+    if ! python3 -I "$VIGIL_BASE/scripts/analyse/vigil_census_mount_guard.py" > "$mount_list"; then
+        rm -f -- "$mount_list"
+        exit 1
+    fi
+    mapfile -d '' -t SCAN_DIRS < "$mount_list"
+    rm -f -- "$mount_list"
+elif [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
     source "$(dirname "$0")/vigil_scan_mounts.sh" || exit 1
     if ! read_investigation_mounts "$INVESTIGATION_DIR"; then
         echo "Impossible de lire les montages à scanner." >&2
@@ -548,7 +569,11 @@ for target in "${TARGETS[@]}"; do
     else
         USE_TTY=0
     fi
-    sudo clamscan --recursive --bell $CLAM_OPTS "$target" 2>&1 \
+    SCANNER=(sudo clamscan)
+    if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+        SCANNER=(clamscan --follow-dir-symlinks=0 --follow-file-symlinks=0 --cross-fs=no "${CASE_DB[@]}")
+    fi
+    "${SCANNER[@]}" --recursive --bell $CLAM_OPTS "$target" 2>&1 \
         | progress_monitor "$LOG_FILE" "$TOTAL_FILES" "$USE_TTY"
     CLAM_RC=${PIPESTATUS[0]:-0}
 
@@ -584,7 +609,7 @@ done
 # Mode multi-analyses : les journaux clamscan (persistants ou temporaires)
 # sont copies dans le dossier de collecte sous un nom previsible
 # (clamav_<dossier>.log) pour etre assembles par vigil_pdf.py --kind multi.
-if [ -n "$JSON_OUT_DIR" ] && [ "${#SCAN_LOGS[@]}" -gt 0 ]; then
+if [ -n "$JSON_OUT_DIR" ] && [ "$JSON_OUT_DIR" != "$RAPPORTS_DIR" ] && [ "${#SCAN_LOGS[@]}" -gt 0 ]; then
     mkdir -p "$JSON_OUT_DIR" 2>/dev/null || true
     for lf in "${SCAN_LOGS[@]}"; do
         [ -f "$lf" ] || continue

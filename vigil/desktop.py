@@ -2,6 +2,7 @@
 import os
 import sqlite3
 import sys
+from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,7 +27,7 @@ from .evidence_panel import EvidencePanel
 from .entity import data_directory, legacy_base
 from .entity_panel import EntityPanel
 from .history import PAGE_SIZE, case_events
-from .reporting import case_pdf_reports, case_report
+from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
@@ -38,6 +39,7 @@ ANALYSIS_LABELS = {
     "archives": ("Archives", "Archives"),
     "audio": ("Fichiers audio", "Audio files"),
     "bigfiles": ("Fichiers volumineux", "Large files"),
+    "clamav": ("Scan antivirus", "Antivirus scan"),
     "census": ("Recensement de fichiers", "File inventory"),
     "crypto": ("Fichiers chiffrés", "Encrypted files"),
     "entropy": ("Analyse de l’entropie", "Entropy analysis"),
@@ -659,6 +661,7 @@ class Workspace(QMainWindow):
         if self.operator.count():
             self.operator.setItemText(0, self.tr_pair("Choisir un opérateur", "Choose an operator"))
         self.refresh_diagnostics()
+        self.refresh_pdf_reports()
         self.system_panel.render()
         self.explorer.retranslate()
         self.entity_panel.retranslate()
@@ -1026,7 +1029,13 @@ class Workspace(QMainWindow):
             with storage.database(self.database_path) as connection:
                 row = connection.execute("SELECT legacy_path FROM cases WHERE id = ?", (case_id,)).fetchone()
             for path in case_pdf_reports(self.database_path, case_id, row["legacy_path"] if row else None):
-                self.add_row(self.pdf_reports, f"{path.parent.name}  ·  {path.name}", str(path))
+                kind = pdf_analysis_kind(path)
+                labels = ANALYSIS_LABELS | {"usbhid": ("Triage USB", "USB triage")}
+                analysis = self.tr_pair(*labels.get(kind, ("Analyse non identifiée", "Unknown analysis")))
+                date = datetime.fromtimestamp(path.stat().st_mtime).strftime(
+                    self.tr_pair("%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S")
+                )
+                self.add_row(self.pdf_reports, f"{date}  ·  {analysis}  ·  {path.name}", str(path))
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
 

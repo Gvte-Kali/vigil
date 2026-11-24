@@ -1,3 +1,4 @@
+import os
 import hashlib
 import json
 import tempfile
@@ -38,7 +39,29 @@ class HistoryAndReportingTest(unittest.TestCase):
             foreign = outside / "foreign.pdf"
             foreign.touch()
             (run / "link.pdf").symlink_to(foreign)
-            self.assertEqual(case_pdf_reports(state, case), [report])
+            copy = run.parent / "rapports" / run.name / report.name
+            self.assertEqual(case_pdf_reports(state, case), [copy])
+            self.assertEqual(copy.read_bytes(), report.read_bytes())
+            report.unlink()
+            self.assertEqual(case_pdf_reports(state, case), [copy])
+
+    def test_pdf_copies_keep_timestamps_and_distinguish_analysis_runs(self):
+        from vigil.reporting import pdf_analysis_kind
+
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "cases.sqlite"
+            case = "a" * 32
+            custody = state.parent / "legacy-custody" / case
+            for module, timestamp in (("archives", 100), ("clamav", 200)):
+                folder = custody / "analyses" / f"vigil.{module}-fixture"
+                folder.mkdir(parents=True)
+                report = folder / "report.pdf"
+                report.write_text(module)
+                os.utime(report, (timestamp, timestamp))
+            reports = case_pdf_reports(state, case)
+            self.assertEqual([pdf_analysis_kind(path) for path in reports], ["clamav", "archives"])
+            self.assertEqual([int(path.stat().st_mtime) for path in reports], [200, 100])
+            self.assertEqual([path.read_text() for path in reports], ["clamav", "archives"])
 
     def test_report_digests_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:

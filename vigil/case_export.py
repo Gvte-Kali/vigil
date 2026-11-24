@@ -12,6 +12,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .history import case_events
+from .report_copies import sync_report_copies
 from .storage import audit, database, evidence_copy_path, file_identity, require_active_case, utc_now
 
 
@@ -90,6 +91,7 @@ def export_case(state, case_id, operator, destination):
         audit(connection, operator, case_id, "case.export.start", {})
         events = case_events(connection, case_id, limit=None)
 
+    sync_report_copies(custody, legacy)
     stage = Path(tempfile.mkdtemp(prefix=".vigil-export-", dir=destination))
     final = destination / f"affaire-{case_id[:8]}-{uuid4().hex}"
     published = False
