@@ -9,6 +9,8 @@ from pathlib import Path
 
 from vigil import storage
 from vigil.case_export import export_case
+from vigil.case_removal import purge_case
+from vigil.reporting import case_report
 
 
 class CaseExportTest(unittest.TestCase):
@@ -84,3 +86,32 @@ class CaseExportTest(unittest.TestCase):
             with storage.database(state) as connection:
                 self.assertEqual(storage.require_active_case(connection, case)["name"], "Version one case")
                 self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 2)
+
+
+    def test_purge_removes_only_selected_local_case_and_reports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "db" / "cases.sqlite"
+            legacy = root / "legacy-original"
+            legacy.mkdir()
+            source = legacy / "source"
+            source.write_bytes(b"fixture")
+            with storage.database(state) as connection:
+                case = storage.create_case(connection, "Imported", "Alice", legacy_path=str(legacy))
+                other = storage.create_case(connection, "Other", "Alice")
+            record = storage.register_file(state, case, source, "Alice")
+            copy = storage.evidence_copy_path(state, case, record["id"])
+            local_report = case_report(state, case)
+            other_report = case_report(state, other)
+            exported = export_case(state, case, "Alice", root).path
+
+            self.assertEqual(purge_case(state, case), [])
+            self.assertFalse(copy.exists())
+            self.assertFalse(local_report.exists())
+            self.assertTrue(other_report.is_dir())
+            self.assertTrue(exported.is_dir())
+            self.assertEqual(source.read_bytes(), b"fixture")
+            with storage.database(state) as connection:
+                self.assertEqual(connection.execute("SELECT id FROM cases").fetchone()[0], other)
+                self.assertIsNone(connection.execute(
+                    "SELECT 1 FROM audit WHERE case_id = ?", (case,)).fetchone())

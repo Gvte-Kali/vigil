@@ -145,7 +145,8 @@ PHASE 06 — INVESTIGATION
     L’explorateur conserve l’arborescence et la sélection après ajout.
     Copies privées mode 0400, SHA-256, export complet tar.gz et manifestes.
     La recherche et la gestion des affaires sont dans le sélecteur du titre.
-    Suppression logique de l’affaire, avec confirmation et trace d’audit.
+    Retrait de la liste avec trace d’audit ou suppression intégrale des
+    données locales, avec deux validations dans les deux parcours.
     Export partiel signalé pour les preuves anciennes sans copie locale.
     L’index census reste consultable séparément dans Analyses.
     Suppression ciblée des copies de preuve avec confirmation et audit.

@@ -300,8 +300,10 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
     0400 de son contenu. Débrancher le support et exporter une preuve
     ancienne sans copie. Vérifier l’avertissement et le statut partiel
     du manifeste. Vérifier qu’une copie altérée bloque l’export.
-[ ] Dans Choisir l’affaire, annuler puis confirmer la suppression de l’affaire
-    active. Vérifier son retrait de la liste et la conservation de la custody.
+[ ] Dans Choisir l’affaire, tester les deux modes de suppression et annuler
+    à chacune des deux validations. Vérifier le refus si le nom saisi est
+    incorrect. Comparer le retrait de la liste avec conservation des données
+    et la suppression intégrale des données locales de la seule affaire.
 
 
 [ ] En VM, monter un disque de test à deux partitions et vérifier deux

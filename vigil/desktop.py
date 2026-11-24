@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from . import storage
 from .case_export import export_case
+from .case_removal import purge_case
 from .adapters import CENSUS_LIMIT, analysis_command, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
@@ -761,25 +762,73 @@ class Workspace(QMainWindow):
         operator = self.require_operator()
         if not operator:
             return
-        dialog = QMessageBox(self.case_picker or self)
-        dialog.setWindowTitle("Vigil")
-        dialog.setIcon(QMessageBox.Icon.Warning)
+        parent = self.case_picker or self
+        tr = self.tr_pair
+        name = case.text()
+        case_id = self.active_case_id
+        dialog = QMessageBox(parent)
+        dialog.setWindowTitle(tr("Supprimer l’affaire", "Delete case"))
         dialog.setTextFormat(Qt.TextFormat.PlainText)
-        dialog.setText(self.tr_pair(
-            f"Supprimer l’affaire « {case.text()} » de la liste ? Ses preuves et son journal seront conservés.",
-            f"Remove “{case.text()}” from the case list? Its evidence and audit history will be retained.",
-        ))
-        dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        dialog.setDefaultButton(QMessageBox.StandardButton.No)
-        if dialog.exec() != QMessageBox.StandardButton.Yes:
+        dialog.setText(tr(f"Que supprimer pour « {name} » ?", f"What should be deleted for “{name}”?"))
+        remove = dialog.addButton(tr("Retirer de la liste", "Remove from list"), QMessageBox.ButtonRole.ActionRole)
+        purge = dialog.addButton(tr("Supprimer intégralement", "Delete permanently"), QMessageBox.ButtonRole.DestructiveRole)
+        cancel = dialog.addButton(QMessageBox.StandardButton.Cancel)
+        dialog.setDefaultButton(cancel)
+        dialog.setEscapeButton(cancel)
+        dialog.exec()
+        choice = dialog.clickedButton()
+        if choice not in (remove, purge):
             return
+
+        confirm = QMessageBox(parent)
+        confirm.setWindowTitle(tr("Validation 1 sur 2", "Confirmation 1 of 2"))
+        confirm.setIcon(QMessageBox.Icon.Warning)
+        confirm.setTextFormat(Qt.TextFormat.PlainText)
+        confirm.setText(tr(
+            f"Supprimer les preuves copiées, résultats, rapports locaux et journal de « {name} » ?",
+            f"Delete saved evidence, results, local reports and audit history for “{name}”?",
+        ) if choice == purge else tr(
+            f"Retirer « {name} » de la liste en conservant ses données ?",
+            f"Remove “{name}” from the list and retain its data?",
+        ))
+        confirm.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        confirm.setDefaultButton(QMessageBox.StandardButton.No)
+        if confirm.exec() != QMessageBox.StandardButton.Yes:
+            return
+
+        if choice == purge:
+            typed, accepted = QInputDialog.getText(
+                parent, tr("Validation 2 sur 2", "Confirmation 2 of 2"),
+                tr("Saisissez le nom exact de l’affaire pour confirmer la suppression définitive.",
+                   "Enter the exact case name to confirm permanent deletion."),
+            )
+            if not accepted:
+                return
+            if typed != name:
+                self.notify("Le nom saisi ne correspond pas à l’affaire.", "The name does not match the case.")
+                return
+        elif QMessageBox.question(
+            parent, tr("Validation 2 sur 2", "Confirmation 2 of 2"),
+            tr("Confirmer le retrait de la liste ?", "Confirm removal from the list?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) != QMessageBox.StandardButton.Yes:
+            return
+
         try:
             if read_zones()["/investigation"]:
                 self.notify("Démontez le support d’investigation avant de supprimer l’affaire.",
                             "Unmount the investigation volume before deleting the case.")
                 return
-            with storage.database(self.database_path) as connection:
-                storage.delete_case(connection, self.active_case_id, operator)
+            if choice == purge:
+                leftovers = purge_case(self.database_path, case_id)
+                if leftovers:
+                    self.notify("L’affaire a été retirée. Des fichiers restent à supprimer.",
+                                "The case was removed. Some files still need cleanup.",
+                                "\n".join(str(path) for path in leftovers))
+            else:
+                with storage.database(self.database_path) as connection:
+                    storage.delete_case(connection, case_id, operator)
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
             return

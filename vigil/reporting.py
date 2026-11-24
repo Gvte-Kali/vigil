@@ -48,7 +48,9 @@ def case_report(state, case_id):
             if hashlib.file_digest(stream, "sha256").hexdigest() != digest:
                 raise ValueError("report integrity verification failed")
         destination = root / f"case-{uuid4().hex}"
-        stage.rename(destination)
+        with database(state) as connection:
+            require_active_case(connection, case_id)
+            stage.rename(destination)
         return destination
     finally:
         if stage.exists():
