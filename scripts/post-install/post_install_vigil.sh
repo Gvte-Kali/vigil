@@ -8,12 +8,18 @@ if sudo test -e /etc/sudoers.d/vigil; then
     echo "Voir docs/development/phase-01-transition.md."
     exit 1
 fi
-if findmnt --mountpoint /investigation >/dev/null 2>&1 ||
-   findmnt --mountpoint /stockage >/dev/null 2>&1 ||
-   findmnt -rn -o TARGET | awk '$0 ~ "^/(investigation|stockage)/" { found=1 } END { exit !found }'; then
-    echo "Démontez les supports des zones Vigil avant la maintenance."
-    exit 1
-fi
+check_vigil_zones_unmounted() {
+    local targets
+    if ! targets=$(findmnt -rn -o TARGET); then
+        echo "Impossible de vérifier les montages avant maintenance." >&2
+        return 1
+    fi
+    if awk '$0 ~ "^/(investigation|stockage)(/|$)" { found=1 } END { exit !found }' <<< "$targets"; then
+        echo "Démontez les supports des zones Vigil avant la maintenance." >&2
+        return 1
+    fi
+}
+check_vigil_zones_unmounted
 
 if [ "$EUID" -eq 0 ]; then
     echo "Démarrez le post-install depuis la session de l'opérateur, avec sudo interactif."
@@ -27,7 +33,20 @@ fi
 
 # --- 1. Verifier et creer les repertoires necessaires ---
 echo "Création des répertoires..."
-sudo mkdir -p /investigation /stockage /opt/vigil/{data,scripts,logs,rapports}
+if [ -L /investigation ] || { [ -e /investigation ] && [ ! -d /investigation ]; }; then
+    echo "/investigation doit être un vrai répertoire." >&2
+    exit 1
+fi
+if [ -d /investigation ]; then
+    investigation_entries=$(sudo find /investigation -mindepth 1 -maxdepth 1 -print -quit)
+    if [ -n "$investigation_entries" ]; then
+        echo "/investigation doit être vide avant de corriger ses permissions." >&2
+        exit 1
+    fi
+fi
+check_vigil_zones_unmounted
+sudo install -d -o root -g root -m 0755 /investigation
+sudo mkdir -p /stockage /opt/vigil/{data,scripts,logs,rapports}
 echo "✅ Répertoires de base présents."
 
 # --- 2. Installer les dependances depuis requirements.txt ---

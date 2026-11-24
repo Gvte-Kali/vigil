@@ -2,6 +2,7 @@ import importlib.machinery
 import importlib.util
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -13,6 +14,13 @@ LOADER.exec_module(HELPER)
 
 
 class MountPolicyTest(unittest.TestCase):
+    def test_target_permission_error_identifies_path_and_mode(self):
+        with self.assertRaisesRegex(ValueError, r"/investigation:.*uid=1000, mode=0775"):
+            HELPER.check_root_owned(SimpleNamespace(st_uid=1000, st_mode=0o775),
+                                    Path("/investigation"))
+        HELPER.check_root_owned(SimpleNamespace(st_uid=0, st_mode=0o755),
+                                Path("/investigation"))
+
     def test_selection_requires_explicit_confirmation(self):
         options = [(Path("/dev/disk/by-id/usb-fixture-part1"), "8:1")]
         with patch.object(HELPER, "candidates", return_value=options), \

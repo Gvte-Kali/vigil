@@ -21,6 +21,8 @@ PHASE 01 — SECURITE
     Post-install sans génération NOPASSWD. Transition manuelle administrateur
     documentée. Helper candidat ext4 avec sélection USB et verrouillage RO
     dans le terminal Qt sous sudo interactif. Recette en VM ouverte.
+    Revue des accès dans docs/development/permissions-audit.md.
+    Le post-install prépare /investigation vide et démonté en root:root 0755.
 [x] Remplacer pickle checksafe par du TSV borné (c5dc118 ; fixtures unittest).
 [ ] Protection bloc/montage et MTP distinct.
 [ ] Validation des destinations et identités ; contexte immuable par run.
