@@ -1391,6 +1391,45 @@ class Workspace(QMainWindow):
         if self.settings.status() != QSettings.Status.NoError:
             raise ValueError("could not save workspace preferences")
 
+    def confirm_block_changes(self, changes):
+        tr = self.tr_pair
+
+        def mode(record):
+            if record is None:
+                return tr("absent", "absent")
+            return tr("lecture seule (ro)", "read-only (ro)") if record["mode"] == "ro" else (
+                tr("lecture-écriture (rw)", "read-write (rw)")
+            )
+
+        lines = []
+        for name, before, after in changes:
+            different_device = before is not None and after is not None and any(
+                before[key] != after[key] for key in ("sysfs", "major_minor", "disk_sequence")
+            )
+            suffix = tr(" · identité différente", " · different identity") if different_device else ""
+            lines.append(f"/dev/{name}: {mode(before)} → {mode(after)}{suffix}")
+
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setWindowTitle(tr("État des périphériques modifié", "Device state changed"))
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(tr("/investigation et /stockage sont démontés. "
+                          "L’état des périphériques diffère de celui au démarrage.",
+                          "/investigation and /stockage are unmounted. "
+                          "Device state differs from startup."))
+        dialog.setInformativeText(
+            tr("Au démarrage → maintenant", "At startup → now") + "\n" + "\n".join(lines[:4])
+            + "\n\n" + tr("Fermer avec l’état actuel ?", "Close with the current state?")
+        )
+        if len(lines) > 4:
+            dialog.setDetailedText("\n".join(lines))
+        accept = dialog.addButton(tr("Fermer quand même", "Close anyway"), QMessageBox.ButtonRole.AcceptRole)
+        cancel = dialog.addButton(tr("Rester dans Vigil", "Stay in Vigil"), QMessageBox.ButtonRole.RejectRole)
+        dialog.setDefaultButton(cancel)
+        dialog.setEscapeButton(cancel)
+        dialog.exec()
+        return dialog.clickedButton() == accept
+
     def closeEvent(self, event):
         if self.closing_checks:
             event.ignore()
@@ -1421,11 +1460,21 @@ class Workspace(QMainWindow):
         try:
             if self.startup_state_error is not None:
                 raise self.startup_state_error
-            check_shutdown_state(self.startup_block_modes)
+            changes = check_shutdown_state(self.startup_block_modes)
+            if changes:
+                progress.hide()
+                if not self.confirm_block_changes(changes):
+                    event.ignore()
+                    return
+                progress.show()
             stage = "save"
             self.save_before_close()
             stage = "system"
-            check_shutdown_state(self.startup_block_modes)
+            if check_shutdown_state(self.startup_block_modes) != changes:
+                raise ValueError(self.tr_pair(
+                    "L’état des périphériques a changé pendant la vérification. Réessayez.",
+                    "Device state changed during the check. Try again.",
+                ))
         except (OSError, ValueError, sqlite3.Error) as failure:
             error = failure
         finally:
@@ -1437,8 +1486,8 @@ class Workspace(QMainWindow):
             event.ignore()
             if isinstance(error, ShutdownBlocked):
                 self.notify(
-                    "Fermeture bloquée. Démontez les zones Vigil et vérifiez les écarts d’état.",
-                    "Close blocked. Unmount the Vigil zones and check state differences.", str(error),
+                    "Fermeture bloquée : un montage subsiste dans /investigation ou /stockage. Démontez la source indiquée.",
+                    "Close blocked: a mount remains under /investigation or /stockage. Unmount the listed source.", str(error),
                 )
             elif stage == "save":
                 self.notify("La sauvegarde a échoué. Vigil reste ouvert.",

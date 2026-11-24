@@ -414,6 +414,24 @@ class WorkspaceTest(unittest.TestCase):
                 self.assertIn("Close blocked", notify.call_args.args[1])
             self.close_workspace(window)
 
+    def test_close_with_block_change_requires_explicit_acknowledgment(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            changes = [("sdb1", {"mode": "ro"}, {"mode": "rw"})]
+            with patch.object(window, "confirm_close", return_value=True), \
+                    patch("vigil.desktop.check_shutdown_state", return_value=changes):
+                with patch.object(window, "confirm_block_changes", return_value=False):
+                    self.assertFalse(window.close())
+                with patch.object(window, "confirm_block_changes", return_value=True) as confirm:
+                    self.assertTrue(window.close())
+                    confirm.assert_called_once_with(changes)
+
     def wait_for_task(self, window):
         for _ in range(200):
             self.app.processEvents()

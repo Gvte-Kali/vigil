@@ -222,8 +222,9 @@ D. Registre, CLI et compatibilité
 
 [ ] En VM synthétique, confirmer la fermeture avec un montage direct ou
     imbriqué sous /investigation ou /stockage. Vérifier le blocage et la
-    source indiquée. Après démontage, vérifier que la fermeture reste
-    bloquée si un mode bloc diffère de l’instantané initial.
+    source indiquée. Après démontage, vérifier qu’un écart bloc affiche
+    le périphérique et les modes avant/après. Refuser puis confirmer la
+    fermeture. Aucun changement de mode bloc ne doit être effectué.
 [ ] Vérifier la fenêtre de contrôle à la fermeture, la sauvegarde de
     l’affaire et la présence du JSON system-snapshots créé au lancement.
 

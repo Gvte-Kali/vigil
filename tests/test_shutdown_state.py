@@ -34,7 +34,7 @@ class ShutdownStateTest(unittest.TestCase):
                 baseline, path = capture_startup_state(root / "cases.sqlite")
             self.assertEqual(json.loads(path.read_text())["block_devices"], baseline)
 
-    def test_shutdown_rejects_mounts_and_block_mode_changes(self):
+    def test_shutdown_rejects_mounts_and_reports_block_mode_changes(self):
         before = {"sda1": {"sysfs": "/sys/sda1", "major_minor": "8:1",
                            "disk_sequence": "21", "mode": "rw"}}
         mounted = {**EMPTY_ZONES, "/stockage": [("/stockage/volume", "/dev/sdb1", "ext4", "rw")]}
@@ -44,7 +44,6 @@ class ShutdownStateTest(unittest.TestCase):
         after = {"sda1": {**before["sda1"], "mode": "ro"}}
         with patch("vigil.shutdown_state.read_zones", return_value=EMPTY_ZONES):
             with patch("vigil.shutdown_state.read_block_modes", return_value=after):
-                with self.assertRaisesRegex(ShutdownBlocked, "rw .* → ro"):
-                    check_shutdown_state(before)
+                self.assertEqual(check_shutdown_state(before), [("sda1", before["sda1"], after["sda1"])])
             with patch("vigil.shutdown_state.read_block_modes", return_value=before):
-                check_shutdown_state(before)
+                self.assertEqual(check_shutdown_state(before), [])

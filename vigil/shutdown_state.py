@@ -56,17 +56,8 @@ def check_shutdown_state(baseline):
             for target, source, filesystem, mode in mounted
         ))
     current = read_block_modes()
-    changes = []
-    for name in sorted(baseline.keys() | current.keys()):
-        before, after = baseline.get(name), current.get(name)
-        if before != after:
-            # Show identity as well as mode when the kernel reuses a device name.
-            def describe(record):
-                if record is None:
-                    return "—"
-                sequence = record["disk_sequence"] or "?"
-                return f"{record['mode']} ({record['major_minor']}, seq={sequence})"
-
-            changes.append(f"/dev/{name}: {describe(before)} → {describe(after)}")
-    if changes:
-        raise ShutdownBlocked("\n".join(changes))
+    return [
+        (name, baseline.get(name), current.get(name))
+        for name in sorted(baseline.keys() | current.keys())
+        if baseline.get(name) != current.get(name)
+    ]
