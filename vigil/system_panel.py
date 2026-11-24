@@ -4,9 +4,9 @@ import shutil
 
 from PySide6.QtCore import QProcess, QTimer, Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QLabel, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
-from .system_info import LSBLK_COLUMNS, ZONES, read_zones, system_metrics
+from .system_info import LSBLK_COLUMNS, ZONES, cpu_ticks, read_zones, system_metrics
 
 
 def capacity(value):
@@ -26,6 +26,8 @@ class SystemPanel(QWidget):
         self.devices = None
         self.zones = None
         self.metrics = (None, None, None, None)
+        self.cpu_previous = None
+        self.cpu_percent = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.summary = QLabel()
@@ -36,6 +38,7 @@ class SystemPanel(QWidget):
         cards.setSpacing(8)
         layout.addLayout(cards)
         self.cards = []
+        self.gauges = {}
         for index, accent in enumerate(("#57C7D4", "#BB9AF7", "#80D7A4", "#EBC47A")):
             card = QLabel()
             card.setTextFormat(Qt.TextFormat.PlainText)
@@ -47,7 +50,20 @@ class SystemPanel(QWidget):
                 f"border-left: 4px solid {accent}; border-radius: 6px; padding: 6px; "
                 "font-weight: 600;"
             )
-            cards.addWidget(card, index // 2, index % 2)
+            box = QVBoxLayout()
+            box.setSpacing(3)
+            box.addWidget(card)
+            if index in (0, 2):
+                gauge = QProgressBar()
+                gauge.setTextVisible(False)
+                gauge.setMaximumHeight(5)
+                gauge.setStyleSheet(
+                    "QProgressBar { background: #303B48; border: 0; border-radius: 2px; }"
+                    f"QProgressBar::chunk {{ background: {accent}; border-radius: 2px; }}"
+                )
+                box.addWidget(gauge)
+                self.gauges[index] = gauge
+            cards.addLayout(box, index // 2, index % 2)
             self.cards.append(card)
         self.protection = QLabel()
         self.protection.setWordWrap(True)
@@ -61,14 +77,40 @@ class SystemPanel(QWidget):
         layout.addWidget(self.refresh_button)
         self.process = QProcess(self)
         self.process.finished.connect(self.read_devices)
-        self.process.errorOccurred.connect(self.render)
+        self.process.errorOccurred.connect(self.render_inventory)
         self.timeout = QTimer(self)
         self.timeout.setSingleShot(True)
         self.timeout.timeout.connect(self.process.kill)
+        self.resources_timer = QTimer(self)
+        self.resources_timer.timeout.connect(self.refresh_resources)
+        self.resources_timer.start(5000)
+        self.inventory_timer = QTimer(self)
+        self.inventory_timer.timeout.connect(self.refresh_inventory)
+        self.inventory_timer.start(2000)
+        self.render()
         self.refresh()
 
     def refresh(self):
+        self.refresh_resources()
+        self.refresh_inventory()
+
+    def refresh_resources(self):
         self.metrics = system_metrics()
+        try:
+            current = cpu_ticks()
+        except (OSError, ValueError):
+            current = None
+        self.cpu_percent = None
+        if current is not None and self.cpu_previous is not None:
+            elapsed = current[0] - self.cpu_previous[0]
+            idle = current[1] - self.cpu_previous[1]
+            if elapsed > 0 and 0 <= idle <= elapsed:
+                self.cpu_percent = round(100 * (elapsed - idle) / elapsed)
+        self.cpu_previous = current
+        self.render_resources()
+
+    def refresh_inventory(self):
+        old_zones = self.zones
         try:
             self.zones = read_zones()
         except OSError:
@@ -76,20 +118,24 @@ class SystemPanel(QWidget):
         executable = shutil.which("lsblk")
         if executable and self.process.state() == QProcess.ProcessState.NotRunning:
             self.process.start(executable, ["--json", "--tree", "--bytes", "-o", LSBLK_COLUMNS])
-            self.timeout.start(5000)
-        elif not executable:
+            self.timeout.start(4500)
+        elif not executable and self.devices is not None:
             self.devices = None
-        self.render()
+            self.render_inventory()
+        if old_zones != self.zones:
+            self.render_inventory()
 
     def read_devices(self, code, status):
         self.timeout.stop()
+        previous = self.devices
         self.devices = None
         if code == 0 and status == QProcess.ExitStatus.NormalExit:
             try:
                 self.devices = json.loads(bytes(self.process.readAllStandardOutput()))["blockdevices"]
             except (KeyError, TypeError, ValueError):
                 pass
-        self.render()
+        if previous != self.devices or self.devices is None:
+            self.render_inventory()
 
     def add(self, parent, text, color="#B9CAD9"):
         item = QTreeWidgetItem(parent, [text])
@@ -97,10 +143,14 @@ class SystemPanel(QWidget):
         item.setForeground(0, QColor(color))
         return item
 
-    def render(self, *_):
+    def render(self):
+        self.render_resources()
+        self.render_inventory()
+
+    def render_resources(self):
         tr = self.tr_pair
         self.refresh_button.setText(tr("Actualiser le système", "Refresh system"))
-        self.summary.setText(tr("Tableau de bord", "Dashboard"))
+        self.summary.setText(tr("Ressources et périphériques", "Resources and devices"))
         memory, uptime, load, cpu_count = self.metrics
         unavailable = tr("Indisponible", "Unavailable")
         values = [
@@ -108,14 +158,30 @@ class SystemPanel(QWidget):
              f"{capacity(memory[0])} / {capacity(memory[1])}" if memory else unavailable),
             (tr("Charge système · 1 / 5 / 15 min", "System load · 1 / 5 / 15 min"),
              " / ".join(f"{sample:.2f}" for sample in load) if load else unavailable),
-            (tr("Processeurs logiques", "Logical processors"),
-             str(cpu_count) if cpu_count else unavailable),
+            (tr("Utilisation CPU", "CPU usage"),
+             f"{self.cpu_percent} % · {cpu_count} {tr('cœurs logiques', 'logical cores')}"
+             if self.cpu_percent is not None else
+             (f"{cpu_count} {tr('cœurs logiques', 'logical cores')}" if cpu_count else unavailable)),
             (tr("Temps de fonctionnement", "Uptime"),
              f"{uptime // 86400}d {uptime // 3600 % 24}h {uptime // 60 % 60}m"
              if uptime is not None else unavailable),
         ]
         for card, (title, value) in zip(self.cards, values):
             card.setText(f"{title}\n{value}")
+        self.gauges[0].setValue(round(100 * memory[0] / memory[1]) if memory else 0)
+        self.gauges[2].setValue(self.cpu_percent or 0)
+
+    def tree_items(self):
+        stack = [self.tree.topLevelItem(i) for i in range(self.tree.topLevelItemCount())]
+        while stack:
+            item = stack.pop()
+            yield item
+            stack.extend(item.child(i) for i in range(item.childCount()))
+
+    def render_inventory(self, *_):
+        tr = self.tr_pair
+        expanded = {key: item.isExpanded() for item in self.tree_items()
+                    if (key := item.data(0, Qt.ItemDataRole.UserRole))}
         writable = readonly = unknown = 0
         pending = list(self.devices or ())
         while pending:
@@ -161,7 +227,9 @@ class SystemPanel(QWidget):
             group = self.add(mounts, f"{zone}  ·  {state}", color)
             for target, source, filesystem, mode in entries or ():
                 self.add(group, "  ·  ".join(filter(None, (source, filesystem, mode, target))))
+            group.setData(0, Qt.ItemDataRole.UserRole, zone)
             group.setExpanded(True)
+        mounts.setData(0, Qt.ItemDataRole.UserRole, "zones")
         mounts.setExpanded(True)
         root = self.add(self.tree, tr("Disques et partitions", "Disks and partitions"), "#57C7D4")
         if self.devices is None:
@@ -174,7 +242,12 @@ class SystemPanel(QWidget):
         else:
             for device in self.devices:
                 self.add_device(root, device)
+        root.setData(0, Qt.ItemDataRole.UserRole, "disk-list")
         root.setExpanded(True)
+        for item in self.tree_items():
+            key = item.data(0, Qt.ItemDataRole.UserRole)
+            if key in expanded:
+                item.setExpanded(expanded[key])
 
     def add_device(self, parent, device):
         tr = self.tr_pair
@@ -187,6 +260,8 @@ class SystemPanel(QWidget):
         device_type = device.get("type")
         color = {"disk": "#57C7D4", "part": "#BB9AF7"}.get(device_type, "#DCE3EC")
         item = self.add(parent, title, color)
+        key = device.get("path") or device.get("name")
+        item.setData(0, Qt.ItemDataRole.UserRole, key)
         ro = device.get("ro")
         mode = tr("Lecture seule", "Read-only") if ro in (True, 1, "1") else (
             tr("Écriture autorisée", "Writable") if ro in (False, 0, "0") else None
@@ -194,6 +269,7 @@ class SystemPanel(QWidget):
         fields = (
             (tr("Mode du bloc", "Block mode"), mode),
             (tr("Modèle", "Model"), device.get("model")),
+            (tr("Connexion", "Transport"), device.get("tran")),
             (tr("Table", "Table"), device.get("pttype")),
             (tr("Type de partition", "Partition type"), device.get("parttype")),
             (tr("Système de fichiers", "Filesystem"), device.get("fstype")),
@@ -205,6 +281,8 @@ class SystemPanel(QWidget):
             group = item if device_type == "part" else self.add(
                 item, tr("Détails du périphérique", "Device details")
             )
+            if group is not item and key:
+                group.setData(0, Qt.ItemDataRole.UserRole, f"{key}/details")
             for label, value in details:
                 self.add(group, f"{label}  ·  {value}")
         for child in device.get("children") or ():
@@ -212,6 +290,8 @@ class SystemPanel(QWidget):
         item.setExpanded(device_type == "disk")
 
     def stop(self):
+        self.resources_timer.stop()
+        self.inventory_timer.stop()
         self.timeout.stop()
         if self.process.state() != QProcess.ProcessState.NotRunning:
             self.process.kill()

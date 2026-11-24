@@ -7,6 +7,24 @@ nav_order: 25
 
 # Clonage d’un disque
 
+## Vigil 2.0
+
+Dans **Actions rapides → Acquisition**, choisir **Cloner un disque** ou
+**Créer une image RAW**. Les deux actions ouvrent le terminal par défaut
+et demandent une authentification sudo.
+
+Le clonage sélectionne deux disques démontés, dont une cible USB. La
+confirmation reprend le chemin de la cible. La copie écrase les premiers
+octets de la cible sur la longueur exacte de la source. Le SHA-256 est
+comparé après relecture de cette même plage.
+
+L’image RAW peut être enregistrée dans un dossier local existant ou sur
+une partition USB compatible. Vigil monte temporairement cette partition
+dans un espace de montage privé, relit l’image, écrit le fichier
+`.raw.sha256` et démonte la partition. Les noms existants sont refusés.
+
+## Vigil 1.0
+
 Copier un disque source secteur par secteur vers un disque cible avec
 `scripts/imager/vigil_disk_clone.sh`, depuis **Cloner un disque dur**.
 

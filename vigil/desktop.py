@@ -32,7 +32,7 @@ from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
 from .terminal_panel import TerminalPanel
-from .quick_actions import legacy_mount_command, storage_command, update_command
+from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_command
 from .external_terminal import launch_action, launch_terminal
 
 ANALYSIS_LABELS = {
@@ -250,12 +250,26 @@ class Workspace(QMainWindow):
             )
             metrics.addWidget(card, 1)
             self.dashboard_cards.append(card)
+        dashboard_body = QHBoxLayout()
+        dashboard_body.setSpacing(14)
+        home.addLayout(dashboard_body, 1)
+        self.system_panel = SystemPanel(self.tr_pair)
+        dashboard_body.addWidget(self.system_panel, 3)
+        dashboard_side = QVBoxLayout()
+        dashboard_body.addLayout(dashboard_side, 2)
         recent = QLabel()
         recent.setObjectName("quickActionTitle")
         self.bind(recent.setText, "Activité récente de l’affaire", "Recent case activity")
-        home.addWidget(recent)
+        dashboard_side.addWidget(recent)
         self.dashboard_events = QListWidget()
-        home.addWidget(self.dashboard_events)
+        dashboard_side.addWidget(self.dashboard_events, 1)
+        tooling = QLabel()
+        tooling.setObjectName("quickActionTitle")
+        self.bind(tooling.setText, "Session et outils", "Session and tools")
+        dashboard_side.addWidget(tooling)
+        self.diagnostics = QListWidget()
+        dashboard_side.addWidget(self.diagnostics, 1)
+        self.button(dashboard_side, "Actualiser les outils", "Refresh tools", self.refresh_diagnostics)
 
 
         self.case_controls = QWidget(self)
@@ -395,15 +409,6 @@ class Workspace(QMainWindow):
         self.history_before = None
         self.history_page = history.parentWidget()
         self.navigation_group("SYSTÈME", "SYSTEM")
-        settings_page = self.page("Diagnostic", "Diagnostics")
-        self.system_panel = SystemPanel(self.tr_pair)
-        settings_page.addWidget(self.system_panel, 2)
-        self.diagnostics = QListWidget()
-        settings_page.addWidget(self.diagnostics)
-        diagnostic_actions = QHBoxLayout()
-        settings_page.addLayout(diagnostic_actions)
-        self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
-        diagnostic_actions.addStretch()
         entity_page = self.page("Configuration de l’entité", "Organization settings")
         self.entity_panel = EntityPanel(data_directory(), self.tr_pair)
         entity_page.addWidget(self.entity_panel)
@@ -475,6 +480,20 @@ class Workspace(QMainWindow):
             "hard-drive", lambda: self.quick_storage("unmount"),
         )
         storage_actions.addStretch()
+        acquisition = self.quick_action_section(quick_actions, "Acquisition", "Acquisition")
+        self.quick_action_card(
+            acquisition, "Cloner un disque", "Clone a disk",
+            "Copie bit à bit sur un disque USB cible et vérifie son SHA-256.",
+            "Copy bit for bit to a USB disk and verify its SHA-256.",
+            "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("clone")),
+        )
+        self.quick_action_card(
+            acquisition, "Créer une image RAW", "Create a RAW image",
+            "Enregistre une image vérifiée en local ou sur un stockage USB temporaire.",
+            "Save a verified image locally or on temporarily mounted USB storage.",
+            "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("image")),
+        )
+        acquisition.addStretch()
         quick_actions.addStretch()
 
         self.terminal = TerminalPanel()
@@ -512,7 +531,7 @@ class Workspace(QMainWindow):
         self.case_navigation.setCurrentRow(0)
         self.mount_timer = QTimer(self)
         self.mount_timer.timeout.connect(self.refresh_case_mount)
-        self.mount_timer.start(3000)
+        self.mount_timer.start(2000)
 
     def tr_pair(self, french, english):
         return english if self.language == "en" else french

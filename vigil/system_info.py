@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 ZONES = ("/investigation", "/stockage")
-LSBLK_COLUMNS = "NAME,PATH,TYPE,SIZE,FSTYPE,PARTTYPE,PTTYPE,RO,MODEL,FSAVAIL,FSUSE%"
+LSBLK_COLUMNS = "NAME,PATH,TYPE,SIZE,FSTYPE,PARTTYPE,PTTYPE,RO,MODEL,TRAN,FSAVAIL,FSUSE%"
 ESCAPE = re.compile(r"\\([0-7]{3})")
 
 
@@ -63,3 +63,12 @@ def system_metrics():
     except OSError:
         pass
     return memory, uptime, load, os.cpu_count()
+
+
+def cpu_ticks():
+    with Path("/proc/stat").open(encoding="ascii") as stream:
+        parts = stream.readline().split()
+    if not parts or parts[0] != "cpu" or len(parts) < 6:
+        raise ValueError("invalid aggregate CPU metrics")
+    ticks = [int(value) for value in parts[1:9]]
+    return sum(ticks), ticks[3] + ticks[4]

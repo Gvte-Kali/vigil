@@ -1,0 +1,65 @@
+import hashlib
+import io
+import runpy
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from vigil.quick_actions import acquisition_command
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/imager/vigil_acquire.py"
+acquisition = runpy.run_path(str(SCRIPT))
+
+
+class AcquisitionTest(unittest.TestCase):
+    def test_verified_image_and_no_overwrite(self):
+        data = b"synthetic image data"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_image = acquisition["create_image"]
+            digest = create_image(io.BytesIO(data), len(data), root, "test.raw")
+            self.assertEqual(digest, hashlib.sha256(data).hexdigest())
+            self.assertEqual((root / "test.raw").read_bytes(), data)
+            self.assertEqual((root / "test.raw.sha256").read_text(), f"{digest}  test.raw\n")
+            with self.assertRaises(FileExistsError):
+                create_image(io.BytesIO(b"replacement"), 11, root, "test.raw")
+            self.assertEqual((root / "test.raw").read_bytes(), data)
+
+    def test_short_read_cleans_new_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(OSError, "Lecture incomplète"):
+                acquisition["create_image"](io.BytesIO(b"short"), 20, root, "short.raw")
+            self.assertEqual(list(root.iterdir()), [])
+
+    def test_failed_unmount_never_removes_mountpoint_contents(self):
+        external_directory = acquisition["external_directory"]
+        globals_ = external_directory.__wrapped__.__globals__
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            protected = root / "existing"
+            protected.touch()
+            disk = {"maj:min": "8:0"}
+            partition = {"name": "/dev/test", "fstype": "ext4", "maj:min": "8:1"}
+            with patch.dict(globals_, {
+                "check_disk": lambda *_: None, "validate_fd": lambda *_: None,
+                "block_mode": lambda *_: 0, "disk_sequence": lambda *_: "10",
+            }), patch.object(globals_["os"], "open", return_value=42), \
+                    patch.object(globals_["os"], "close"), \
+                    patch.object(tempfile, "mkdtemp", return_value=tmp), \
+                    patch.dict(globals_, {"command": lambda program, *args:
+                               (_ for _ in ()).throw(OSError("busy"))
+                               if program.endswith("umount") else "/dev/nonexistent"}):
+                with self.assertRaisesRegex(OSError, "busy"):
+                    with external_directory(disk, "10", partition, (1000, 1000)):
+                        self.fail("mount verification must fail for a nonexistent device")
+            self.assertTrue(protected.exists())
+
+    def test_gui_uses_private_mount_namespace(self):
+        for operation in ("clone", "image"):
+            argv = acquisition_command(operation)
+            self.assertEqual(argv[:7], [
+                "/usr/bin/sudo", "--", "/usr/bin/unshare", "--mount", "--propagation", "private", "--",
+            ])
+            self.assertIn(operation, argv)

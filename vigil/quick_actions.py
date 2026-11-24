@@ -151,3 +151,15 @@ def storage_command(operation, state, case_id, name, operator):
         f"VIGIL_LEGACY_CASE_DIR={directory}", "/usr/bin/bash", "-c",
         '/usr/bin/sudo -v && exec /usr/bin/bash "$@"', "vigil", str(script),
     ]
+
+
+def acquisition_command(operation):
+    if operation not in {"clone", "image"}:
+        raise ValueError("unsupported acquisition operation")
+    script = legacy_base() / "scripts" / "imager" / "vigil_acquire.py"
+    if not script.is_file():
+        raise ValueError(f"acquisition script unavailable: {script}")
+    return [
+        "/usr/bin/sudo", "--", "/usr/bin/unshare", "--mount", "--propagation", "private",
+        "--", "/usr/bin/python3", "-I", str(script), operation, "--local-default", str(Path.home()),
+    ]

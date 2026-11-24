@@ -280,6 +280,9 @@ class WorkspaceTest(unittest.TestCase):
         self.assertNotEqual(disk.foreground(0).color(), partition.foreground(0).color())
         partition.setExpanded(True)
         self.assertIn("ext4", partition.child(1).text(0))
+        panel.render_inventory()
+        self.assertTrue(panel.tree.topLevelItem(1).child(0).child(1).isExpanded())
+        panel.stop()
         panel.close()
 
     def close_workspace(self, window):
@@ -317,6 +320,12 @@ class WorkspaceTest(unittest.TestCase):
             )
             self.assertEqual(window.navigation.currentItem().text(), "Accueil")
             self.assertEqual(window.pages.currentIndex(), 0)
+            self.assertTrue(window.pages.currentWidget().isAncestorOf(window.system_panel))
+            self.assertTrue(window.pages.currentWidget().isAncestorOf(window.diagnostics))
+            self.assertNotIn("Diagnostic", [window.navigation.item(i).text()
+                                            for i in range(window.navigation.count())])
+            self.assertEqual(window.system_panel.resources_timer.interval(), 5000)
+            self.assertEqual(window.system_panel.inventory_timer.interval(), 2000)
             window.navigation.setCurrentRow(3)
             self.assertEqual(window.pages.currentIndex(), 1)
             window.language_buttons["en"].click()
@@ -388,10 +397,10 @@ class WorkspaceTest(unittest.TestCase):
             page = window.pages.currentWidget()
             self.assertEqual(
                 [label.text() for label in page.findChildren(QLabel, "quickActionTitle")],
-                ["Antivirus", "Stockage"],
+                ["Antivirus", "Stockage", "Acquisition"],
             )
             action_buttons = page.findChildren(QPushButton)
-            self.assertEqual(len(action_buttons), 5)
+            self.assertEqual(len(action_buttons), 7)
             self.assertTrue(all(not button.icon().isNull() for button in action_buttons))
             window.language_buttons["en"].click()
             self.assertEqual(quick.text(), "Quick actions")
