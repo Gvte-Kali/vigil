@@ -74,8 +74,12 @@ PHASE 04 — WORKSPACE QT ET MODULES
     Terminal PTY Qt pour ClamAV local, FreshClam utilisateur et inventaire
     stockage. Lecture de l’état RO bloc au démarrage. Montage via le broker
     et migration des autres modules interactifs restent ouverts.
+    Accueil centré sur les données réelles de l’affaire, inventaire dans
+    Diagnostic, centre Terminal/Tâches rétractable et page Intégrité.
     Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.
+    Catalogue des modules intégrés avec fiches et création d’un squelette
+    local. Installation, versions et activation restent ouvertes.
 [ ] Catalogue officiel séparé : index, recherche, cache, revue et CI.
 [ ] Téléchargement vérifié, signature, staging, rollback, isolation ;
     aucune exécution communautaire tant que les protections sont absentes.
@@ -83,6 +87,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
 
 PHASE 05 — TACHES
 [ ] File persistante, progression réelle ou indéterminée, logs, annulation.
+    Centre intégré pour les commandes PTY de la session, sortie en direct,
+    codes retour et annulation. File durable et relance restent ouvertes.
 [ ] Historique, reprise/checkpoints ou nouvelle tentative, crash recovery.
     Journal d’audit Qt filtrable et paginé par affaire. Historique complet
     des runs, tentatives et reprise après interruption à réaliser.
@@ -91,6 +97,8 @@ PHASE 05 — TACHES
 
 PHASE 06 — INVESTIGATION
 [ ] Explorer paginé, index census validé, aperçu inerte, export contrôlé.
+    Explorateur Qt des fichiers enregistrés : dossiers, filtre et aperçu
+    borné hexadécimal/ASCII, métadonnées et empreinte enregistrée disponibles.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.
 [ ] Validation humaine.

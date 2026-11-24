@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShort
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QStackedWidget,
+    QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QStackedWidget, QTabWidget,
     QVBoxLayout, QWidget,
 )
 
@@ -17,6 +17,9 @@ from . import storage
 from .adapters import CENSUS_LIMIT, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
+from .inspection import inspect_file
+from .module_scaffold import create_module_draft
+from .evidence_panel import EvidencePanel
 from .history import PAGE_SIZE, case_events
 from .reporting import case_report
 from .system_panel import SystemPanel
@@ -192,9 +195,29 @@ class Workspace(QMainWindow):
         self.setCentralWidget(root)
 
         self.navigation_group("ESPACE DE TRAVAIL", "WORKSPACE")
-        home = self.page("Accueil", "Home", heading=False)
-        self.system_panel = SystemPanel(self.tr_pair)
-        home.addWidget(self.system_panel)
+        home = self.page("Accueil", "Home")
+        self.dashboard_case = QLabel()
+        self.dashboard_case.setTextFormat(Qt.TextFormat.PlainText)
+        home.addWidget(self.dashboard_case)
+        metrics = QHBoxLayout()
+        home.addLayout(metrics)
+        self.dashboard_cards = []
+        for color in ("#57C7D4", "#BB9AF7", "#80D7A4"):
+            card = QLabel()
+            card.setTextFormat(Qt.TextFormat.PlainText)
+            card.setMinimumHeight(67)
+            card.setStyleSheet(
+                f"background: #1A2029; color: {color}; padding: 12px; "
+                "border-radius: 8px; font-size: 15px; font-weight: 600;"
+            )
+            metrics.addWidget(card, 1)
+            self.dashboard_cards.append(card)
+        recent = QLabel()
+        recent.setObjectName("quickActionTitle")
+        self.bind(recent.setText, "Activité récente de l’affaire", "Recent case activity")
+        home.addWidget(recent)
+        self.dashboard_events = QListWidget()
+        home.addWidget(self.dashboard_events)
 
 
         cases = self.page("Affaires", "Cases")
@@ -235,6 +258,10 @@ class Workspace(QMainWindow):
         evidence_actions.addStretch()
 
 
+        explorer = self.page("Explorateur", "Evidence explorer")
+        self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence)
+        explorer.addWidget(self.explorer)
+
         self.navigation_group("INVESTIGATION", "INVESTIGATION")
         modules = self.page("Affaire en cours", "Current case")
         self.module_case = QLabel()
@@ -247,6 +274,17 @@ class Workspace(QMainWindow):
         self.button(module_actions, "Consulter un index de recensement",
                     "Query a census index", self.query_index, primary=True)
         module_actions.addStretch()
+        catalogue = self.page("Catalogue de modules", "Module catalogue")
+        self.catalogue_filter = QLineEdit()
+        self.bind(self.catalogue_filter.setPlaceholderText, "Rechercher dans les modules intégrés",
+                  "Search bundled modules")
+        self.catalogue_filter.textChanged.connect(self.filter_catalogue)
+        catalogue.addWidget(self.catalogue_filter)
+        self.catalogue = QListWidget()
+        self.catalogue.itemActivated.connect(self.show_module_details)
+        catalogue.addWidget(self.catalogue)
+        self.button(catalogue, "Créer un module", "Create a module", self.new_module, primary=True)
+
         history = self.page("Journal d’affaire", "Case history")
         self.history_filter = QLineEdit()
         self.bind(self.history_filter.setPlaceholderText, "Filtrer par action ou opérateur",
@@ -269,12 +307,25 @@ class Workspace(QMainWindow):
         self.history_page = history.parentWidget()
         self.navigation_group("SYSTÈME", "SYSTEM")
         settings_page = self.page("Diagnostic", "Diagnostics")
+        self.system_panel = SystemPanel(self.tr_pair)
+        settings_page.addWidget(self.system_panel, 2)
         self.diagnostics = QListWidget()
         settings_page.addWidget(self.diagnostics)
         diagnostic_actions = QHBoxLayout()
         settings_page.addLayout(diagnostic_actions)
         self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
         diagnostic_actions.addStretch()
+        integrity = self.page("Intégrité", "Integrity")
+        self.integrity_context = QLabel()
+        self.integrity_context.setTextFormat(Qt.TextFormat.PlainText)
+        integrity.addWidget(self.integrity_context)
+        self.integrity_files = QListWidget()
+        integrity.addWidget(self.integrity_files)
+        self.button(integrity, "Comparer avec l’empreinte enregistrée",
+                    "Compare against the recorded hash", self.verify_integrity, primary=True)
+        self.button(integrity, "Exporter l’audit de l’affaire", "Export case audit",
+                    self.export_case_report)
+
         quick_actions = self.page("Actions rapides", "Quick actions", grouped=False)
         antivirus = self.quick_action_section(quick_actions, "Antivirus", "Antivirus")
         self.button(antivirus, "Scan antivirus", "Antivirus scan", self.quick_scan, primary=True)
@@ -288,9 +339,27 @@ class Workspace(QMainWindow):
         self.terminal.completed.connect(self.quick_finished)
         self.terminal_dock = QDockWidget(self)
         self.bind(self.terminal_dock.setWindowTitle, "Terminal", "Terminal")
-        self.terminal_dock.setWidget(self.terminal)
+        self.task_tabs = QTabWidget()
+        tasks_page = QWidget()
+        tasks_layout = QVBoxLayout(tasks_page)
+        self.tasks = QListWidget()
+        tasks_layout.addWidget(self.tasks)
+        self.cancel_task_button = QPushButton()
+        self.bind(self.cancel_task_button.setText, "Annuler la commande active", "Cancel active command")
+        self.cancel_task_button.setEnabled(False)
+        self.cancel_task_button.clicked.connect(self.terminal.interrupt)
+        tasks_layout.addWidget(self.cancel_task_button)
+        self.task_tabs.addTab(self.terminal, "Terminal")
+        self.bind(lambda label: self.task_tabs.setTabText(1, label), "Tâches", "Tasks")
+        self.task_tabs.addTab(tasks_page, "")
+        self.terminal_dock.setWidget(self.task_tabs)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.terminal_dock)
         self.terminal_dock.hide()
+        self.terminal_toggle = QPushButton()
+        self.terminal_toggle.setCheckable(True)
+        self.terminal_toggle.clicked.connect(self.toggle_terminal)
+        self.terminal_dock.visibilityChanged.connect(self.update_terminal_toggle)
+        self.statusBar().addPermanentWidget(self.terminal_toggle)
         self.refresh_operators()
         self.translate()
         self.refresh_cases()
@@ -412,7 +481,10 @@ class Workspace(QMainWindow):
             self.operator.setItemText(0, self.tr_pair("Choisir un opérateur", "Choose an operator"))
         self.refresh_diagnostics()
         self.system_panel.render()
+        self.explorer.retranslate()
+        self.update_terminal_toggle(self.terminal_dock.isVisible())
         self.update_case_label()
+        self.refresh_dashboard()
 
     def notify(self, french, english, details=""):
         message = QMessageBox(self)
@@ -433,9 +505,12 @@ class Workspace(QMainWindow):
         for name, path in result["tools"].items():
             self.diagnostics.addItem(f"{name}  ·  {path or self.tr_pair('Indisponible', 'Unavailable')}")
         self.modules.clear()
+        self.catalogue.clear()
         manifests, errors = discover(BUILTIN_MODULES)
         for module in manifests.values():
             self.modules.addItem(f"{module.id}  ·  {module.version}")
+            self.add_row(self.catalogue, f"{module.id}  ·  {module.version}", module.id)
+        self.filter_catalogue(self.catalogue_filter.text())
         for path in errors:
             self.modules.addItem(self.tr_pair("Manifeste invalide", "Invalid manifest") + f"  ·  {path}")
 
@@ -519,6 +594,7 @@ class Workspace(QMainWindow):
         name = item.text() if item else self.tr_pair("Aucune affaire active", "No active case")
         label = self.tr_pair("Affaire verrouillée", "Locked case") + f"  ·  {name}" if item else name
         self.case_label.setText(label)
+        self.integrity_context.setText(label)
         self.module_case.setText(label)
         self.active_case.setText("·  " + self.active_case.fontMetrics().elidedText(
             name, Qt.TextElideMode.ElideRight, 200
@@ -528,6 +604,9 @@ class Workspace(QMainWindow):
     def refresh_evidence(self, *_):
         self.update_case_label()
         self.evidence.clear()
+        self.integrity_files.clear()
+        self.explorer.set_files([])
+        self.refresh_dashboard()
         case = self.active_case_item()
         if case is None:
             return
@@ -540,8 +619,89 @@ class Workspace(QMainWindow):
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
             return
+        self.explorer.set_files(rows)
         for evidence_id, path, digest in rows:
-            self.add_row(self.evidence, f"{path}  ·  {digest}", evidence_id)
+            label = f"{path}  ·  {digest}"
+            self.add_row(self.evidence, label, evidence_id)
+            self.add_row(self.integrity_files, label, evidence_id)
+
+    def filter_catalogue(self, value):
+        query = value.strip().casefold()
+        for index in range(self.catalogue.count()):
+            item = self.catalogue.item(index)
+            item.setHidden(query not in item.text().casefold())
+
+    def show_module_details(self, item):
+        module_id = item.data(Qt.ItemDataRole.UserRole)
+        manifests, _ = discover(BUILTIN_MODULES)
+        manifest = manifests.get(module_id)
+        if manifest is None:
+            return
+        tr = self.tr_pair
+        details = "\n".join((
+            f"{manifest.id} · {manifest.version}",
+            f"{tr('Auteur individuel', 'Individual author')}: {tr('Non renseigné', 'Unspecified')}",
+            f"{tr('Licence du dépôt', 'Repository license')}: GPL v3",
+            f"{tr('Dépendances', 'Dependencies')}: {', '.join(manifest.dependencies) or '—'}",
+            f"{tr('Permissions déclarées', 'Declared permissions')}: {', '.join(manifest.capabilities) or '—'}",
+            f"{tr('Entrée', 'Entrypoint')}: {manifest.entrypoint}",
+            "https://github.com/Gvte-Kali/vigil",
+        ))
+        self.notify("Module intégré", "Bundled module", details)
+
+    def new_module(self):
+        name, accepted = QInputDialog.getText(
+            self, self.tr_pair("Créer un module", "Create a module"),
+            self.tr_pair("Identifiant local", "Local identifier"),
+        )
+        if not accepted:
+            return
+        try:
+            path = create_module_draft(self.database_path, name.strip())
+        except (OSError, ValueError) as error:
+            self.fail(error)
+            return
+        self.notify("Squelette du module enregistré.", "Module draft created.", str(path))
+
+    def refresh_dashboard(self):
+        self.dashboard_case.setText(self.active_case.toolTip())
+        self.dashboard_events.clear()
+        count = None
+        events = []
+        if self.active_case_id:
+            try:
+                with storage.database(self.database_path) as connection:
+                    count = connection.execute(
+                        "SELECT count(*) FROM evidence WHERE case_id = ?", (self.active_case_id,),
+                    ).fetchone()[0]
+                    events = case_events(connection, self.active_case_id, limit=8)
+            except (OSError, ValueError, sqlite3.Error):
+                pass
+        for card, (label, value) in zip(self.dashboard_cards, (
+            (self.tr_pair("Fichiers enregistrés", "Registered files"), count),
+            (self.tr_pair("Événements récents", "Recent events"), len(events) if count is not None else None),
+            (self.tr_pair("Tâches locales actives", "Active local tasks"),
+             int(self.busy is not None) + int(self.terminal.session is not None)),
+        )):
+            card.setText(f"{label}\n{value if value is not None else '—'}")
+        for event in events:
+            self.dashboard_events.addItem(
+                f"{event['timestamp']}  ·  {event['action']}  ·  {event['operator']}"
+            )
+
+    def preview_evidence(self, name, digest):
+        if self.busy is not None:
+            return
+        case_id = self.active_case_id
+
+        def display(snapshot):
+            if self.active_case_id == case_id:
+                self.explorer.show_preview(name, digest, snapshot)
+
+        self.run_task(lambda: inspect_file(Path(name)), display)
+
+    def verify_integrity(self):
+        self.verify_selected_file(self.integrity_files.currentItem())
 
     def reset_history(self, *_):
         self.history_rows.clear()
@@ -694,7 +854,9 @@ class Workspace(QMainWindow):
         )
 
     def verify_file(self):
-        item = self.evidence.currentItem()
+        self.verify_selected_file(self.evidence.currentItem())
+
+    def verify_selected_file(self, item):
         if item is None:
             self.notify("Sélectionnez un fichier enregistré.", "Select a registered file.")
             return
@@ -767,6 +929,7 @@ class Workspace(QMainWindow):
             button.setEnabled(False)
         self.statusBar().showMessage(self.tr_pair("Calcul en cours…", "Computing…"))
         self.busy.start()
+        self.refresh_dashboard()
 
     @Slot(object, object)
     def store_result(self, result, error):
@@ -780,10 +943,21 @@ class Workspace(QMainWindow):
         for button in self.buttons:
             button.setEnabled(True)
         result, error = self.task_result
+        self.refresh_dashboard()
         if error:
             self.fail(error)
         else:
             self.on_success(result)
+
+    def update_terminal_toggle(self, visible):
+        self.terminal_toggle.setChecked(visible)
+        self.terminal_toggle.setText(self.tr_pair("Masquer le terminal", "Hide terminal") if visible
+                                     else self.tr_pair("Afficher le terminal", "Show terminal"))
+
+    def toggle_terminal(self, visible):
+        self.terminal_dock.setVisible(visible)
+        if visible:
+            self.resizeDocks([self.terminal_dock], [270], Qt.Orientation.Vertical)
 
     def start_quick_action(self, command):
         if self.terminal.session is not None:
@@ -793,7 +967,12 @@ class Workspace(QMainWindow):
         try:
             self.terminal_dock.show()
             self.resizeDocks([self.terminal_dock], [270], Qt.Orientation.Vertical)
-            self.terminal.start(command())
+            arguments = command()
+            self.task_tabs.setCurrentIndex(0)
+            self.terminal.start(arguments)
+            self.cancel_task_button.setEnabled(True)
+            self.tasks.insertItem(0, Path(arguments[0]).name)
+            self.refresh_dashboard()
         except (OSError, ValueError) as error:
             self.fail(error)
 
@@ -824,7 +1003,13 @@ class Workspace(QMainWindow):
         ), 10000)
 
     def quick_finished(self, code):
-        self.terminal.appendPlainText(self.tr_pair(f"Code de sortie : {code}", f"Exit code: {code}"))
+        self.cancel_task_button.setEnabled(False)
+        status = self.tr_pair(f"Code de sortie : {code}", f"Exit code: {code}")
+        self.terminal.appendPlainText(status)
+        if self.tasks.count():
+            task = self.tasks.item(0)
+            task.setText(f"{task.text()} · {status}")
+        self.refresh_dashboard()
         self.system_panel.refresh()
 
     def confirm_close(self):

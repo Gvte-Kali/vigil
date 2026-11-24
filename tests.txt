@@ -50,10 +50,10 @@ B. Langue et navigation Qt
 [ ] Si disponibles, comparer un lancement X11 et un lancement Wayland.
     Indiquer la session utilisée et noter les erreurs de plugin Qt.
 
-[ ] Dans Accueil, vérifier les lignes cyan des disques et les lignes
+[ ] Dans Diagnostic, vérifier les lignes cyan des disques et les lignes
     violettes des partitions. Déplier chaque partition pour afficher ses
     détails. Au lancement, seules les synthèses doivent être visibles.
-[ ] Dans Accueil, comparer disques, tailles, tables, types de partitions
+[ ] Dans Diagnostic, comparer disques, tailles, tables, types de partitions
     et systèmes de fichiers avec lsblk. Vérifier que le bandeau est
     affiché sur toute la largeur et que le bouton Actualiser relit
     les informations. Vérifier les quatre cartes système et les barres
@@ -145,6 +145,24 @@ D. Registre, CLI et compatibilité
 [ ] Exporter le journal et les métadonnées, puis vérifier le dossier indiqué
     par Vigil avec sha256sum -c SHA256SUMS depuis ce dossier. Réexporter
     et vérifier que le premier dossier reste disponible.
+
+[ ] Au démarrage sur un profil neuf, vérifier que l’accueil affiche
+    aucun compteur de preuve inventé. Confirmer une affaire, enregistrer
+    un fichier synthétique et vérifier compteurs et événements. Comparer
+    l’inventaire disque et les zones dans Diagnostic.
+[ ] Depuis plusieurs pages, afficher puis masquer le terminal avec le bouton
+    en bas. Lancer une commande de test, masquer le panneau, naviguer,
+    le rouvrir et contrôler la sortie et les codes dans Tâches.
+[ ] Relancer la mise à jour FreshClam sur Parrot. Vérifier que le fichier
+    généré est vigil-freshclam.conf et que les signatures restent dans le
+    profil utilisateur. Noter le premier message d’erreur si l’action échoue.
+[ ] Dans Explorateur, ouvrir un fichier enregistré et comparer métadonnées,
+    hex et chaînes ASCII. Vérifier la limite 4 Kio et le refus d’un lien.
+[ ] Dans Intégrité, comparer un fichier inchangé puis modifié et exporter
+    l’audit. Vérifier que les empreintes enregistrée et calculée sont visibles.
+[ ] Dans Catalogue de modules, rechercher un module intégré, ouvrir sa fiche
+    et créer un brouillon local. Vérifier les quatre fichiers du squelette
+    et le refus d’un identifiant déjà existant.
 
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,

@@ -255,7 +255,9 @@ class WorkspaceTest(unittest.TestCase):
             sidebar = window.navigation
             quick = sidebar.item(sidebar.count() - 1)
             self.assertEqual(quick.text(), "Actions rapides")
-            sidebar.itemWidget(sidebar.item(sidebar.count() - 3)).click()
+            system = next(sidebar.item(index) for index in range(sidebar.count())
+                          if sidebar.item(index).text() == "SYSTÈME")
+            sidebar.itemWidget(system).click()
             self.assertFalse(quick.isHidden())
             sidebar.setCurrentItem(quick)
             page = window.pages.currentWidget()
@@ -267,6 +269,25 @@ class WorkspaceTest(unittest.TestCase):
             window.language_buttons["en"].click()
             self.assertEqual(quick.text(), "Quick actions")
             self.assertEqual(page.findChildren(QLabel, "quickActionTitle")[1].text(), "Storage")
+            self.close_workspace(window)
+
+    def test_terminal_toggle_is_accessible_across_pages(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            window.show()
+            self.app.processEvents()
+            window.terminal_toggle.click()
+            self.assertTrue(window.terminal_dock.isVisible())
+            window.navigation.setCurrentRow(2)
+            self.assertTrue(window.terminal_dock.isVisible())
+            window.terminal_toggle.click()
+            self.assertFalse(window.terminal_dock.isVisible())
             self.close_workspace(window)
 
     def wait_for_task(self, window):

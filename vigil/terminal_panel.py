@@ -1,5 +1,6 @@
 """Qt terminal bound to one local PTY command at a time."""
 import os
+import signal
 from pathlib import Path
 
 import pyte
@@ -66,6 +67,20 @@ class TerminalPanel(QPlainTextEdit):
         self.session.__exit__()
         self.session = self.notifier = None
         self.completed.emit(code)
+
+    def interrupt(self):
+        session = self.session
+        if session is None:
+            return
+        self._signal(session, signal.SIGTERM)
+        QTimer.singleShot(2000, lambda: self._signal(session, signal.SIGKILL))
+
+    def _signal(self, session, signum):
+        if self.session is session and session.process.poll() is None:
+            try:
+                os.killpg(session.process.pid, signum)
+            except ProcessLookupError:
+                pass
 
     def resize_terminal(self):
         if self.session is None:
