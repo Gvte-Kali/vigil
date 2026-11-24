@@ -1127,6 +1127,15 @@ class Workspace(QMainWindow):
         self.terminal.appendPlainText(status)
         if self.tasks.count():
             task = self.tasks.item(0)
+            if code == 2 and task.text() == "freshclam" and (
+                "Can't open/parse the config file" in self.terminal.toPlainText()
+            ):
+                self.terminal.appendPlainText(self.tr_pair(
+                    "FreshClam refuse le fichier local. Si /etc/clamav/freshclam.conf fonctionne, "
+                    "vérifiez les refus AppArmor. Voir docs/configuration/clamav.md.",
+                    "FreshClam rejected the local file. If /etc/clamav/freshclam.conf works, "
+                    "check AppArmor denials. See docs/configuration/clamav.md.",
+                ))
             task.setText(f"{task.text()} · {status}")
         self.refresh_dashboard()
         self.system_panel.refresh()

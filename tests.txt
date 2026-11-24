@@ -157,7 +157,9 @@ D. Registre, CLI et compatibilité
     le rouvrir et contrôler la sortie et les codes dans Tâches.
 [ ] Relancer la mise à jour FreshClam sur Parrot. Vérifier que le fichier
     généré est vigil-freshclam.conf et que les signatures restent dans le
-    profil utilisateur. Noter le premier message d’erreur si l’action échoue.
+    profil utilisateur. Si la configuration système est lisible et celle de
+    Vigil refusée, vérifier le diagnostic dans le terminal et demander les
+    entrées AppArmor à l’administrateur.
 [ ] Dans Explorateur, ouvrir un fichier enregistré et comparer métadonnées,
     hex et chaînes ASCII. Vérifier la limite 4 Kio et le refus d’un lien.
 [ ] Dans Intégrité, comparer un fichier inchangé puis modifié et exporter

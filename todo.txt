@@ -72,7 +72,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
     Menus dépliants cyan avec hauteur des titres vérifiée en Qt, Affaire en cours et page Actions rapides
     avec sections Antivirus et Stockage accessibles.
     Terminal PTY Qt pour ClamAV local, FreshClam utilisateur et inventaire
-    stockage. Lecture de l’état RO bloc au démarrage. Montage via le broker
+    stockage. Diagnostic AppArmor documenté pour la configuration FreshClam
+    locale sur Parrot. Lecture de l’état RO bloc au démarrage. Montage via le broker
     et migration des autres modules interactifs restent ouverts.
     Accueil centré sur les données réelles de l’affaire, inventaire dans
     Diagnostic et centre des tâches rétractable fixé en bas.
