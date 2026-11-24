@@ -51,7 +51,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(reopened.operator.currentText(), "Alice")
             self.assertTrue(reopened.language_buttons["en"].isChecked())
             reopened.language_buttons["fr"].click()
-            self.assertEqual(reopened.case_navigation.item(1).text(), "Preuves")
+            self.assertEqual(reopened.case_navigation.tabText(1), "Preuves")
             self.close_workspace(reopened)
 
     def test_case_picker_reuses_controls_and_restores_cases_page(self):
@@ -358,24 +358,6 @@ class WorkspaceTest(unittest.TestCase):
             self.assertFalse(window.navigation.item(1).isHidden())
             self.close_workspace(window)
 
-    def test_integrated_pty_drains_output_and_reports_exit(self):
-        import sys
-
-        from vigil.terminal_panel import TerminalPanel
-
-        panel = TerminalPanel()
-        codes = []
-        panel.completed.connect(codes.append)
-        panel.start([sys.executable, "-c", "print('fixture terminal'); raise SystemExit(3)"])
-        for _ in range(250):
-            self.app.processEvents()
-            if codes:
-                break
-            time.sleep(0.01)
-        self.assertEqual(codes, [3])
-        self.assertIn("fixture terminal", panel.toPlainText())
-        panel.close()
-
     def test_quick_actions_are_one_standalone_page(self):
         from PySide6.QtWidgets import QLabel, QPushButton
         from vigil.desktop import Workspace
@@ -391,6 +373,8 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(quick.text(), "Actions rapides")
             system = next(sidebar.item(index) for index in range(sidebar.count())
                           if sidebar.item(index).text() == "SYSTÈME")
+            sidebar.itemWidget(system).click()
+            self.assertTrue(quick.isHidden())
             sidebar.itemWidget(system).click()
             self.assertFalse(quick.isHidden())
             sidebar.setCurrentItem(quick)
@@ -409,7 +393,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(area.sections.direction(), QBoxLayout.Direction.LeftToRight)
             window.resize(940, 740)
             self.app.processEvents()
-            self.assertEqual(area.sections.direction(), QBoxLayout.Direction.TopToBottom)
+            self.assertEqual(area.sections.direction(), QBoxLayout.Direction.LeftToRight)
             action_buttons = page.findChildren(QPushButton)
             self.assertEqual(len(action_buttons), 7)
             self.assertTrue(all(not button.icon().isNull() for button in action_buttons))
@@ -418,29 +402,42 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(page.findChildren(QLabel, "quickCategoryTitle")[1].text(), "Storage")
             self.close_workspace(window)
 
-    def test_terminal_toggle_is_accessible_across_pages(self):
+    def test_external_terminal_preference_is_accessible_without_task_dock(self):
+        from PySide6.QtWidgets import QDockWidget, QInputDialog
         from vigil.desktop import Workspace
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            window = Workspace(
-                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
-                root / "cases.sqlite",
-            )
-            window.show()
-            self.app.processEvents()
-            self.assertFalse(window.terminal_dock.isVisible())
-            window.terminal_toggle.click()
-            self.assertTrue(window.terminal_dock.isVisible())
-            window.navigation.setCurrentRow(2)
-            self.assertTrue(window.terminal_dock.isVisible())
-            window.terminal_toggle.click()
-            self.assertFalse(window.terminal_dock.isVisible())
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            self.assertFalse(window.findChildren(QDockWidget))
+            with patch.object(QInputDialog, "getItem", return_value=("foot", True)):
+                window.button_for_terminal.click()
+            self.assertEqual(window.settings.value("external_terminal"), "foot")
             self.close_workspace(window)
 
-    def test_case_workspace_holds_related_views_and_fixed_task_dock(self):
-        from PySide6.QtCore import Qt
-        from PySide6.QtWidgets import QDockWidget
+    def test_mount_storage_button_sends_mount_without_an_active_case(self):
+        from PySide6.QtWidgets import QMessageBox, QPushButton
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.add_operator("Alice")
+            self.assertEqual(window.active_case_id, "")
+            button = next(b for b in window.findChildren(QPushButton) if b.text() == "Monter un stockage")
+            with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes), \
+                    patch.object(window, "launch_external") as launch:
+                button.click()
+            argv, operation = launch.call_args.args
+            self.assertEqual(operation, "storage-mount")
+            self.assertIn("VIGIL_LEGACY_PROJECT=(no-project)", argv)
+            self.assertIn("VIGIL_ACTIVE_USER=Alice", argv)
+            self.assertTrue(argv[-1].endswith("vigil_stockage_mount.sh"))
+            self.close_workspace(window)
+
+    def test_case_workspace_holds_icon_tabs(self):
         from vigil.desktop import Workspace
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -453,21 +450,20 @@ class WorkspaceTest(unittest.TestCase):
             self.assertNotIn("Preuves", navigation)
             window.navigation.setCurrentRow(navigation.index("Affaire en cours"))
             sections = [
-                window.case_navigation.item(i).text() for i in range(window.case_navigation.count())
+                window.case_navigation.tabText(i) for i in range(window.case_navigation.count())
             ]
             self.assertEqual(sections, [
                 "Explorateur", "Preuves", "Analyses", "Actions et journal", "Rapports PDF", "Exporter l’affaire",
             ])
-            window.case_navigation.setCurrentRow(2)
+            window.case_navigation.setCurrentIndex(2)
             self.assertTrue(window.case_pages.currentWidget().isAncestorOf(window.modules))
             self.assertIn("Recensement de fichiers", [
                 window.modules.item(i).text().split("  ·  ")[0]
                 for i in range(window.modules.count())
             ])
-            self.assertEqual(window.terminal_dock.features(),
-                             QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
-            self.assertEqual(window.terminal_dock.allowedAreas(), Qt.DockWidgetArea.BottomDockWidgetArea)
-            self.assertEqual(window.terminal_toggle.text(), "Afficher le centre des tâches")
+            self.assertTrue(window.case_navigation.usesScrollButtons())
+            self.assertTrue(all(not window.case_navigation.tabIcon(i).isNull()
+                                for i in range(window.case_navigation.count())))
             self.close_workspace(window)
 
     def test_case_header_displays_mounted_source_and_clears_it(self):

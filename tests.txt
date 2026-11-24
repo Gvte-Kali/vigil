@@ -128,7 +128,7 @@ D. Registre, CLI et compatibilité
     la même page, en FR et EN. Replier Système et vérifier que l’entrée
     Actions rapides reste visible.
 [ ] Dans Actions rapides, choisir un fichier synthétique pour ClamAV.
-    Comparer le code de sortie et le résultat dans le terminal intégré.
+    Comparer le code de sortie et le résultat dans le terminal externe.
     Vérifier aussi le traitement de ClamAV absent.
 [ ] Pour FreshClam, annuler la confirmation puis, sur un environnement
     de test connecté, vérifier que les signatures restent dans le profil
@@ -274,7 +274,7 @@ E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,
     entropie, gros fichiers et limites ClamAV.
-[ ] Parité GUI/CLI et panneau PTY : tâche interactive, saisie, annulation,
+[ ] Parité GUI/CLI et terminal externe : tâche interactive, saisie, annulation,
     redimensionnement, navigation et fermeture, états après interruption.
 [ ] En VM dédiée : permissions du broker, identité bloc et montage RO,
     alias/symlinks, refus d’une destination sur la source, et MTP simulé.
@@ -402,3 +402,20 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
     restauration RW, puis le comportement normal au prochain branchement.
     Vérifier qu’un support initialement RO reste RO et qu’une autre session
     Vigil active conserve la protection.
+
+
+Recette interface et terminaux
+[ ] Vérifier FR/EN, navigation latérale repliable, onglets d’affaire
+    horizontaux, défilement et contraste avec une police plus grande.
+[ ] Vérifier les filtres d’outils et de modules, l’inspecteur des modules
+    et la configuration de l’entité avec des données synthétiques.
+[ ] Démarrer un terminal depuis Hyprland/Wayland puis X11. Tester le choix
+    de l’émulateur, les chemins avec espaces, une erreur et Ctrl+C.
+    Confirmer le code de sortie de l’opération et le blocage de fermeture
+    pendant l’exécution. Vérifier que le centre des tâches est absent.
+[ ] Monter puis démonter un stockage de recette sans affaire active.
+    Vérifier les confirmations et que le contexte autonome est journalisé.
+[ ] En TTY, vérifier la barre, le débit et l’ETA lorsque calculables, puis
+    le message de synchronisation et le temps écoulé actualisé sur place.
+    En sortie redirigée, vérifier le texte uni et les lignes espacées.
+    Vérifier que le résumé n’annonce le SHA-256 conforme qu’après comparaison.

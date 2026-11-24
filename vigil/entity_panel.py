@@ -3,7 +3,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QIODevice, Qt
 from PySide6.QtGui import QImageReader, QPixmap
-from PySide6.QtWidgets import QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from .entity import load_entity, save_entity
 
@@ -24,8 +24,25 @@ class EntityPanel(QWidget):
         self.pending_logo = None
         self.changed = False
         layout = QVBoxLayout(self)
-        form = QFormLayout()
-        layout.addLayout(form)
+        self.section_titles = []
+        def section():
+            frame = QFrame()
+            frame.setObjectName("quickActionSection")
+            frame.setMaximumWidth(640)
+            box = QVBoxLayout(frame)
+            box.setContentsMargins(16, 12, 16, 12)
+            title = QLabel()
+            title.setObjectName("quickActionTitle")
+            self.section_titles.append(title)
+            box.addWidget(title)
+            layout.addWidget(frame)
+            return box
+
+        identity = QFormLayout()
+        section().addLayout(identity)
+        contact = QFormLayout()
+        section().addLayout(contact)
+        visual = section()
         self.fields = {}
         self.labels = {}
         for key in LABELS:
@@ -35,13 +52,14 @@ class EntityPanel(QWidget):
             label.setBuddy(field)
             self.fields[key] = field
             self.labels[key] = label
-            form.addRow(label, field)
+            field.setMaximumWidth(440)
+            (identity if key in ("entity_name", "establishment") else contact).addRow(label, field)
         self.preview = QLabel()
         self.preview.setMinimumHeight(80)
         self.preview.setTextFormat(Qt.TextFormat.PlainText)
-        layout.addWidget(self.preview)
+        visual.addWidget(self.preview)
         actions = QHBoxLayout()
-        layout.addLayout(actions)
+        visual.addLayout(actions)
         self.choose = QPushButton()
         self.choose.clicked.connect(self.choose_logo)
         actions.addWidget(self.choose)
@@ -73,6 +91,9 @@ class EntityPanel(QWidget):
 
     def retranslate(self):
         tr = self.tr_pair
+        for label, pair in zip(self.section_titles, (("Identité", "Identity"), ("Coordonnées", "Contact"),
+                                                      ("Identité visuelle", "Visual identity"))):
+            label.setText(tr(*pair))
         for key, pair in LABELS.items():
             self.labels[key].setText(tr(*pair))
         self.choose.setText(tr("Choisir un logo…", "Choose a logo…"))

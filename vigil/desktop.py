@@ -1,8 +1,10 @@
 """Bilingual Qt workspace for the local Vigil core."""
 import os
+import shutil
 import sqlite3
 import sys
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,8 +12,8 @@ from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSe
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QBoxLayout, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QStackedWidget, QTabWidget,
+    QAbstractItemView, QApplication, QBoxLayout, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPlainTextEdit, QSplitter,
+    QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QStackedWidget, QTabBar,
     QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -20,6 +22,7 @@ from .case_export import export_case
 from .case_removal import purge_case
 from .adapters import CENSUS_LIMIT, analysis_command, query_census
 from .core import BUILTIN_MODULES, discover, doctor
+from .desktop_theme import ACCENT, ICONS, SPACE, STYLE, SUCCESS, VIOLET, WARNING
 from .images import inspect_raw
 from .inspection import inspect_file, investigation_mounts
 from .module_scaffold import create_module_draft
@@ -31,9 +34,8 @@ from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
-from .terminal_panel import TerminalPanel
 from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_command
-from .external_terminal import launch_action, launch_terminal
+from .external_terminal import TERMINALS, launch_terminal, launch_tracked
 
 ANALYSIS_LABELS = {
     "archives": ("Archives", "Archives"),
@@ -48,64 +50,6 @@ ANALYSIS_LABELS = {
     "videos": ("Fichiers vidéo", "Video files"),
 }
 
-STYLE = """
-QWidget { background: #101318; color: #DCE3EC; font-size: 13px; }
-QFrame#header { background: #1A2029; border: 1px solid #35404E; border-radius: 10px; }
-QFrame#header QLabel { background: transparent; }
-QLabel#brand { font-size: 21px; font-weight: 700; }
-QTreeWidget { background: #121820; border: 1px solid #3B495B; border-radius: 7px; }
-QLabel#sectionContext { color: #B9CAD9; padding: 3px 0; }
-QLineEdit, QComboBox, QListWidget {
-    background: #121820; border: 1px solid #3B495B; border-radius: 7px;
-    padding: 8px; selection-background-color: #57C7D4; selection-color: #101318;
-}
-QListWidget::item { padding: 8px; border-radius: 4px; }
-QListWidget::item:hover:!selected { background: #263444; }
-QListWidget::item:selected { background: #57C7D4; color: #101318; }
-QListWidget#navigation {
-    background: #101318; border: none; padding: 0 7px 0 0;
-    selection-background-color: #203741; selection-color: #80DEE8;
-}
-QListWidget#navigation::item { min-height: 31px; padding: 4px 11px; border-radius: 6px; }
-QListWidget#navigation::item:hover:!selected { background: #1B2834; }
-QListWidget#navigation::item:selected { background: #203741; color: #80DEE8; }
-QListWidget#caseNavigation { background: #1A2029; }
-QListWidget#caseNavigation::item:selected { background: #203741; color: #80DEE8; }
-QListWidget#navigation::item:disabled { background: transparent; color: #91A1B3; }
-QScrollArea#quickActionArea { background: transparent; border: 0; }
-QFrame#quickActionSection { background: #171E27; border: 1px solid #35404E; border-radius: 12px; }
-QFrame#quickActionCard { background: #202A36; border: 1px solid #354658; border-radius: 8px; }
-QFrame#quickActionCard QLabel { background: transparent; color: #BDCADA; }
-QFrame#quickActionCard QPushButton { text-align: left; padding: 9px 11px; }
-QFrame#quickActionCard QPushButton:focus { border: 1px solid #A5EAF2; }
-QFrame#quickActionCard QPushButton[destructive="true"] { color: #FFE0AA; border-color: #806640; }
-QFrame#quickActionCard QPushButton[destructive="true"]:hover { background: #493A2D; }
-QLabel#quickCategoryTitle { background: transparent; font-size: 17px; font-weight: 700; }
-QLabel#quickActionTitle { color: #57C7D4; background: transparent; font-weight: 700; }
-QLabel#pageTitle { font-size: 20px; font-weight: 700; }
-QWidget[workspacePage="true"] { background: #101318; }
-QPushButton {
-    background: #273447; color: #F1F6FC; border: 1px solid #4B6076;
-    border-radius: 7px; padding: 8px 13px; font-weight: 600;
-}
-QPushButton:hover { background: #35475D; border-color: #7393AE; }
-QPushButton:pressed { background: #1C2939; }
-QPushButton[primary="true"] { background: #57C7D4; color: #101318; border-color: #72DAE5; }
-QPushButton[primary="true"]:hover { background: #80DEE8; }
-QPushButton[primary="true"]:pressed { background: #44AAB8; }
-QPushButton[languageButton="true"] { padding: 6px 9px; }
-QPushButton[languageButton="true"]:checked {
-    background: #284753; border-color: #57C7D4; color: #F0FCFF;
-}
-QPushButton:focus, QLineEdit:focus, QComboBox:focus, QListWidget:focus { border-color: #A3F3FC; }
-QScrollBar:vertical { width: 12px; background: #1A2029; margin: 0; }
-QScrollBar:horizontal { height: 12px; background: #1A2029; margin: 0; }
-QScrollBar::handle { background: #57C7D4; border-radius: 5px; min-width: 28px; min-height: 28px; }
-QScrollBar::handle:hover { background: #80DEE8; }
-QScrollBar::add-line, QScrollBar::sub-line { width: 0; height: 0; }
-QScrollBar::add-page, QScrollBar::sub-page { background: transparent; }
-QPushButton:disabled { background: #202A36; color: #91A1B3; border-color: #35404E; }
-"""
 
 FLAGS = {
     "fr": '<path fill="#002395" d="M0 0h10v20H0z"/><path fill="#fff" d="M10 0h10v20H10z"/>'
@@ -151,22 +95,14 @@ class QuickActionArea(QScrollArea):
         super().__init__()
         self.setObjectName("quickActionArea")
         self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(0, 2, 5, 4)
-        self.sections = QBoxLayout(QBoxLayout.Direction.TopToBottom)
-        self.sections.setSpacing(14)
+        layout.setContentsMargins(0, 0, SPACE, SPACE)
+        self.sections = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self.sections.setSpacing(2 * SPACE)
         layout.addLayout(self.sections)
         layout.addStretch()
         self.setWidget(content)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        direction = (QBoxLayout.Direction.LeftToRight if self.width() >= 1000
-                     else QBoxLayout.Direction.TopToBottom)
-        if self.sections.direction() != direction:
-            self.sections.setDirection(direction)
 
 
 class ReportDateItem(QTableWidgetItem):
@@ -191,6 +127,7 @@ class Workspace(QMainWindow):
         self.translator = QTranslator(self)
         self.localized = []
         self.busy = None
+        self.external_runs = []
         self.worker = None
         self.buttons = []
         screen = self.screen().availableGeometry()
@@ -205,7 +142,7 @@ class Workspace(QMainWindow):
         header_frame = QFrame()
         header_frame.setObjectName("header")
         header = QHBoxLayout(header_frame)
-        header.setContentsMargins(14, 10, 14, 10)
+        header.setContentsMargins(12, 6, 12, 6)
         header.setSpacing(10)
         logo = QLabel()
         logo_path = Path(__file__).resolve().parents[1] / "data/icons/vigil.svg"
@@ -213,7 +150,7 @@ class Workspace(QMainWindow):
             logo_path = Path(sys.prefix) / "share/vigil/vigil.svg"
         icon = QIcon(str(logo_path))
         self.setWindowIcon(icon)
-        logo.setPixmap(icon.pixmap(40, 40))
+        logo.setPixmap(icon.pixmap(32, 32))
         header.addWidget(logo)
         brand = QLabel("Vigil 2.0")
         brand.setObjectName("brand")
@@ -253,7 +190,15 @@ class Workspace(QMainWindow):
         self.group_items = {}
         self.group_open = {}
         self.current_group = None
-        self.navigation.setFixedWidth(224)
+        self.sidebar_compact = False
+        self.navigation.setFixedWidth(208)
+        self.navigation.setIconSize(QSize(18, 18))
+        self.navigation.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        sidebar_button = QPushButton(self.action_icon("list", ACCENT), "")
+        self.bind(sidebar_button.setAccessibleName, "Replier ou déplier la navigation", "Toggle navigation width")
+        self.bind(sidebar_button.setToolTip, "Replier ou déplier la navigation", "Toggle navigation width")
+        sidebar_button.clicked.connect(self.toggle_navigation_width)
+        header.insertWidget(0, sidebar_button)
         self.bind(self.navigation.setAccessibleName, "Navigation", "Navigation")
         self.navigation.currentItemChanged.connect(self.open_page)
         body.addWidget(self.navigation)
@@ -262,23 +207,36 @@ class Workspace(QMainWindow):
         self.setCentralWidget(root)
 
         self.navigation_group("ESPACE DE TRAVAIL", "WORKSPACE")
-        home = self.page("Accueil", "Home")
+        home = self.page("Accueil", "Home", scroll=True)
         self.dashboard_case = QLabel()
         self.dashboard_case.setTextFormat(Qt.TextFormat.PlainText)
         home.addWidget(self.dashboard_case)
         metrics = QHBoxLayout()
         home.addLayout(metrics)
         self.dashboard_cards = []
-        for color in ("#57C7D4", "#BB9AF7", "#80D7A4"):
-            card = QLabel()
-            card.setTextFormat(Qt.TextFormat.PlainText)
-            card.setMinimumHeight(67)
-            card.setStyleSheet(
-                f"background: #1A2029; color: {color}; padding: 12px; "
-                "border-radius: 8px; font-size: 15px; font-weight: 600;"
-            )
+        for icon_name, color in (("list", ACCENT), ("circle-dot", VIOLET), ("shield", SUCCESS)):
+            card = QFrame()
+            card.setObjectName("quickActionSection")
+            card.setMaximumWidth(300)
+            card_layout = QHBoxLayout(card)
+            card_layout.setContentsMargins(12, 9, 12, 9)
+            icon_label = QLabel()
+            icon_label.setPixmap(self.action_icon(icon_name, color).pixmap(18, 18))
+            icon_label.setStyleSheet("background: transparent;")
+            card_layout.addWidget(icon_label)
+            column = QVBoxLayout()
+            column.setSpacing(2)
+            title = QLabel()
+            value = QLabel()
+            for label in (title, value):
+                label.setTextFormat(Qt.TextFormat.PlainText)
+                column.addWidget(label)
+            title.setStyleSheet("background: transparent; color: #BAC9D7;")
+            value.setStyleSheet(f"background: transparent; color: {color}; font-size: 19px; font-weight: 700;")
+            card_layout.addLayout(column, 1)
             metrics.addWidget(card, 1)
-            self.dashboard_cards.append(card)
+            self.dashboard_cards.append((title, value))
+        metrics.addStretch()
         dashboard_body = QHBoxLayout()
         dashboard_body.setSpacing(14)
         home.addLayout(dashboard_body, 1)
@@ -287,7 +245,7 @@ class Workspace(QMainWindow):
         hotplug_column = QVBoxLayout()
         dashboard_body.addLayout(hotplug_column, 3)
         hotplug_column.addWidget(self.hotplug_status)
-        self.system_panel = SystemPanel(self.tr_pair)
+        self.system_panel = SystemPanel(self.tr_pair, self.action_icon)
         hotplug_column.addWidget(self.system_panel, 1)
         dashboard_side = QVBoxLayout()
         dashboard_body.addLayout(dashboard_side, 2)
@@ -301,7 +259,16 @@ class Workspace(QMainWindow):
         tooling.setObjectName("quickActionTitle")
         self.bind(tooling.setText, "Session et outils", "Session and tools")
         dashboard_side.addWidget(tooling)
-        self.diagnostics = QListWidget()
+        self.tools_filter = QComboBox()
+        self.tools_filter.addItems(["", ""])
+        self.bind(lambda label: self.tools_filter.setItemText(0, label), "Tous les outils", "All tools")
+        self.bind(lambda label: self.tools_filter.setItemText(1, label), "Outils manquants", "Missing tools")
+        self.tools_filter.currentIndexChanged.connect(self.filter_tools)
+        dashboard_side.addWidget(self.tools_filter)
+        self.diagnostics = self.data_table(3)
+        self.bind(lambda _: self.diagnostics.setHorizontalHeaderLabels([
+            self.tr_pair("Outil", "Tool"), self.tr_pair("État", "Status"), self.tr_pair("Chemin", "Path")
+        ]), "", "")
         dashboard_side.addWidget(self.diagnostics, 1)
 
 
@@ -334,8 +301,16 @@ class Workspace(QMainWindow):
 
         self.navigation_group("INVESTIGATION", "INVESTIGATION")
         case_workspace = self.page("Affaire en cours", "Current case", heading=False)
-        case_header = QHBoxLayout()
-        case_workspace.addLayout(case_header)
+        case_toolbar = QScrollArea()
+        case_toolbar.setFrameShape(QFrame.Shape.NoFrame)
+        case_toolbar.setWidgetResizable(True)
+        case_toolbar.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        toolbar_content = QWidget()
+        case_header = QHBoxLayout(toolbar_content)
+        case_header.setContentsMargins(0, 0, 0, 0)
+        case_toolbar.setWidget(toolbar_content)
+        case_toolbar.setFixedHeight(60)
+        case_workspace.addWidget(case_toolbar)
         self.case_title = QLabel()
         self.case_title.setObjectName("pageTitle")
         self.case_title.setTextFormat(Qt.TextFormat.PlainText)
@@ -346,6 +321,7 @@ class Workspace(QMainWindow):
                     self.request_mount, primary=True)
         self.button(case_header, "Démonter périphérique/image", "Unmount device/image",
                     self.request_unmount)
+        case_toolbar.setFixedHeight(case_header.sizeHint().height() + 16)
         self.investigation_mount = QLabel()
         self.investigation_mount.setTextFormat(Qt.TextFormat.PlainText)
         self.investigation_mount.setWordWrap(True)
@@ -353,18 +329,20 @@ class Workspace(QMainWindow):
         self.case_workspace_page = case_workspace.parentWidget()
         case_body = QHBoxLayout()
         case_workspace.addLayout(case_body, 1)
+        self.case_navigation = QTabBar()
+        self.case_navigation.setExpanding(False)
+        self.case_navigation.setUsesScrollButtons(True)
+        self.case_navigation.setIconSize(QSize(16, 16))
+        case_workspace.insertWidget(case_workspace.count() - 1, self.case_navigation)
         self.case_pages = QStackedWidget()
         case_body.addWidget(self.case_pages, 1)
-        self.case_navigation = QListWidget()
         self.case_navigation.setObjectName("caseNavigation")
-        self.case_navigation.setFixedWidth(160)
         self.bind(self.case_navigation.setAccessibleName, "Vues de l’affaire", "Case views")
-        case_body.addWidget(self.case_navigation)
-        self.case_navigation.currentRowChanged.connect(self.open_case_view)
 
         explorer = self.case_view("Explorateur", "Evidence explorer")
         self.explorer_case_id = None
-        self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence, self.process_explorer_selection)
+        self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence, self.process_explorer_selection,
+                                      self.action_icon, lambda: bool(self.active_case_id))
         explorer.addWidget(self.explorer)
         self.explorer_page = explorer.parentWidget()
 
@@ -411,15 +389,33 @@ class Workspace(QMainWindow):
                     "Query a census index", self.query_index, primary=True)
         module_actions.addStretch()
         catalogue = self.page("Catalogue de modules", "Module catalogue")
+        catalogue_actions = QHBoxLayout()
+        catalogue.addLayout(catalogue_actions)
         self.catalogue_filter = QLineEdit()
-        self.bind(self.catalogue_filter.setPlaceholderText, "Rechercher dans les modules intégrés",
-                  "Search bundled modules")
+        self.catalogue_filter.addAction(self.action_icon("search", ACCENT), QLineEdit.ActionPosition.LeadingPosition)
+        self.bind(self.catalogue_filter.setPlaceholderText, "Rechercher un module", "Search modules")
+        catalogue_actions.addWidget(self.catalogue_filter, 1)
+        self.catalogue_availability = QComboBox()
+        self.catalogue_availability.addItems(["", ""])
+        self.bind(lambda text: self.catalogue_availability.setItemText(0, text), "Tous", "All")
+        self.bind(lambda text: self.catalogue_availability.setItemText(1, text), "Disponibles", "Available")
+        catalogue_actions.addWidget(self.catalogue_availability)
+        self.button(catalogue_actions, "Créer un module", "Create a module", self.new_module, primary=True)
+        module_split = QSplitter()
+        catalogue.addWidget(module_split, 1)
+        self.catalogue = self.data_table(3)
+        self.bind(lambda _: self.catalogue.setHorizontalHeaderLabels([
+            self.tr_pair("Module", "Module"), "Version", self.tr_pair("État", "Status")
+        ]), "", "")
+        self.catalogue.setColumnWidth(0, 200)
+        self.catalogue.currentCellChanged.connect(self.show_module_details)
         self.catalogue_filter.textChanged.connect(self.filter_catalogue)
-        catalogue.addWidget(self.catalogue_filter)
-        self.catalogue = QListWidget()
-        self.catalogue.itemActivated.connect(self.show_module_details)
-        catalogue.addWidget(self.catalogue)
-        self.button(catalogue, "Créer un module", "Create a module", self.new_module, primary=True)
+        self.catalogue_availability.currentIndexChanged.connect(self.filter_catalogue)
+        module_split.addWidget(self.catalogue)
+        self.module_inspector = QPlainTextEdit()
+        self.module_inspector.setReadOnly(True)
+        module_split.addWidget(self.module_inspector)
+        module_split.setSizes([560, 360])
 
         history = self.case_view("Actions et journal", "Actions and history")
         self.history_filter = QLineEdit()
@@ -442,7 +438,7 @@ class Workspace(QMainWindow):
         self.history_before = None
         self.history_page = history.parentWidget()
         self.navigation_group("SYSTÈME", "SYSTEM")
-        entity_page = self.page("Configuration de l’entité", "Organization settings")
+        entity_page = self.page("Configuration de l’entité", "Organization settings", scroll=True)
         self.entity_panel = EntityPanel(data_directory(), self.tr_pair)
         entity_page.addWidget(self.entity_panel)
         reports = self.case_view("Rapports PDF", "PDF reports")
@@ -478,7 +474,7 @@ class Workspace(QMainWindow):
         self.button(export, "Exporter l’audit de l’affaire", "Export case audit", self.export_case_report)
         export.addStretch()
 
-        quick_actions = self.page("Actions rapides", "Quick actions", grouped=False)
+        quick_actions = self.page("Actions rapides", "Quick actions")
         action_area = QuickActionArea()
         quick_actions.addWidget(action_area, 1)
         sections = action_area.sections
@@ -507,7 +503,7 @@ class Workspace(QMainWindow):
             storage_actions, "Monter un stockage", "Mount storage",
             "Sélectionne un support de travail et le monte en lecture-écriture sous /stockage.",
             "Select a work drive and mount it read-write under /stockage.",
-            "hard-drive", self.quick_storage, primary=True,
+            "hard-drive", lambda: self.quick_storage("mount"), primary=True,
         )
         self.quick_action_card(
             storage_actions, "Démonter le stockage", "Unmount storage",
@@ -521,7 +517,7 @@ class Workspace(QMainWindow):
             acquisition, "Cloner un disque", "Clone a disk",
             "Copie bit à bit sur un disque USB cible et vérifie son SHA-256.",
             "Copy bit for bit to a USB disk and verify its SHA-256.",
-            "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("clone")),
+            "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("clone"), "clone"),
             destructive=True,
         )
         self.quick_action_card(
@@ -531,43 +527,26 @@ class Workspace(QMainWindow):
             "hard-drive", self.quick_raw_image,
         )
         acquisition.addStretch()
+        sections.addStretch()
 
-        self.terminal = TerminalPanel()
-        self.terminal.completed.connect(self.quick_finished)
-        self.terminal_dock = QDockWidget(self)
-        self.terminal_dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
-        self.terminal_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
-        self.terminal_dock.setTitleBarWidget(QWidget())
-        self.bind(self.terminal_dock.setWindowTitle, "Centre des tâches", "Task centre")
-        self.task_tabs = QTabWidget()
-        tasks_page = QWidget()
-        tasks_layout = QVBoxLayout(tasks_page)
-        self.tasks = QListWidget()
-        tasks_layout.addWidget(self.tasks)
-        self.cancel_task_button = QPushButton()
-        self.bind(self.cancel_task_button.setText, "Annuler la commande active", "Cancel active command")
-        self.cancel_task_button.setEnabled(False)
-        self.cancel_task_button.clicked.connect(self.terminal.interrupt)
-        tasks_layout.addWidget(self.cancel_task_button)
-        self.task_tabs.addTab(self.terminal, "Terminal")
-        self.bind(lambda label: self.task_tabs.setTabText(1, label), "Tâches", "Tasks")
-        self.task_tabs.addTab(tasks_page, "")
-        self.terminal_dock.setWidget(self.task_tabs)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.terminal_dock)
-        self.terminal_dock.hide()
-        self.terminal_toggle = QPushButton()
-        self.terminal_toggle.setCheckable(True)
-        self.terminal_toggle.clicked.connect(self.toggle_terminal)
-        self.terminal_dock.visibilityChanged.connect(self.update_terminal_toggle)
-        self.statusBar().addPermanentWidget(self.terminal_toggle)
+        self.footer_protection = QLabel()
+        self.footer_zones = QLabel()
+        self.statusBar().addPermanentWidget(self.footer_protection)
+        self.statusBar().addPermanentWidget(self.footer_zones)
+        self.button_for_terminal = QPushButton()
+        self.bind(self.button_for_terminal.setText, "Terminal…", "Terminal…")
+        self.button_for_terminal.clicked.connect(self.choose_terminal)
+        self.statusBar().addPermanentWidget(self.button_for_terminal)
         self.refresh_operators()
         self.translate()
         self.refresh_cases()
         self.navigation.setCurrentRow(1)
-        self.case_navigation.setCurrentRow(0)
+        self.case_navigation.currentChanged.connect(self.open_case_view)
+        self.case_navigation.setCurrentIndex(0)
         self.mount_timer = QTimer(self)
         self.mount_timer.timeout.connect(self.refresh_case_mount)
         self.mount_timer.timeout.connect(self.refresh_hotplug_status)
+        self.mount_timer.timeout.connect(self.refresh_external_runs)
         self.mount_timer.start(2000)
 
     def tr_pair(self, french, english):
@@ -575,6 +554,18 @@ class Workspace(QMainWindow):
 
     def bind(self, setter, french, english):
         self.localized.append((setter, french, english))
+
+    def toggle_navigation_width(self):
+        self.sidebar_compact = not self.sidebar_compact
+        self.navigation.setFixedWidth(56 if self.sidebar_compact else 208)
+        for row in range(self.navigation.count()):
+            item = self.navigation.item(row)
+            button = self.navigation.itemWidget(item)
+            if button is None:
+                item.setText("" if self.sidebar_compact else item.toolTip())
+            else:
+                arrow = button.text().split(" ", 1)[0]
+                button.setText(arrow if self.sidebar_compact else f"{arrow}  {item.text()}")
 
     def navigation_group(self, french, english):
         item = QListWidgetItem(self.navigation)
@@ -595,7 +586,7 @@ class Workspace(QMainWindow):
         def label(value):
             item.setText(value)
             arrow = "▾" if self.group_open[key] else "▸"
-            button.setText(f"{arrow}  {value}")
+            button.setText(arrow if self.sidebar_compact else f"{arrow}  {value}")
             button.setAccessibleName(value)
             button.ensurePolished()
             height = max(button.sizeHint().height(), button.fontMetrics().height() + 16)
@@ -620,14 +611,20 @@ class Workspace(QMainWindow):
                         and self.case_pages.currentWidget() is self.history_page):
                     self.reset_history()
 
-    def page(self, french, english, *, heading=True, grouped=True):
+    def page(self, french, english, *, heading=True, grouped=True, scroll=False):
         widget = QWidget()
         widget.setProperty("workspacePage", True)
         item = QListWidgetItem(self.navigation)
         item.setData(Qt.ItemDataRole.UserRole, self.pages.addWidget(widget))
         if grouped:
             self.group_items[self.current_group].append(item)
-        self.bind(item.setText, french, english)
+        item.setIcon(self.action_icon(ICONS[english], ACCENT))
+        def page_label(label):
+            item.setText("" if self.sidebar_compact else label)
+            item.setToolTip(label)
+            item.setData(Qt.ItemDataRole.AccessibleTextRole, label)
+
+        self.bind(page_label, french, english)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
@@ -636,13 +633,23 @@ class Workspace(QMainWindow):
             title.setObjectName("pageTitle")
             self.bind(title.setText, french, english)
             layout.addWidget(title)
+        if scroll:
+            area = QScrollArea()
+            area.setFrameShape(QFrame.Shape.NoFrame)
+            area.setWidgetResizable(True)
+            content = QWidget()
+            inner = QVBoxLayout(content)
+            inner.setContentsMargins(0, 0, SPACE, 0)
+            area.setWidget(content)
+            layout.addWidget(area, 1)
+            return inner
         return layout
 
     def case_view(self, french, english):
         widget = QWidget()
         self.case_pages.addWidget(widget)
-        item = QListWidgetItem(self.case_navigation)
-        self.bind(item.setText, french, english)
+        index = self.case_navigation.addTab(self.action_icon(ICONS[english], ACCENT), "")
+        self.bind(lambda label: self.case_navigation.setTabText(index, label), french, english)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         return layout
@@ -676,7 +683,9 @@ class Workspace(QMainWindow):
         actions = QVBoxLayout()
         actions.setSpacing(9)
         layout.addLayout(actions, 1)
-        sections.addWidget(section, 1)
+        section.setMinimumWidth(272)
+        section.setMaximumWidth(420)
+        sections.addWidget(section, 1, Qt.AlignmentFlag.AlignTop)
         return actions
 
     def quick_action_card(self, column, french, english, description_fr, description_en,
@@ -699,6 +708,7 @@ class Workspace(QMainWindow):
         column.addWidget(card)
 
     @staticmethod
+    @lru_cache(maxsize=80)
     def action_icon(name, color):
         source = legacy_base() / "data/icons" / f"{name}.svg"
         if not source.is_file():
@@ -752,7 +762,6 @@ class Workspace(QMainWindow):
         self.refresh_hotplug_status()
         self.explorer.retranslate()
         self.entity_panel.retranslate()
-        self.update_terminal_toggle(not self.terminal_dock.isHidden())
         self.refresh_case_mount()
         self.update_case_label()
         self.refresh_dashboard()
@@ -776,18 +785,28 @@ class Workspace(QMainWindow):
 
     def refresh_diagnostics(self):
         result = doctor()
-        self.diagnostics.clear()
-        self.diagnostics.addItem(self.tr_pair("Session graphique", "Graphical session") + f"  ·  {result['session']}")
+        self.diagnostics.setRowCount(0)
+        self.add_table_row(self.diagnostics, [self.tr_pair("Session graphique", "Graphical session"), result["session"], ""])
         for name, path in result["tools"].items():
-            self.diagnostics.addItem(f"{name}  ·  {path or self.tr_pair('Indisponible', 'Unavailable')}")
+            self.add_table_row(self.diagnostics, [name, self.tr_pair("Disponible", "Available") if path
+                                                  else self.tr_pair("Indisponible", "Unavailable"), path or "—"],
+                               available=bool(path))
+        self.filter_tools()
         self.modules.clear()
-        self.catalogue.clear()
+        self.catalogue.setRowCount(0)
         manifests, errors = discover(BUILTIN_MODULES)
+        self.catalogue_manifests = manifests
         for module in manifests.values():
             names = ANALYSIS_LABELS.get(module.id.removeprefix("vigil."), (module.name, module.name))
             self.add_row(self.modules, f"{self.tr_pair(*names)}  ·  {module.entrypoint.rsplit('/', 1)[-1]}", module.id)
-            self.add_row(self.catalogue, f"{module.id}  ·  {module.version}", module.id)
-        self.filter_catalogue(self.catalogue_filter.text())
+            ready = all(shutil.which(dep) for dep in module.dependencies)
+            item = self.add_table_row(self.catalogue, [self.tr_pair(*names), module.version,
+                                     self.tr_pair("Disponible", "Available") if ready else self.tr_pair("Outils manquants", "Missing tools")],
+                                     available=ready)
+            item.setData(Qt.ItemDataRole.UserRole, module.id)
+            item.setIcon(self.action_icon("flask-conical", VIOLET))
+        self.filter_catalogue()
+        self.show_module_details(self.catalogue.currentRow())
         for path in errors:
             self.modules.addItem(self.tr_pair("Manifeste invalide", "Invalid manifest") + f"  ·  {path}")
 
@@ -1025,29 +1044,58 @@ class Workspace(QMainWindow):
             item.setToolTip(1, digest)
             item.setData(0, Qt.ItemDataRole.UserRole, evidence_id)
 
-    def filter_catalogue(self, value):
-        query = value.strip().casefold()
-        for index in range(self.catalogue.count()):
-            item = self.catalogue.item(index)
-            item.setHidden(query not in item.text().casefold())
+    @staticmethod
+    def data_table(columns):
+        table = QTableWidget(0, columns)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        table.verticalHeader().hide()
+        table.horizontalHeader().setStretchLastSection(True)
+        return table
 
-    def show_module_details(self, item):
-        module_id = item.data(Qt.ItemDataRole.UserRole)
-        manifests, _ = discover(BUILTIN_MODULES)
-        manifest = manifests.get(module_id)
+    @staticmethod
+    def add_table_row(table, values, *, available=True):
+        index = table.rowCount()
+        table.insertRow(index)
+        for column, value in enumerate(values):
+            item = QTableWidgetItem(value)
+            table.setItem(index, column, item)
+        first = table.item(index, 0)
+        first.setData(Qt.ItemDataRole.UserRole + 1, available)
+        return first
+
+    def filter_tools(self, *_):
+        for row in range(self.diagnostics.rowCount()):
+            ready = self.diagnostics.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
+            self.diagnostics.setRowHidden(row, self.tools_filter.currentIndex() == 1 and ready)
+
+    def filter_catalogue(self, *_):
+        query = self.catalogue_filter.text().strip().casefold()
+        for row in range(self.catalogue.rowCount()):
+            item = self.catalogue.item(row, 0)
+            module_id = item.data(Qt.ItemDataRole.UserRole) or ""
+            ready = item.data(Qt.ItemDataRole.UserRole + 1)
+            show = query in f"{item.text()} {module_id}".casefold()
+            self.catalogue.setRowHidden(row, not show or (self.catalogue_availability.currentIndex() == 1 and not ready))
+
+    def show_module_details(self, row, *_):
+        item = self.catalogue.item(row, 0)
+        tr = self.tr_pair
+        if item is None:
+            self.module_inspector.setPlainText(tr("Sélectionnez un module.", "Select a module."))
+            return
+        manifest = self.catalogue_manifests.get(item.data(Qt.ItemDataRole.UserRole))
         if manifest is None:
             return
-        tr = self.tr_pair
-        details = "\n".join((
-            f"{manifest.id} · {manifest.version}",
-            f"{tr('Auteur individuel', 'Individual author')}: {tr('Non renseigné', 'Unspecified')}",
-            f"{tr('Licence du dépôt', 'Repository license')}: GPL v3",
-            f"{tr('Dépendances', 'Dependencies')}: {', '.join(manifest.dependencies) or '—'}",
-            f"{tr('Permissions déclarées', 'Declared permissions')}: {', '.join(manifest.capabilities) or '—'}",
-            f"{tr('Entrée', 'Entrypoint')}: {manifest.entrypoint}",
-            "https://github.com/Gvte-Kali/vigil",
-        ))
-        self.notify("Module intégré", "Bundled module", details)
+        self.module_inspector.setPlainText("\n".join((
+            item.text(), f"{manifest.id} · {manifest.version}", "",
+            f"{tr('Catégorie', 'Category')} · {manifest.category}",
+            f"{tr('Provenance', 'Source')} · Vigil (GPL v3)",
+            f"API / manifeste · {manifest.api_version} / {manifest.schema_version}",
+            f"{tr('Dépendances', 'Dependencies')} · {', '.join(manifest.dependencies) or '—'}",
+            f"{tr('Capacités', 'Capabilities')} · {', '.join(manifest.capabilities) or '—'}",
+            f"{tr('Entrée', 'Entrypoint')} · {manifest.entrypoint}",
+        )))
 
     def new_module(self):
         name, accepted = QInputDialog.getText(
@@ -1066,28 +1114,29 @@ class Workspace(QMainWindow):
     def refresh_dashboard(self):
         self.dashboard_case.setText(self.active_case.toolTip())
         self.dashboard_events.clear()
-        count = None
+        count = paths = None
         events = []
         if self.active_case_id:
             try:
                 with storage.database(self.database_path) as connection:
-                    count = connection.execute(
-                        "SELECT count(*) FROM evidence WHERE case_id = ?", (self.active_case_id,),
-                    ).fetchone()[0]
+                    count, paths = connection.execute(
+                        "SELECT count(*), count(DISTINCT path) FROM evidence WHERE case_id = ?", (self.active_case_id,),
+                    ).fetchone()
                     events = case_events(connection, self.active_case_id, limit=8)
             except (OSError, ValueError, sqlite3.Error):
                 pass
-        for card, (label, value) in zip(self.dashboard_cards, (
-            (self.tr_pair("Fichiers enregistrés", "Registered files"), count),
+        for (title, indicator), (label, value) in zip(self.dashboard_cards, (
+            (self.tr_pair("Fichiers enregistrés", "Registered files"), paths),
             (self.tr_pair("Événements récents", "Recent events"), len(events) if count is not None else None),
-            (self.tr_pair("Tâches locales actives", "Active local tasks"),
-             int(self.busy is not None) + int(self.terminal.session is not None)),
+            (self.tr_pair("Preuves", "Evidence"), count),
         )):
-            card.setText(f"{label}\n{value if value is not None else '—'}")
+            title.setText(label)
+            indicator.setText(str(value) if value is not None else "—")
+        if not events:
+            self.dashboard_events.addItem(self.tr_pair("Aucun événement pour cette affaire.", "No case events."))
         for event in events:
-            self.dashboard_events.addItem(
-                f"{event['timestamp']}  ·  {event['action']}  ·  {event['operator']}"
-            )
+            self.dashboard_events.addItem(QListWidgetItem(self.action_icon("list", ACCENT),
+                f"{event['timestamp']}  ·  {event['action']}  ·  {event['operator']}"))
 
     def preview_evidence(self, name, digest, mount=None):
         if self.busy is not None:
@@ -1393,7 +1442,7 @@ class Workspace(QMainWindow):
         item = self.selected_evidence_item()
         if item is None or self.busy is not None:
             return
-        self.case_navigation.setCurrentRow(self.case_pages.indexOf(self.explorer_page))
+        self.case_navigation.setCurrentIndex(self.case_pages.indexOf(self.explorer_page))
         self.preview_evidence(item.toolTip(0), item.text(1))
 
     def open_evidence_folder(self):
@@ -1507,7 +1556,7 @@ class Workspace(QMainWindow):
         )
 
     def run_selected_analysis(self):
-        if self.busy is not None or self.terminal.session is not None:
+        if self.busy is not None:
             return
         item = self.modules.currentItem()
         if item is None or not (module_id := item.data(Qt.ItemDataRole.UserRole)) or not self.active_case_id:
@@ -1523,7 +1572,8 @@ class Workspace(QMainWindow):
                 self.notify("Montez les supports d’investigation en lecture seule.",
                             "Mount the investigation volumes read-only.")
                 return
-            launch_action(analysis_command(self.database_path, self.active_case_id, operator, module_id))
+            self.launch_external(analysis_command(self.database_path, self.active_case_id, operator, module_id),
+                                 module_id, case_id=self.active_case_id)
         except (OSError, sqlite3.Error, ValueError) as error:
             self.fail(error)
 
@@ -1616,6 +1666,7 @@ class Workspace(QMainWindow):
             text = self.tr_pair("Protection des nouveaux disques non installée",
                                 "New disk protection is not installed")
         self.hotplug_status.setText(text)
+        self.footer_protection.setText(text)
         self.hotplug_status.setStyleSheet(
             f"color: {'#80D7A4' if active else '#EBC47A'}; font-weight: 600;"
         )
@@ -1631,7 +1682,7 @@ class Workspace(QMainWindow):
                 'if /usr/bin/sudo -- "$@"; then exit 0; fi; '
                 'read -r -p "Protection inactive. Entrée / Enter"; exit 1',
                 "vigil", helper, "activate", str(os.getpid()),
-            ])
+            ], self.settings.value("external_terminal", ""))
         except (OSError, ValueError) as error:
             self.statusBar().showMessage(str(error), 10000)
 
@@ -1648,9 +1699,31 @@ class Workspace(QMainWindow):
     def refresh_case_mount(self):
         self.refresh_explorer_mounts()
         try:
-            entries = read_zones()["/investigation"]
+            zones = read_zones()
         except OSError:
-            entries = None
+            zones = None
+        entries = zones.get("/investigation") if zones is not None else None
+        summary = []
+        for zone in ("/investigation", "/stockage"):
+            if zones is None or zone not in zones:
+                state = self.tr_pair("inconnu", "unknown")
+            elif not zones[zone]:
+                state = self.tr_pair("non monté", "not mounted")
+            else:
+                state = "/".join(sorted({mode.upper() or "?" for _, _, _, mode in zones[zone]}))
+                blocks = []
+                for _, source, _, _ in zones[zone]:
+                    try:
+                        device = Path(source).resolve(strict=True)
+                        if not device.is_block_device():
+                            raise OSError("unverified block source")
+                        flag = (Path("/sys/class/block") / device.name / "ro").read_text().strip()
+                        blocks.append({"1": "RO", "0": "RW"}.get(flag, "?"))
+                    except OSError:
+                        blocks.append("?")
+                state += " · " + self.tr_pair("bloc ", "block ") + "/".join(sorted(set(blocks)))
+            summary.append(f"{zone}  {state}")
+        self.footer_zones.setText("  |  ".join(summary))
         if entries is None:
             state = self.tr_pair("État indisponible", "Status unavailable")
         elif not entries:
@@ -1675,7 +1748,7 @@ class Workspace(QMainWindow):
 
     def request_mount_action(self, operation):
         self.refresh_case_mount()
-        if self.terminal.session is not None or self.busy is not None:
+        if self.busy is not None:
             self.notify("Attendez la fin de l’opération en cours.", "Wait for the current operation.")
             return
         case_id = self.active_case_id
@@ -1706,10 +1779,9 @@ class Workspace(QMainWindow):
             return
         try:
             case = self.active_case_item()
-            launcher = launch_action if operation == "mount" else launch_terminal
-            launcher(legacy_mount_command(
+            self.launch_external(legacy_mount_command(
                 operation, self.database_path, case_id, case.text(), operator,
-            ))
+            ), operation, case_id=case_id)
         except (OSError, ValueError) as error:
             self.fail(error)
             return
@@ -1718,20 +1790,41 @@ class Workspace(QMainWindow):
             "Legacy script opened in the terminal.",
         ), 10000)
 
-    def update_terminal_toggle(self, visible):
-        self.terminal_toggle.setChecked(visible)
-        self.terminal_toggle.setText(self.tr_pair("Masquer le centre des tâches", "Hide task centre")
-                                     if visible else
-                                     self.tr_pair("Afficher le centre des tâches", "Show task centre"))
+    def choose_terminal(self):
+        current = self.settings.value("external_terminal", "")
+        choices = ["", *TERMINALS]
+        auto = self.tr_pair("Automatique", "Automatic")
+        labels = [auto, *TERMINALS]
+        name, accepted = QInputDialog.getItem(
+            self, self.tr_pair("Terminal externe", "External terminal"),
+            self.tr_pair("Émulateur de terminal", "Terminal emulator"), labels,
+            choices.index(current) if current in choices else 0, False,
+        )
+        if accepted:
+            self.settings.setValue("external_terminal", choices[labels.index(name)])
+            self.settings.sync()
 
-    def toggle_terminal(self, visible):
-        self.terminal_dock.setVisible(visible)
-        if visible:
-            self.resizeDocks([self.terminal_dock], [270], Qt.Orientation.Vertical)
+    def launch_external(self, arguments, operation, *, case_id=None):
+        context = {"operation": operation, "operator": self.operator.currentText(),
+                   "case_id": case_id}
+        run = launch_tracked(arguments, self.database_path.parent / "terminal-runs", context,
+                             self.settings.value("external_terminal", ""))
+        self.external_runs.append(run)
 
-    def start_quick_action(self, command):
+    def refresh_external_runs(self):
+        for run in tuple(self.external_runs):
+            status = run.status()
+            if status is None:
+                continue
+            self.external_runs.remove(run)
+            text = self.tr_pair(f"Terminal · résultat : {status}", f"Terminal · result: {status}")
+            if status == "unknown":
+                text = self.tr_pair("Terminal · résultat inconnu", "Terminal · result unknown")
+            self.statusBar().showMessage(text, 10000)
+
+    def start_quick_action(self, command, operation="quick-action", *, case_id=None):
         try:
-            launch_action(command())
+            self.launch_external(command(), operation, case_id=case_id)
         except (OSError, ValueError) as error:
             self.fail(error)
 
@@ -1788,9 +1881,9 @@ class Workspace(QMainWindow):
                 case_id = storage.antivirus_case(connection, operator)
                 storage.audit(connection, operator, case_id, "antivirus.request", {"run_id": run_id})
             self.refresh_cases()
-            launch_action(legacy_mount_command(
+            self.launch_external(legacy_mount_command(
                 "scan", self.database_path, case_id, "Scan antivirus", operator, run_id=run_id,
-            ))
+            ), "antivirus", case_id=case_id)
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
 
@@ -1803,7 +1896,7 @@ class Workspace(QMainWindow):
             QMessageBox.StandardButton.No,
         )
         if response == QMessageBox.StandardButton.Yes:
-            self.start_quick_action(lambda: update_command(self.database_path))
+            self.start_quick_action(lambda: update_command(self.database_path), "freshclam")
 
     def quick_raw_image(self):
         tr = self.tr_pair
@@ -1822,11 +1915,11 @@ class Workspace(QMainWindow):
                 self, tr("Choisir le dossier de destination", "Choose the destination folder"), str(Path.home()),
             )
             if directory:
-                self.start_quick_action(lambda: acquisition_command("image", local_directory=Path(directory)))
+                self.start_quick_action(lambda: acquisition_command("image", local_directory=Path(directory)), "image-raw")
         elif choice == external:
-            self.start_quick_action(lambda: acquisition_command("image", external=True))
+            self.start_quick_action(lambda: acquisition_command("image", external=True), "image-raw")
 
-    def quick_storage(self, operation="mount"):
+    def quick_storage(self, operation):
         operator = self.require_operator()
         if not operator:
             return
@@ -1841,28 +1934,15 @@ class Workspace(QMainWindow):
                                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         case = self.active_case_item()
-        self.start_quick_action(lambda: storage_command(
-            operation, self.database_path, self.active_case_id, case.text() if case else "", operator,
-        ))
-
-    def quick_finished(self, code):
-        self.cancel_task_button.setEnabled(False)
-        status = self.tr_pair(f"Code de sortie : {code}", f"Exit code: {code}")
-        self.terminal.appendPlainText(status)
-        if self.tasks.count():
-            task = self.tasks.item(0)
-            if code == 2 and task.text() == "freshclam" and (
-                "Can't open/parse the config file" in self.terminal.toPlainText()
-            ):
-                self.terminal.appendPlainText(self.tr_pair(
-                    "FreshClam refuse le fichier local. Si /etc/clamav/freshclam.conf fonctionne, "
-                    "vérifiez les refus AppArmor. Voir docs/configuration/clamav.md.",
-                    "FreshClam rejected the local file. If /etc/clamav/freshclam.conf works, "
-                    "check AppArmor denials. See docs/configuration/clamav.md.",
-                ))
-            task.setText(f"{task.text()} · {status}")
-        self.refresh_dashboard()
-        self.system_panel.refresh()
+        case_id = self.active_case_id
+        try:
+            arguments = storage_command(operation, self.database_path, case_id, case.text() if case else "", operator)
+            self.launch_external(arguments, f"storage-{operation}", case_id=case_id or None)
+        except (OSError, ValueError) as error:
+            if operation == "mount":
+                self.notify("Impossible d’ouvrir le montage du stockage.", "Could not open storage mounting.", str(error))
+            else:
+                self.notify("Impossible d’ouvrir le démontage du stockage.", "Could not open storage unmounting.", str(error))
 
     def confirm_close(self):
         dialog = QMessageBox(self)
@@ -1906,7 +1986,8 @@ class Workspace(QMainWindow):
         if self.closing_checks:
             event.ignore()
             return
-        if self.busy is not None or self.terminal.session is not None:
+        self.refresh_external_runs()
+        if self.busy is not None or self.external_runs:
             event.ignore()
             self.notify("Attendez la fin de l’opération avant de fermer Vigil.",
                         "Wait for the operation to finish before closing Vigil.")

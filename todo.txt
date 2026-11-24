@@ -9,6 +9,17 @@ GitHub officiel séparé (Gvte-Kali/vigil-modules, nom proposé).
 Les anciennes règles d'intégration GUI statique ci-dessous sont historiques :
 la cible utilise des manifestes et adaptateurs, sans supprimer les acquis.
 
+CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
+[x] Contexte autonome du stockage et sélection explicite de l’opération.
+[x] Présentation commune RAW/clonage et statut de synchronisation en TTY.
+[x] Terminal externe avec préférence et résultat de la commande enregistré.
+[x] Centre des tâches retiré de la GUI. Runner PTY conservé dans le Core.
+[x] Palette partagée, logo intact, onglets horizontaux et zones défilantes.
+[x] Accueil, explorateur, catalogue, entité et actions rapides remaniés.
+[ ] Recette manuelle des terminaux sous Parrot, Hyprland, Wayland et X11.
+[ ] Recette opérateur non destructive des montages et de l’acquisition.
+Voir docs/development/cahier-des-charges-interface.md.
+
 PHASE 00 — AUDIT
 [x] Inventaire scripts, GUI, CLI, dépendances, privilèges, formats, logo/hash.
 [x] Matrice de parité et 27 exigences, risques, architecture, migration.
@@ -116,20 +127,18 @@ PHASE 04 — WORKSPACE QT ET MODULES
     Menus dépliants cyan avec hauteur des titres vérifiée en Qt, Affaire en cours et page Actions rapides
     avec cartes compactes, icônes et descriptions Antivirus et Stockage.
     Le terminal du scan affiche son code de sortie avant fermeture.
-    Terminal PTY Qt pour ClamAV local, FreshClam utilisateur et inventaire
-    stockage. Diagnostic AppArmor documenté pour la configuration FreshClam
+    Terminaux système pour les opérations ClamAV, FreshClam et stockage.
+    Diagnostic AppArmor documenté pour la configuration FreshClam
     locale sur Parrot. Post-install Qt, données de travail et signatures sous
     /opt/vigil, exception AppArmor limitée aux signatures. Le démarrage
     éditable sous /opt et les préférences Qt utilisent aussi data/state.
     Copie des PDF antivirus vers le dossier commun. Recette cible à faire.
     Lecture de l’état RO bloc au démarrage. Montage via le broker
     et migration des autres modules interactifs restent ouverts.
-    Accueil centré sur les données réelles de l’affaire, inventaire dans
-    Diagnostic et centre des tâches rétractable fixé en bas.
-    Affaire en cours regroupe Explorateur, Preuves, Analyses, Actions et
-    journal et Intégrité dans un sélecteur vertical à droite. Fenêtre maximisée,
-    centre des tâches ouvert au démarrage et état de /investigation visible
-    dans l’en-tête. Montage et démontage guidés vers l’administrateur.
+    Accueil centré sur les données réelles de l’affaire avec inventaire.
+    Affaire en cours utilise des onglets horizontaux pour Explorateur,
+    Preuves, Analyses, Journal, Rapports et Export. L’état de /investigation
+    reste visible et les opérations de montage utilisent le terminal externe.
     Configuration d’entité Qt compatible avec system.json et les PDF 1.0.
     Création explicite d’un opérateur depuis la fenêtre de démarrage.
     Checklist de recette à la racine dans tests.txt.

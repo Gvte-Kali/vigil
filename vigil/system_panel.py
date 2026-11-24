@@ -20,9 +20,10 @@ def capacity(value):
 
 
 class SystemPanel(QWidget):
-    def __init__(self, translate):
+    def __init__(self, translate, icon=None):
         super().__init__()
         self.tr_pair = translate
+        self.icon = icon
         self.devices = None
         self.zones = None
         self.metrics = (None, None, None, None)
@@ -221,6 +222,8 @@ class SystemPanel(QWidget):
                 state = tr("Sous-montages", "Submounts")
             color = "#80D7A4" if entries else "#EBC47A"
             group = self.add(mounts, f"{zone}  ·  {state}", color)
+            if self.icon:
+                group.setIcon(0, self.icon("plug", color))
             for target, source, filesystem, mode in entries or ():
                 self.add(group, "  ·  ".join(filter(None, (source, filesystem, mode, target))))
             group.setData(0, Qt.ItemDataRole.UserRole, zone)
@@ -256,6 +259,8 @@ class SystemPanel(QWidget):
         device_type = device.get("type")
         color = {"disk": "#57C7D4", "part": "#BB9AF7"}.get(device_type, "#DCE3EC")
         item = self.add(parent, title, color)
+        if self.icon:
+            item.setIcon(0, self.icon("hard-drive" if device_type == "disk" else "database", color))
         key = device.get("path") or device.get("name")
         item.setData(0, Qt.ItemDataRole.UserRole, key)
         ro = device.get("ro")

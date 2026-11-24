@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .inspection import list_evidence_directory
 
+from PySide6.QtGui import QFontDatabase
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QLabel, QMenu, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
@@ -12,17 +13,20 @@ from PySide6.QtWidgets import (
 
 
 class EvidencePanel(QWidget):
-    def __init__(self, translate, request_preview, selection_action):
+    def __init__(self, translate, request_preview, selection_action, icon, has_case):
         super().__init__()
         self.tr_pair = translate
         self.request_preview = request_preview
         self.selection_action = selection_action
+        self.icon = icon
+        self.has_case = has_case
         self.mounts = {}
         self.registered_files = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.filter = QLineEdit()
         self.filter.setClearButtonEnabled(True)
+        self.filter.addAction(icon("search", "#55C5D2"), QLineEdit.ActionPosition.LeadingPosition)
         self.filter.textChanged.connect(self.apply_filter)
         layout.addWidget(self.filter)
         split = QSplitter()
@@ -46,6 +50,7 @@ class EvidencePanel(QWidget):
         self.views = [QPlainTextEdit() for _ in range(3)]
         for view in self.views:
             view.setReadOnly(True)
+            view.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
             self.tabs.addTab(view, "")
         split.addWidget(details)
         split.setSizes([340, 600])
@@ -54,10 +59,13 @@ class EvidencePanel(QWidget):
     def retranslate(self):
         tr = self.tr_pair
         self.filter.setPlaceholderText(tr("Filtrer les fichiers affichés", "Filter displayed files"))
-        self.hint.setText(tr(
-            "Ouvrez un fichier de l’affaire pour lire ses 4 premiers Kio.",
-            "Open a case file to read its first 4 KiB.",
-        ))
+        if not self.has_case():
+            hint = tr("Choisissez une affaire pour accéder aux preuves.", "Choose a case to see its evidence.")
+        elif not self.mounts and not self.registered_files:
+            hint = tr("Aucun support monté ni preuve enregistrée.", "No mounted devices or registered evidence.")
+        else:
+            hint = tr("Ouvrez un fichier pour afficher ses 4 premiers Kio.", "Open a file to see its first 4 KiB.")
+        self.hint.setText(hint)
         self.update_mount_status()
         self.tabs.setTabText(0, tr("Métadonnées", "Metadata"))
         self.tabs.setTabText(1, tr("Hexadécimal", "Hex"))
@@ -112,8 +120,10 @@ class EvidencePanel(QWidget):
             parent = str(path.parent)
             if parent not in groups:
                 groups[parent] = QTreeWidgetItem(self.tree, [parent])
+                groups[parent].setIcon(0, self.icon("folder", "#55C5D2"))
             item = QTreeWidgetItem(groups[parent], [path.name])
             item.setData(0, Qt.ItemDataRole.UserRole, (name, digest))
+            item.setIcon(0, self.file_icon(path))
             item.setToolTip(0, name)
         for group in groups.values():
             group.setExpanded(self.item_key(group) not in collapsed)
@@ -140,8 +150,13 @@ class EvidencePanel(QWidget):
                 "Read-only system mounts under /investigation. Expand a folder to browse it.",
             ))
 
+    def file_icon(self, path):
+        image = path.suffix.casefold() in {".png", ".jpg", ".jpeg", ".webp", ".tif", ".gif"}
+        return self.icon("image" if image else "list", "#94A3B3")
+
     def add_live_item(self, parent, label, path, mount, directory):
         item = QTreeWidgetItem(parent, [label])
+        item.setIcon(0, self.icon("folder", "#55C5D2") if directory else self.file_icon(path))
         item.setToolTip(0, str(path))
         item.setData(0, Qt.ItemDataRole.UserRole, (str(path), self.registered_files.get(str(path)), mount, directory))
         if directory:

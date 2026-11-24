@@ -128,8 +128,12 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
 
 def storage_command(operation, state, case_id, name, operator):
     scripts = {"mount": "vigil_stockage_mount.sh", "unmount": "vigil_stockage_umount.sh"}
-    if operation not in scripts or (case_id and not re.fullmatch(r"[0-9a-f]{32}", case_id)):
-        raise ValueError("invalid storage context")
+    if operation not in scripts:
+        raise ValueError("Opération de stockage inconnue / Unsupported storage operation")
+    if case_id and (not isinstance(case_id, str) or not re.fullmatch(r"[0-9a-f]{32}", case_id)):
+        raise ValueError("Identifiant d’affaire invalide / Invalid case ID")
+    if not isinstance(operator, str) or not operator.strip():
+        raise ValueError("Opérateur requis pour le stockage / Storage requires an operator")
     base = legacy_base()
     script = base / "scripts" / "stockage" / scripts[operation]
     if not script.is_file():

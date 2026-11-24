@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2,<3", "PyYAML>=6,<7", "typer>=0.12,<1"]
 
 [project.optional-dependencies]
-desktop = ["PySide6-Essentials>=6.7,<7", "pyte>=0.8,<1"]
+desktop = ["PySide6-Essentials>=6.7,<7"]
 
 [project.scripts]
 vigil2 = "vigil.cli:app"
@@ -26,4 +26,9 @@ vigil = ["modules/*.yaml"]
 
 "share/vigil/scripts" = ["scripts/analyse/vigil_census_query.py"]
 
-"share/vigil/icons" = ["data/icons/shield.svg", "data/icons/upload.svg", "data/icons/hard-drive.svg", "data/icons/folder.svg"]
+"share/vigil/icons" = [
+  "data/icons/shield.svg", "data/icons/upload.svg", "data/icons/hard-drive.svg", "data/icons/folder.svg",
+  "data/icons/home.svg", "data/icons/database.svg", "data/icons/settings.svg", "data/icons/play.svg",
+  "data/icons/folder-tree.svg", "data/icons/flask-conical.svg", "data/icons/list.svg", "data/icons/search.svg",
+  "data/icons/image.svg", "data/icons/plug.svg", "data/icons/circle-dot.svg",
+]
