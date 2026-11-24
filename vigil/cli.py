@@ -81,33 +81,13 @@ def import_case(path: Path, operator: str = typer.Option(...), db: DatabaseOptio
 def add(case_id: str, path: Path, operator: str = typer.Option(...),
         db: DatabaseOption = None):
     with command():
-        path = path.absolute()
-        state = db or storage.default_database()
-        if state.exists() and state.samefile(path):
-            raise ValueError("database and evidence must be separate files")
-        size, digest = storage.fingerprint(path)
-        with storage.database(state) as connection:
-            evidence_id = storage.add_evidence(connection, case_id, path, size, digest, operator)
-        emit({"id": evidence_id, "size": size, "sha256": digest})
+        emit(storage.register_file(db or storage.default_database(), case_id, path, operator))
 
 
 @evidence.command("verify")
 def verify(evidence_id: str, operator: str = typer.Option(...), db: DatabaseOption = None):
-    path = db or storage.default_database()
     with command():
-        with storage.database(path) as connection:
-            record = connection.execute(
-                "SELECT * FROM evidence WHERE id = ?", (evidence_id,)
-            ).fetchone()
-        if record is None:
-            raise ValueError("unknown evidence ID")
-        size, digest = storage.fingerprint(Path(record["path"]))
-        result = {
-            "id": evidence_id, "expected_sha256": record["sha256"], "sha256": digest,
-            "matches": size == record["size"] and digest == record["sha256"],
-        }
-        with storage.database(path) as connection:
-            storage.audit(connection, operator, record["case_id"], "evidence.verify", result)
+        result = storage.verify_file(db or storage.default_database(), evidence_id, operator)
         emit(result)
         if not result["matches"]:
             raise typer.Exit(2)

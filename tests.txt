@@ -1,0 +1,98 @@
+VIGIL 2.0 — RECETTE SUR PARROT OS
+================================
+
+Noter pour chaque essai le commit, la version de Parrot, X11 ou Wayland,
+et le résultat avec le message d’erreur s’il y en a un. [ ] = à tester.
+Utiliser uniquement un dossier de test, des projets copiés et des fichiers
+synthétiques. La procédure ci-dessous n’exige ni sudo, ni montage réel.
+
+A. Installation et mises à jour
+[ ] cd /opt/vigil
+    git status --short --branch
+    git pull --ff-only
+    git rev-parse --short HEAD
+    Vérifier que la branche active est vigil-2.0.
+[ ] Installer une fois les dépendances Qt dans un environnement utilisateur.
+    python3 -m venv "$HOME/.venvs/vigil2"
+    "$HOME/.venvs/vigil2/bin/python" -m pip install -e '.[desktop]'
+[ ] Lancer la suite depuis /opt/vigil.
+    QT_QPA_PLATFORM=offscreen "$HOME/.venvs/vigil2/bin/python" -m unittest discover -s tests -v
+    Vérifier qu’aucun test Qt n’est marqué skipped.
+[ ] Préparer une session isolée depuis le même terminal.
+    recette=$(mktemp -d)
+    export XDG_STATE_HOME="$recette/state"
+    export XDG_CONFIG_HOME="$recette/config"
+    printf 'Session de recette : %s\n' "$recette"
+    Fermer puis relancer depuis ce terminal pour tester la persistance.
+[ ] Lancer "$HOME/.venvs/vigil2/bin/vigil2-gui" dans la session graphique.
+    Vérifier le logo, l’affichage du thème et les onglets.
+[ ] Après un nouveau pull, relancer la même commande. Réinstaller avec pip
+    si les dépendances ou le point d’entrée changent.
+
+B. Langue et navigation Qt
+[ ] Vérifier le français sur un profil de recette neuf.
+[ ] Cliquer sur FR / EN. Les onglets, boutons, champs, messages et dialogues
+    s’affichent en anglais. Vérifier au clavier avec Tab puis Espace.
+[ ] Fermer puis rouvrir. Vérifier que l’anglais reste actif. Revenir au
+    français et vérifier sa persistance après un second redémarrage.
+[ ] Changer de langue sur chaque onglet avec une affaire sélectionnée.
+    Les noms d’affaires, chemins et empreintes restent identiques.
+[ ] Tester petite fenêtre, agrandissement, navigation clavier et écrans HiDPI.
+[ ] Si disponibles, comparer un lancement X11 et un lancement Wayland.
+    Indiquer la session utilisée et noter les erreurs de plugin Qt.
+
+C. Affaires et fichiers de preuve
+[ ] Créer une affaire avec opérateur et nom contenant des accents.
+    Tester séparément les champs vides et la traduction de l’erreur.
+[ ] Importer deux fois un projet synthétique contenant un info.json valide.
+    Vérifier que la liste n’affiche qu’une affaire et que le projet source
+    est intact. Tester aussi un dossier sans info.json et un JSON invalide.
+[ ] Dans Preuves, sélectionner une affaire et ajouter un fichier synthétique.
+    Vérifier que le SHA-256 affiché correspond à sha256sum.
+[ ] Ajouter un fichier à une seconde affaire et vérifier la séparation.
+[ ] Vérifier l’empreinte, modifier uniquement le fichier synthétique, puis
+    relancer la vérification. Vérifier que l’écart est signalé en FR et EN.
+[ ] Tester un fichier disparu, un lien symbolique et une boîte de dialogue
+    annulée. Vérifier que la GUI récupère et que la liste reste cohérente.
+[ ] Pendant le calcul d’un fichier synthétique volumineux, changer d’onglet
+    et de langue. Vérifier que le calcul aboutit et que fermer affiche
+    l’état en cours. Vérifier la réactivation des boutons ensuite.
+[ ] Inspecter une image RAW MBR synthétique. Comparer taille, décalage et
+    SHA-256. Vérifier le refus d’une partition hors limites et d’un GPT.
+    Le test automatisé tests/test_raw_image.py fabrique ces fixtures.
+
+D. Registre, CLI et compatibilité
+[ ] Dans Modules, vérifier les neuf analyses du registre. Dans Diagnostic,
+    vérifier la session et les outils détectés ou signalés indisponibles.
+[ ] Lancer "$HOME/.venvs/vigil2/bin/vigil2" doctor et
+    "$HOME/.venvs/vigil2/bin/vigil2" modules list. Comparer avec Qt.
+[ ] Lancer "$HOME/.venvs/vigil2/bin/vigil2" cases list depuis la même
+    session de recette. Vérifier que les affaires créées dans Qt y figurent.
+[ ] Vérifier la lecture d’un index census synthétique, le rejet des bases
+    checksafe mal formées et la saisie PTY avec la suite automatisée.
+[ ] Lancer l’ancien point d’entrée /usr/bin/python3
+    /opt/vigil/gui/vigil_main_gui.py pour contrôler la coexistence Tk.
+    Utiliser VIGIL_DATA_DIR vers une copie de données de recette si tu
+    comptes créer des projets ou modifier des réglages historiques.
+[ ] Comparer filtres et presets historiques, sans lancer de scan réel.
+    Les libellés Tk et les messages bruts des scripts suivent leur
+    localisation historique. Le bouton FR/EN agit dans Qt.
+
+E. Recette à reprendre quand les parcours correspondants seront livrés
+[ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
+    doublons, médias, Office, archives, formats inconnus, chiffrement,
+    entropie, gros fichiers et limites ClamAV.
+[ ] Parité GUI/CLI et panneau PTY : tâche interactive, saisie, annulation,
+    redimensionnement, navigation et fermeture, états après interruption.
+[ ] En VM dédiée : permissions du broker, identité bloc et montage RO,
+    alias/symlinks, refus d’une destination sur la source, et MTP simulé.
+[ ] En VM dédiée : partitions GPT, RAW/E01/AFF, SHA-256 et nettoyage.
+[ ] Sur projets synthétiques : conservation de la custody, historique,
+    export atomique, validation du manifeste et résultats partiels.
+[ ] Gestionnaire de modules : version, rollback, cache hors ligne,
+    signatures invalides, archives rejetées et isolation.
+[ ] Avant livraison : installation fraîche et mise à niveau sur les
+    distributions cibles. Tester les exigences F01–F27 de la matrice.
+
+Les cases de ce fichier sont la recette opérateur. Voir todo.txt pour
+l’état d’avancement et todo_tests.txt pour les scénarios historiques.

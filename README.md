@@ -10,6 +10,16 @@ Pensée pour un poste dédié sous ParrotOS / Debian, avec une interface Python 
 
 La [CLI en développement](docs/development/linux-portability.md) s'installe
 dans un environnement Python utilisateur et fonctionne sans session graphique.
+Pour lancer l'espace de travail Qt sur un clone de la branche `vigil-2.0` :
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[desktop]'
+.venv/bin/vigil2-gui
+```
+
+La [recette Parrot](tests.txt) couvre le sélecteur FR/EN, les affaires,
+les preuves et les parcours historiques encore disponibles dans Tkinter.
 
 ## Installer la version historique
 

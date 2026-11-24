@@ -51,7 +51,12 @@ PHASE 03 — AFFAIRES ET PREUVES
 
 PHASE 04 — WORKSPACE QT ET MODULES
 [ ] QMainWindow, navigation, logo original, FR/EN, Graphite/Cyan, densité.
+    Workspace PySide6, logo original, Graphite/Cyan et bascule FR/EN persistante
+    testés hors écran. Densité et recette graphique sur Parrot ouvertes.
 [ ] Dashboard, Cases, Evidence, Modules, Settings ; migration progressive.
+    Affaires, preuves de type fichier, diagnostic et registre en lecture seule
+    accessibles en Qt. Parité historique et panneau terminal ouverts.
+    Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.
 [ ] Catalogue officiel séparé : index, recherche, cache, revue et CI.
 [ ] Téléchargement vérifié, signature, staging, rollback, isolation ;

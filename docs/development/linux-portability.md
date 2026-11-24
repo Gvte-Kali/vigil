@@ -23,9 +23,11 @@ sont des capacités à vérifier individuellement.
 La GUI Tk choisit `xdg-terminal-exec` s'il est installé, puis recherche
 Konsole, GNOME Terminal, XFCE Terminal, kitty ou xterm. Installer Tk et un
 terminal utilisable dans la session. Tk repose sur X11, donc XWayland est
-nécessaire dans une session Wayland. Le futur workspace Qt utilisera les
-plugins de plateforme Qt pour X11 ou Wayland selon la session. Il n'aura
-pas de dépendance à un gestionnaire de fenêtres. Le transport PTY possède un terminal de contrôle, reçoit les frappes et
+nécessaire dans une session Wayland. Le workspace Qt utilise les plugins de plateforme Qt pour X11 ou Wayland
+selon la session et ne dépend pas d'un gestionnaire de fenêtres précis.
+Installer l'extra `desktop` et lancer `vigil2-gui` depuis le venv.
+La [recette Parrot](../../tests.txt) détaille la bascule FR/EN persistante,
+les parcours Qt disponibles et la coexistence avec Tk. Le transport PTY possède un terminal de contrôle, reçoit les frappes et
 le redimensionnement. Son raccordement aux adaptateurs et au futur
 émulateur du panneau Qt reste à réaliser.
 

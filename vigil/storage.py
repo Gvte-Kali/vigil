@@ -140,3 +140,30 @@ def add_evidence(connection, case_id, path, size, digest, operator):
     audit(connection, operator, case_id, "evidence.add",
           {"evidence_id": evidence_id, "sha256": digest})
     return evidence_id
+
+
+def register_file(state, case_id, path, operator):
+    path = path.absolute()
+    if state.exists() and state.samefile(path):
+        raise ValueError("database and evidence must be separate files")
+    size, digest = fingerprint(path)
+    with database(state) as connection:
+        evidence_id = add_evidence(connection, case_id, path, size, digest, operator)
+    return {"id": evidence_id, "size": size, "sha256": digest}
+
+
+def verify_file(state, evidence_id, operator):
+    with database(state) as connection:
+        record = connection.execute(
+            "SELECT * FROM evidence WHERE id = ?", (evidence_id,)
+        ).fetchone()
+    if record is None:
+        raise ValueError("unknown evidence ID")
+    size, digest = fingerprint(Path(record["path"]))
+    result = {
+        "id": evidence_id, "expected_sha256": record["sha256"], "sha256": digest,
+        "matches": size == record["size"] and digest == record["sha256"],
+    }
+    with database(state) as connection:
+        audit(connection, operator, record["case_id"], "evidence.verify", result)
+    return result
