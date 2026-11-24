@@ -63,3 +63,12 @@ class AcquisitionTest(unittest.TestCase):
                 "/usr/bin/sudo", "--", "/usr/bin/unshare", "--mount", "--propagation", "private", "--",
             ])
             self.assertIn(operation, argv)
+
+
+    def test_native_picker_path_is_passed_as_one_argument(self):
+        directory = Path("/tmp/vigil image output")
+        argv = acquisition_command("image", local_directory=directory)
+        self.assertEqual(argv[-2:], ["--local-directory", str(directory)])
+        self.assertEqual(acquisition_command("image", external=True)[-1], "--external")
+        with self.assertRaises(ValueError):
+            acquisition_command("image", local_directory=directory, external=True)

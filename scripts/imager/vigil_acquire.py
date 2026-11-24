@@ -222,7 +222,7 @@ def create_image(source, size, directory, filename, owner=None):
         os.close(folder)
 
 
-def run(operation, local_default):
+def run(operation, local_default, *, local_directory=None, external=False):
     disks = [row for row in devices() if row["type"] == "disk" and row["size"] > 0 and idle(row)]
     source = choose(disks, "Disque source entier, démonté")
     sequence = disk_sequence(source)
@@ -241,12 +241,18 @@ def run(operation, local_default):
         print(f"Clone vérifié · SHA-256 : {digest}")
         return
 
-    mode = input("Destination : [1] locale, [2] partition USB externe, [q] annuler : ").strip()
+    if local_directory is not None:
+        mode = "1"
+    elif external:
+        mode = "2"
+    else:
+        mode = input("Destination : [1] locale, [2] partition USB externe, [q] annuler : ").strip()
     if mode not in {"1", "2"}:
         raise InterruptedError("Imagerie annulée.")
     owner = int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
     if mode == "1":
-        local = Path(input(f"Dossier local existant [{local_default}] : ").strip() or local_default)
+        local = Path(local_directory if local_directory is not None else
+                     input(f"Dossier local existant [{local_default}] : ").strip() or local_default)
         local = local.resolve(strict=True)
         if not local.is_dir() or local.stat().st_uid != owner[0] or local.is_relative_to("/investigation"):
             raise ValueError("Choisissez un dossier local existant qui vous appartient, hors de /investigation.")
@@ -276,7 +282,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("clone", "image"))
     parser.add_argument("--local-default", required=True)
+    destination = parser.add_mutually_exclusive_group()
+    destination.add_argument("--local-directory")
+    destination.add_argument("--external", action="store_true")
     args = parser.parse_args()
+    if args.operation == "clone" and (args.local_directory is not None or args.external):
+        parser.error("Options de destination réservées à l’imagerie RAW.")
     if os.geteuid() != 0 or "SUDO_UID" not in os.environ:
         parser.error("Lancez cette action avec sudo dans un espace de montage privé.")
     if os.readlink("/proc/self/ns/mnt") == os.readlink("/proc/1/ns/mnt"):
@@ -288,7 +299,7 @@ def main():
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGHUP, interrupt)
     try:
-        run(args.operation, args.local_default)
+        run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external)
         return 0
     except (OSError, ValueError, KeyError, subprocess.SubprocessError, KeyboardInterrupt, EOFError) as error:
         diagnostic = getattr(error, "stderr", None) or str(error)

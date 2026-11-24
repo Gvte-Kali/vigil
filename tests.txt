@@ -360,4 +360,8 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 [ ] Dans Accueil, vérifier le tableau de bord, les ressources CPU/RAM toutes
     les cinq secondes, les disques et zones de montage toutes les deux
     secondes, et le maintien des détails de partition ouverts.
-    Vérifier que Session et outils remplace l’onglet Diagnostic.
+    Vérifier que Session et outils remplace l’onglet Diagnostic et que
+    l’accueil ne comporte plus de boutons d’actualisation.
+[ ] Créer une image RAW, choisir Dossier local puis un chemin avec des
+    espaces dans le sélecteur système. Vérifier que le terminal utilise
+    le dossier choisi et qu’annuler le sélecteur ne lance rien.

@@ -4,7 +4,7 @@ import shutil
 
 from PySide6.QtCore import QProcess, QTimer, Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QGridLayout, QLabel, QProgressBar, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QLabel, QProgressBar, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from .system_info import LSBLK_COLUMNS, ZONES, cpu_ticks, read_zones, system_metrics
 
@@ -72,9 +72,6 @@ class SystemPanel(QWidget):
         self.tree.setHeaderHidden(True)
         self.tree.setToolTipDuration(10000)
         layout.addWidget(self.tree)
-        self.refresh_button = QPushButton()
-        self.refresh_button.clicked.connect(self.refresh)
-        layout.addWidget(self.refresh_button)
         self.process = QProcess(self)
         self.process.finished.connect(self.read_devices)
         self.process.errorOccurred.connect(self.render_inventory)
@@ -149,7 +146,6 @@ class SystemPanel(QWidget):
 
     def render_resources(self):
         tr = self.tr_pair
-        self.refresh_button.setText(tr("Actualiser le système", "Refresh system"))
         self.summary.setText(tr("Ressources et périphériques", "Resources and devices"))
         memory, uptime, load, cpu_count = self.metrics
         unavailable = tr("Indisponible", "Unavailable")

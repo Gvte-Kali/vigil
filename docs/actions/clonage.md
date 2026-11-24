@@ -18,8 +18,8 @@ confirmation reprend le chemin de la cible. La copie écrase les premiers
 octets de la cible sur la longueur exacte de la source. Le SHA-256 est
 comparé après relecture de cette même plage.
 
-L’image RAW peut être enregistrée dans un dossier local existant ou sur
-une partition USB compatible. Vigil monte temporairement cette partition
+L’image RAW peut être enregistrée dans un dossier local existant choisi
+dans le sélecteur système ou sur une partition USB compatible. Vigil monte temporairement cette partition
 dans un espace de montage privé, relit l’image, écrit le fichier
 `.raw.sha256` et démonte la partition. Les noms existants sont refusés.
 

@@ -269,7 +269,6 @@ class Workspace(QMainWindow):
         dashboard_side.addWidget(tooling)
         self.diagnostics = QListWidget()
         dashboard_side.addWidget(self.diagnostics, 1)
-        self.button(dashboard_side, "Actualiser les outils", "Refresh tools", self.refresh_diagnostics)
 
 
         self.case_controls = QWidget(self)
@@ -491,7 +490,7 @@ class Workspace(QMainWindow):
             acquisition, "Créer une image RAW", "Create a RAW image",
             "Enregistre une image vérifiée en local ou sur un stockage USB temporaire.",
             "Save a verified image locally or on temporarily mounted USB storage.",
-            "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("image")),
+            "hard-drive", self.quick_raw_image,
         )
         acquisition.addStretch()
         quick_actions.addStretch()
@@ -1722,6 +1721,27 @@ class Workspace(QMainWindow):
         )
         if response == QMessageBox.StandardButton.Yes:
             self.start_quick_action(lambda: update_command(self.database_path))
+
+    def quick_raw_image(self):
+        tr = self.tr_pair
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(tr("Destination de l’image RAW", "RAW image destination"))
+        dialog.setText(tr("Où enregistrer l’image ?", "Where should the image be saved?"))
+        local = dialog.addButton(tr("Dossier local", "Local folder"), QMessageBox.ButtonRole.ActionRole)
+        external = dialog.addButton(tr("Périphérique USB", "USB device"), QMessageBox.ButtonRole.ActionRole)
+        cancel = dialog.addButton(QMessageBox.StandardButton.Cancel)
+        dialog.setDefaultButton(cancel)
+        dialog.setEscapeButton(cancel)
+        dialog.exec()
+        choice = dialog.clickedButton()
+        if choice == local:
+            directory = QFileDialog.getExistingDirectory(
+                self, tr("Choisir le dossier de destination", "Choose the destination folder"), str(Path.home()),
+            )
+            if directory:
+                self.start_quick_action(lambda: acquisition_command("image", local_directory=Path(directory)))
+        elif choice == external:
+            self.start_quick_action(lambda: acquisition_command("image", external=True))
 
     def quick_storage(self, operation="mount"):
         operator = self.require_operator()

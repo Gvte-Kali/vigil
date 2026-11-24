@@ -153,13 +153,20 @@ def storage_command(operation, state, case_id, name, operator):
     ]
 
 
-def acquisition_command(operation):
+def acquisition_command(operation, *, local_directory=None, external=False):
     if operation not in {"clone", "image"}:
         raise ValueError("unsupported acquisition operation")
+    if (local_directory is not None and external) or (operation == "clone" and (local_directory is not None or external)):
+        raise ValueError("invalid acquisition destination")
     script = legacy_base() / "scripts" / "imager" / "vigil_acquire.py"
     if not script.is_file():
         raise ValueError(f"acquisition script unavailable: {script}")
+    arguments = []
+    if local_directory is not None:
+        arguments = ["--local-directory", str(local_directory)]
+    elif external:
+        arguments = ["--external"]
     return [
         "/usr/bin/sudo", "--", "/usr/bin/unshare", "--mount", "--propagation", "private",
-        "--", "/usr/bin/python3", "-I", str(script), operation, "--local-default", str(Path.home()),
+        "--", "/usr/bin/python3", "-I", str(script), operation, "--local-default", str(Path.home()), *arguments,
     ]
