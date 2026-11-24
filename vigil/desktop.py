@@ -26,6 +26,18 @@ from .system_panel import SystemPanel
 from .terminal_panel import TerminalPanel
 from .quick_actions import scan_command, tool, update_command
 
+ANALYSIS_LABELS = {
+    "archives": ("Archives", "Archives"),
+    "audio": ("Fichiers audio", "Audio files"),
+    "bigfiles": ("Fichiers volumineux", "Large files"),
+    "census": ("Recensement de fichiers", "File inventory"),
+    "crypto": ("Fichiers chiffrés", "Encrypted files"),
+    "entropy": ("Analyse de l’entropie", "Entropy analysis"),
+    "images": ("Images et métadonnées", "Images and metadata"),
+    "office": ("Documents bureautiques", "Office documents"),
+    "videos": ("Fichiers vidéo", "Video files"),
+}
+
 STYLE = """
 QWidget { background: #101318; color: #DCE3EC; font-size: 13px; }
 QFrame#header { background: #1A2029; border: 1px solid #35404E; border-radius: 10px; }
@@ -47,6 +59,8 @@ QListWidget#navigation {
 QListWidget#navigation::item { min-height: 31px; padding: 4px 11px; border-radius: 6px; }
 QListWidget#navigation::item:hover:!selected { background: #1B2834; }
 QListWidget#navigation::item:selected { background: #203741; color: #80DEE8; }
+QListWidget#caseNavigation { background: #1A2029; }
+QListWidget#caseNavigation::item:selected { background: #203741; color: #80DEE8; }
 QListWidget#navigation::item:disabled { background: transparent; color: #91A1B3; }
 QFrame#quickActionSection { background: #1A2029; border: 1px solid #35404E; border-radius: 8px; }
 QLabel#quickActionTitle { color: #57C7D4; background: transparent; font-weight: 700; }
@@ -242,7 +256,29 @@ class Workspace(QMainWindow):
         self.button(case_actions, "Créer une affaire", "Create case", self.create_case, primary=True)
         self.button(case_actions, "Importer un ancien projet", "Import legacy project", self.import_case)
 
-        evidence = self.page("Preuves", "Evidence")
+        self.navigation_group("INVESTIGATION", "INVESTIGATION")
+        case_workspace = self.page("Affaire en cours", "Current case")
+        self.case_workspace_page = case_workspace.parentWidget()
+        self.module_case = QLabel()
+        self.module_case.setObjectName("sectionContext")
+        self.module_case.setTextFormat(Qt.TextFormat.PlainText)
+        case_workspace.addWidget(self.module_case)
+        case_body = QHBoxLayout()
+        case_workspace.addLayout(case_body, 1)
+        self.case_pages = QStackedWidget()
+        case_body.addWidget(self.case_pages, 1)
+        self.case_navigation = QListWidget()
+        self.case_navigation.setObjectName("caseNavigation")
+        self.case_navigation.setFixedWidth(160)
+        self.bind(self.case_navigation.setAccessibleName, "Vues de l’affaire", "Case views")
+        case_body.addWidget(self.case_navigation)
+        self.case_navigation.currentRowChanged.connect(self.open_case_view)
+
+        explorer = self.case_view("Explorateur", "Evidence explorer")
+        self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence)
+        explorer.addWidget(self.explorer)
+
+        evidence = self.case_view("Preuves", "Evidence")
         self.case_label = QLabel()
         self.case_label.setObjectName("sectionContext")
         self.case_label.setTextFormat(Qt.TextFormat.PlainText)
@@ -258,15 +294,17 @@ class Workspace(QMainWindow):
         evidence_actions.addStretch()
 
 
-        explorer = self.page("Explorateur", "Evidence explorer")
-        self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence)
-        explorer.addWidget(self.explorer)
-
-        self.navigation_group("INVESTIGATION", "INVESTIGATION")
-        modules = self.page("Affaire en cours", "Current case")
-        self.module_case = QLabel()
-        self.module_case.setTextFormat(Qt.TextFormat.PlainText)
-        modules.addWidget(self.module_case)
+        modules = self.case_view("Analyses", "Analyses")
+        self.analysis_hint = QLabel()
+        self.analysis_hint.setWordWrap(True)
+        self.bind(
+            self.analysis_hint.setText,
+            "La consultation d’un index est disponible ici. Les autres scripts sont répertoriés "
+            "pour référence et restent accessibles via Vigil 1.0.",
+            "Index queries are available here. The other scripts are listed for reference "
+            "and remain accessible through Vigil 1.0.",
+        )
+        modules.addWidget(self.analysis_hint)
         self.modules = QListWidget()
         modules.addWidget(self.modules)
         module_actions = QHBoxLayout()
@@ -285,7 +323,7 @@ class Workspace(QMainWindow):
         catalogue.addWidget(self.catalogue)
         self.button(catalogue, "Créer un module", "Create a module", self.new_module, primary=True)
 
-        history = self.page("Journal d’affaire", "Case history")
+        history = self.case_view("Actions et journal", "Actions and history")
         self.history_filter = QLineEdit()
         self.bind(self.history_filter.setPlaceholderText, "Filtrer par action ou opérateur",
                   "Filter by action or operator")
@@ -315,7 +353,7 @@ class Workspace(QMainWindow):
         settings_page.addLayout(diagnostic_actions)
         self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
         diagnostic_actions.addStretch()
-        integrity = self.page("Intégrité", "Integrity")
+        integrity = self.case_view("Intégrité", "Integrity")
         self.integrity_context = QLabel()
         self.integrity_context.setTextFormat(Qt.TextFormat.PlainText)
         integrity.addWidget(self.integrity_context)
@@ -338,7 +376,10 @@ class Workspace(QMainWindow):
         self.terminal = TerminalPanel()
         self.terminal.completed.connect(self.quick_finished)
         self.terminal_dock = QDockWidget(self)
-        self.bind(self.terminal_dock.setWindowTitle, "Terminal", "Terminal")
+        self.terminal_dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        self.terminal_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea)
+        self.terminal_dock.setTitleBarWidget(QWidget())
+        self.bind(self.terminal_dock.setWindowTitle, "Centre des tâches", "Task centre")
         self.task_tabs = QTabWidget()
         tasks_page = QWidget()
         tasks_layout = QVBoxLayout(tasks_page)
@@ -364,6 +405,7 @@ class Workspace(QMainWindow):
         self.translate()
         self.refresh_cases()
         self.navigation.setCurrentRow(1)
+        self.case_navigation.setCurrentRow(0)
 
     def tr_pair(self, french, english):
         return english if self.language == "en" else french
@@ -411,7 +453,8 @@ class Workspace(QMainWindow):
             index = item.data(Qt.ItemDataRole.UserRole)
             if index is not None:
                 self.pages.setCurrentIndex(index)
-                if self.pages.currentWidget() is self.history_page:
+                if (self.pages.currentWidget() is self.case_workspace_page
+                        and self.case_pages.currentWidget() is self.history_page):
                     self.reset_history()
 
     def page(self, french, english, *, heading=True, grouped=True):
@@ -431,6 +474,21 @@ class Workspace(QMainWindow):
             self.bind(title.setText, french, english)
             layout.addWidget(title)
         return layout
+
+    def case_view(self, french, english):
+        widget = QWidget()
+        self.case_pages.addWidget(widget)
+        item = QListWidgetItem(self.case_navigation)
+        self.bind(item.setText, french, english)
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        return layout
+
+    def open_case_view(self, index):
+        if index >= 0:
+            self.case_pages.setCurrentIndex(index)
+            if self.case_pages.currentWidget() is self.history_page:
+                self.reset_history()
 
     def quick_action_section(self, page, french, english):
         section = QFrame()
@@ -508,7 +566,8 @@ class Workspace(QMainWindow):
         self.catalogue.clear()
         manifests, errors = discover(BUILTIN_MODULES)
         for module in manifests.values():
-            self.modules.addItem(f"{module.id}  ·  {module.version}")
+            names = ANALYSIS_LABELS.get(module.id.removeprefix("vigil."), (module.name, module.name))
+            self.modules.addItem(f"{self.tr_pair(*names)}  ·  {module.entrypoint.rsplit('/', 1)[-1]}")
             self.add_row(self.catalogue, f"{module.id}  ·  {module.version}", module.id)
         self.filter_catalogue(self.catalogue_filter.text())
         for path in errors:
@@ -951,8 +1010,9 @@ class Workspace(QMainWindow):
 
     def update_terminal_toggle(self, visible):
         self.terminal_toggle.setChecked(visible)
-        self.terminal_toggle.setText(self.tr_pair("Masquer le terminal", "Hide terminal") if visible
-                                     else self.tr_pair("Afficher le terminal", "Show terminal"))
+        self.terminal_toggle.setText(self.tr_pair("Masquer le centre des tâches", "Hide task centre")
+                                     if visible else
+                                     self.tr_pair("Afficher le centre des tâches", "Show task centre"))
 
     def toggle_terminal(self, visible):
         self.terminal_dock.setVisible(visible)

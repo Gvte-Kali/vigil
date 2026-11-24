@@ -51,7 +51,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(reopened.operator.currentText(), "Alice")
             self.assertTrue(reopened.language_buttons["en"].isChecked())
             reopened.language_buttons["fr"].click()
-            self.assertEqual(reopened.navigation.item(3).text(), "Preuves")
+            self.assertEqual(reopened.case_navigation.item(1).text(), "Preuves")
             self.close_workspace(reopened)
 
     def test_background_file_registration_and_verification(self):
@@ -288,6 +288,38 @@ class WorkspaceTest(unittest.TestCase):
             self.assertTrue(window.terminal_dock.isVisible())
             window.terminal_toggle.click()
             self.assertFalse(window.terminal_dock.isVisible())
+            self.close_workspace(window)
+
+    def test_case_workspace_holds_related_views_and_fixed_task_dock(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QDockWidget
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            navigation = [window.navigation.item(i).text() for i in range(window.navigation.count())]
+            self.assertNotIn("Preuves", navigation)
+            window.navigation.setCurrentRow(navigation.index("Affaire en cours"))
+            sections = [
+                window.case_navigation.item(i).text() for i in range(window.case_navigation.count())
+            ]
+            self.assertEqual(sections, [
+                "Explorateur", "Preuves", "Analyses", "Actions et journal", "Intégrité",
+            ])
+            window.case_navigation.setCurrentRow(2)
+            self.assertTrue(window.case_pages.currentWidget().isAncestorOf(window.modules))
+            self.assertIn("Recensement de fichiers", [
+                window.modules.item(i).text().split("  ·  ")[0]
+                for i in range(window.modules.count())
+            ])
+            self.assertEqual(window.terminal_dock.features(),
+                             QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+            self.assertEqual(window.terminal_dock.allowedAreas(), Qt.DockWidgetArea.BottomDockWidgetArea)
+            self.assertEqual(window.terminal_toggle.text(), "Afficher le centre des tâches")
             self.close_workspace(window)
 
     def wait_for_task(self, window):
