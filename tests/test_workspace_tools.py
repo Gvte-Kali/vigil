@@ -39,6 +39,20 @@ class WorkspaceToolsTest(unittest.TestCase):
             self.assertIn(f"VIGIL_LEGACY_SCAN_DIR={root / 'legacy-custody' / case / ('scan-' + run)}", argv)
             self.assertEqual(argv[-4:], ["--user", "Bob", "--log", "--pdf"])
 
+    def test_external_action_keeps_exit_error_visible(self):
+        import subprocess
+
+        from vigil.external_terminal import launch_action
+
+        with patch("vigil.external_terminal.launch_terminal") as launch:
+            launch_action(["/usr/bin/bash", "-c", "echo fixture-error >&2; exit 2"])
+        result = subprocess.run(
+            launch.call_args.args[0], input="\n", text=True, capture_output=True, timeout=5,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("fixture-error", result.stderr)
+        self.assertIn("Exit code: 2", result.stdout)
+
     def test_site_launcher_state_is_separate_from_development(self):
         with patch.dict("os.environ", {
             "VIGIL_STATE_DIR": "/opt/vigil/data/state", "XDG_STATE_HOME": "/tmp/development",

@@ -265,7 +265,9 @@ class WorkspaceTest(unittest.TestCase):
                 [label.text() for label in page.findChildren(QLabel, "quickActionTitle")],
                 ["Antivirus", "Stockage"],
             )
-            self.assertEqual(len(page.findChildren(QPushButton)), 3)
+            action_buttons = page.findChildren(QPushButton)
+            self.assertEqual(len(action_buttons), 3)
+            self.assertTrue(all(not button.icon().isNull() for button in action_buttons))
             window.language_buttons["en"].click()
             self.assertEqual(quick.text(), "Quick actions")
             self.assertEqual(page.findChildren(QLabel, "quickActionTitle")[1].text(), "Storage")
@@ -309,7 +311,7 @@ class WorkspaceTest(unittest.TestCase):
                 window.case_navigation.item(i).text() for i in range(window.case_navigation.count())
             ]
             self.assertEqual(sections, [
-                "Explorateur", "Preuves", "Analyses", "Actions et journal", "Intégrité",
+                "Explorateur", "Preuves", "Analyses", "Actions et journal", "Intégrité", "Rapports PDF",
             ])
             window.case_navigation.setCurrentRow(2)
             self.assertTrue(window.case_pages.currentWidget().isAncestorOf(window.modules))

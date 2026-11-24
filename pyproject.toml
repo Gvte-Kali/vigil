@@ -25,3 +25,5 @@ vigil = ["modules/*.yaml"]
 "share/vigil" = ["data/icons/vigil.svg"]
 
 "share/vigil/scripts" = ["scripts/analyse/vigil_census_query.py"]
+
+"share/vigil/icons" = ["data/icons/shield.svg", "data/icons/upload.svg", "data/icons/hard-drive.svg"]

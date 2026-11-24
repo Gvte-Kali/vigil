@@ -1,6 +1,7 @@
 """Publish a versioned JSON snapshot and its SHA-256 manifest."""
 import hashlib
 import json
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -51,3 +52,26 @@ def case_report(state, case_id):
     finally:
         if stage.exists():
             shutil.rmtree(stage)
+
+
+def case_pdf_reports(state, case_id, legacy_path=None):
+    """List case-scoped PDFs without following symbolic links."""
+    if not re.fullmatch(r"[0-9a-f]{32}", case_id):
+        raise ValueError("invalid case ID")
+    custody = state.parent / "legacy-custody" / case_id
+    directories = []
+    if custody.is_dir() and custody.resolve() == custody.absolute():
+        directories.append(custody)
+        directories.extend(
+            folder for folder in custody.glob("scan-*")
+            if folder.is_dir() and not folder.is_symlink()
+        )
+    if legacy_path:
+        imported = Path(legacy_path)
+        if imported.is_dir() and imported.resolve() == imported:
+            directories.append(imported)
+    files = {
+        path for directory in directories for path in directory.glob("*.pdf")
+        if not path.is_symlink() and path.is_file()
+    }
+    return sorted(files, key=lambda path: (path.name.casefold(), str(path)))

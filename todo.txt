@@ -79,7 +79,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
     au lancement et contrôle de sortie des deux zones et des écarts RO/RW. Les futurs modules
     doivent enregistrer leurs modifications dans leur affaire avant fermeture.
     Menus dépliants cyan avec hauteur des titres vérifiée en Qt, Affaire en cours et page Actions rapides
-    avec sections Antivirus et Stockage accessibles.
+    avec cartes compactes, icônes et descriptions Antivirus et Stockage.
+    Le terminal du scan affiche son code de sortie avant fermeture.
     Terminal PTY Qt pour ClamAV local, FreshClam utilisateur et inventaire
     stockage. Diagnostic AppArmor documenté pour la configuration FreshClam
     locale sur Parrot. Post-install Qt, données de travail et signatures sous
@@ -131,7 +132,9 @@ PHASE 07 — ARTEFACTS
 PHASE 08 — RAPPORTS ET RELEASE
 [ ] Rapports personnalisables module/preuve/affaire ; manifeste SHA-256.
     Export JSON de l’affaire, des métadonnées et de l’audit avec SHA256SUMS
-    validé. PDF, livrables binaires et périmètre complet encore ouverts.
+    validé. Les PDF historiques sont accessibles dans la vue Rapports PDF
+    de l’affaire. Le générateur ClamAV a été vérifié sur un journal
+    synthétique. PDF personnalisables et périmètre complet encore ouverts.
 [ ] Export figé et vérifié ; tests intégration, sécurité, GUI et installation.
 [ ] Vérifier F01–F27, parité, logo, docs, migration et rollback.
 [ ] Retirer Tkinter seulement après parité et accord ; release sur accord.

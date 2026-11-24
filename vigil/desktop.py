@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTimer, QTranslator, Qt, Signal, Slot
-from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTimer, QTranslator, QUrl, Qt, Signal, Slot
+from PySide6.QtGui import QDesktopServices, QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
@@ -21,10 +21,10 @@ from .images import inspect_raw
 from .inspection import inspect_file
 from .module_scaffold import create_module_draft
 from .evidence_panel import EvidencePanel
-from .entity import data_directory
+from .entity import data_directory, legacy_base
 from .entity_panel import EntityPanel
 from .history import PAGE_SIZE, case_events
-from .reporting import case_report
+from .reporting import case_pdf_reports, case_report
 from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
@@ -69,6 +69,8 @@ QListWidget#caseNavigation { background: #1A2029; }
 QListWidget#caseNavigation::item:selected { background: #203741; color: #80DEE8; }
 QListWidget#navigation::item:disabled { background: transparent; color: #91A1B3; }
 QFrame#quickActionSection { background: #1A2029; border: 1px solid #35404E; border-radius: 8px; }
+QFrame#quickActionCard { background: #202A36; border: 1px solid #455569; border-radius: 7px; }
+QFrame#quickActionCard QLabel { background: transparent; color: #C4D1E0; }
 QLabel#quickActionTitle { color: #57C7D4; background: transparent; font-weight: 700; }
 QLabel#pageTitle { font-size: 20px; font-weight: 700; }
 QWidget[workspacePage="true"] { background: #101318; }
@@ -395,13 +397,37 @@ class Workspace(QMainWindow):
         self.button(integrity, "Exporter l’audit de l’affaire", "Export case audit",
                     self.export_case_report)
 
+        reports = self.case_view("Rapports PDF", "PDF reports")
+        self.pdf_reports_page = reports.parentWidget()
+        self.pdf_reports = QListWidget()
+        reports.addWidget(self.pdf_reports)
+        self.button(reports, "Actualiser la liste", "Refresh list", self.refresh_pdf_reports)
+        self.button(reports, "Ouvrir le dossier du rapport", "Open report folder",
+                    self.open_pdf_folder, primary=True)
+
         quick_actions = self.page("Actions rapides", "Quick actions", grouped=False)
         antivirus = self.quick_action_section(quick_actions, "Antivirus", "Antivirus")
-        self.button(antivirus, "Scan antivirus", "Antivirus scan", self.quick_scan, primary=True)
-        self.button(antivirus, "Mettre à jour l’antivirus", "Update antivirus", self.quick_update)
+        self.quick_action_card(
+            antivirus, "Scan antivirus", "Antivirus scan",
+            "Monte le support, lance ClamAV et enregistre le rapport PDF.",
+            "Mount the device, run ClamAV and save the PDF report.",
+            "shield", self.quick_scan, primary=True,
+        )
+        self.quick_action_card(
+            antivirus, "Mettre à jour l’antivirus", "Update antivirus",
+            "Télécharge les signatures ClamAV dans le profil Vigil.",
+            "Download ClamAV signatures into the Vigil profile.",
+            "upload", self.quick_update,
+        )
+        antivirus.addStretch()
         storage_actions = self.quick_action_section(quick_actions, "Stockage", "Storage")
-        self.button(storage_actions, "Ajouter un périphérique de stockage",
-                    "Add a storage device", self.quick_storage, primary=True)
+        self.quick_action_card(
+            storage_actions, "Ajouter un périphérique de stockage", "Add a storage device",
+            "Affiche les périphériques détectés et leurs montages.",
+            "Show detected devices and their mounts.",
+            "hard-drive", self.quick_storage, primary=True,
+        )
+        storage_actions.addStretch()
         quick_actions.addStretch()
 
         self.terminal = TerminalPanel()
@@ -523,6 +549,8 @@ class Workspace(QMainWindow):
             self.case_pages.setCurrentIndex(index)
             if self.case_pages.currentWidget() is self.history_page:
                 self.reset_history()
+            if self.case_pages.currentWidget() is self.pdf_reports_page:
+                self.refresh_pdf_reports()
 
     def quick_action_section(self, page, french, english):
         section = QFrame()
@@ -537,6 +565,41 @@ class Workspace(QMainWindow):
         layout.addLayout(actions)
         page.addWidget(section)
         return actions
+
+    def quick_action_card(self, row, french, english, description_fr, description_en,
+                          icon_name, action, *, primary=False):
+        card = QFrame()
+        card.setObjectName("quickActionCard")
+        card.setMaximumWidth(310)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        description = QLabel()
+        description.setWordWrap(True)
+        self.bind(description.setText, description_fr, description_en)
+        layout.addWidget(description)
+        layout.addStretch()
+        buttons = QHBoxLayout()
+        layout.addLayout(buttons)
+        self.button(buttons, french, english, action, primary=primary)
+        button = self.buttons[-1]
+        button.setIcon(self.action_icon(icon_name, "#101318" if primary else "#57C7D4"))
+        buttons.addStretch()
+        row.addWidget(card)
+
+    @staticmethod
+    def action_icon(name, color):
+        source = legacy_base() / "data/icons" / f"{name}.svg"
+        if not source.is_file():
+            source = Path(sys.prefix) / "share/vigil/icons" / f"{name}.svg"
+        if not source.is_file():
+            return QIcon()
+        svg = source.read_bytes().replace(b"currentColor", color.encode("ascii"))
+        renderer = QSvgRenderer(QByteArray(svg))
+        pixmap = QPixmap(20, 20)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        with QPainter(pixmap) as painter:
+            renderer.render(painter)
+        return QIcon(pixmap)
 
     def button(self, layout, french, english, action, *, primary=False):
         button = QPushButton()
@@ -700,6 +763,7 @@ class Workspace(QMainWindow):
         self.update_case_label()
         self.evidence.clear()
         self.integrity_files.clear()
+        self.refresh_pdf_reports()
         self.explorer.set_files([])
         self.refresh_dashboard()
         case = self.active_case_item()
@@ -822,6 +886,29 @@ class Workspace(QMainWindow):
                          row["details"])
             self.history_before = row["sequence"]
         self.more_history.setEnabled(len(rows) > PAGE_SIZE)
+
+    def refresh_pdf_reports(self):
+        self.pdf_reports.clear()
+        case_id = self.active_case_id
+        if not case_id:
+            return
+        try:
+            with storage.database(self.database_path) as connection:
+                row = connection.execute("SELECT legacy_path FROM cases WHERE id = ?", (case_id,)).fetchone()
+            for path in case_pdf_reports(self.database_path, case_id, row["legacy_path"] if row else None):
+                self.add_row(self.pdf_reports, f"{path.parent.name}  ·  {path.name}", str(path))
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
+
+    def open_pdf_folder(self):
+        item = self.pdf_reports.currentItem()
+        if item is None:
+            self.notify("Sélectionnez un rapport.", "Select a report.")
+            return
+        directory = Path(item.data(Qt.ItemDataRole.UserRole)).parent
+        if not directory.is_dir() or not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
+            self.notify("Impossible d’ouvrir le dossier du rapport.",
+                        "Could not open the report folder.", str(directory))
 
     def export_case_report(self):
         case_id = self.active_case_id
@@ -1195,6 +1282,16 @@ class Workspace(QMainWindow):
         operator = self.require_operator()
         if not operator:
             return
+        try:
+            existing = read_zones()["/investigation"]
+        except OSError as error:
+            self.fail(error)
+            return
+        if existing:
+            self.notify("Le scan rapide nécessite une zone /investigation démontée.",
+                        "Quick scan requires an unmounted /investigation zone.",
+                        "\n".join(f"{source} → {target}" for target, source, *_ in existing))
+            return
         response = QMessageBox.question(
             self, "Vigil",
             self.tr_pair("Lancer le parcours montage, scan et démontage dans l’affaire Scan antivirus ?",
@@ -1210,7 +1307,7 @@ class Workspace(QMainWindow):
                 case_id = storage.antivirus_case(connection, operator)
                 storage.audit(connection, operator, case_id, "antivirus.request", {"run_id": run_id})
             self.refresh_cases()
-            launch_terminal(legacy_mount_command(
+            launch_action(legacy_mount_command(
                 "scan", self.database_path, case_id, "Scan antivirus", operator, run_id=run_id,
             ))
         except (OSError, ValueError, sqlite3.Error) as error:
