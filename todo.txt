@@ -62,7 +62,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
     accessibles en Qt. Accueil avec inventaire bloc et état des deux zones
     de montage, cartes système pleine largeur, recherche locale et affaire
     activée par confirmation à chaque clic, avec restauration au lancement.
-    Navigation verticale groupée et cartes du tableau de bord en grille.
+    Navigation verticale groupée, fenêtre initiale élargie selon l’écran
+    et cartes du tableau de bord en grille.
     Les détails de partition sont repliés par défaut et l’inventaire
     distingue disques, partitions et états de montage par couleur.
     Fermeture confirmée et sauvegarde contrôlée. Les futurs modules
@@ -81,6 +82,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
 PHASE 05 — TACHES
 [ ] File persistante, progression réelle ou indéterminée, logs, annulation.
 [ ] Historique, reprise/checkpoints ou nouvelle tentative, crash recovery.
+    Journal d’audit Qt filtrable et paginé par affaire. Historique complet
+    des runs, tentatives et reprise après interruption à réaliser.
 [ ] CPU/RAM/I/O/espace disque ; fermeture contrôlée sans daemon.
 [ ] Validation humaine.
 
@@ -93,11 +96,14 @@ PHASE 06 — INVESTIGATION
 PHASE 07 — ARTEFACTS
 [ ] Registre, USB, EVTX, MFT, USN, LNK, thumbs, PE, BOOTSTAT.
 [ ] Timeline interactive, provenance, fuseaux et corrélation explicable.
+    Les événements de custody UTC sont consultables dans le Journal d’affaire.
 [ ] Carving guidé séparé, destination contrôlée, hashes, custody.
 [ ] Validation humaine.
 
 PHASE 08 — RAPPORTS ET RELEASE
 [ ] Rapports personnalisables module/preuve/affaire ; manifeste SHA-256.
+    Export JSON de l’affaire, des métadonnées et de l’audit avec SHA256SUMS
+    validé. PDF, livrables binaires et périmètre complet encore ouverts.
 [ ] Export figé et vérifié ; tests intégration, sécurité, GUI et installation.
 [ ] Vérifier F01–F27, parité, logo, docs, migration et rollback.
 [ ] Retirer Tkinter seulement après parité et accord ; release sur accord.

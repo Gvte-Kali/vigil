@@ -133,6 +133,13 @@ D. Registre, CLI et compatibilité
 [ ] Au démarrage, comparer la synthèse de protection bloc avec lsblk
     et distinguer cet état des options de montage dans Zones Vigil.
 
+[ ] Dans Investigation → Journal d’affaire, filtrer par opérateur puis
+    action, charger une page précédente et ouvrir les détails d’un événement.
+    Changer d’affaire et vérifier l’absence des événements de la précédente.
+[ ] Exporter le journal et les métadonnées, puis vérifier le dossier indiqué
+    par Vigil avec sha256sum -c SHA256SUMS depuis ce dossier. Réexporter
+    et vérifier que le premier dossier reste disponible.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

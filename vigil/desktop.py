@@ -17,6 +17,8 @@ from . import storage
 from .adapters import CENSUS_LIMIT, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
+from .history import PAGE_SIZE, case_events
+from .reporting import case_report
 from .system_panel import SystemPanel
 from .terminal_panel import TerminalPanel
 from .quick_actions import scan_command, tool, update_command
@@ -119,7 +121,8 @@ class Workspace(QMainWindow):
         self.busy = None
         self.worker = None
         self.buttons = []
-        self.resize(1130, 660)
+        screen = self.screen().availableGeometry()
+        self.resize(min(1280, screen.width()), min(660, screen.height()))
         self.setWindowTitle("Vigil 2.0")
         self.setStyleSheet(STYLE)
 
@@ -241,6 +244,26 @@ class Workspace(QMainWindow):
         self.button(module_actions, "Consulter un index de recensement",
                     "Query a census index", self.query_index, primary=True)
         module_actions.addStretch()
+        history = self.page("Journal d’affaire", "Case history")
+        self.history_filter = QLineEdit()
+        self.bind(self.history_filter.setPlaceholderText, "Filtrer par action ou opérateur",
+                  "Filter by action or operator")
+        self.history_filter.textChanged.connect(self.reset_history)
+        history.addWidget(self.history_filter)
+        self.history_rows = QListWidget()
+        self.history_rows.itemActivated.connect(self.show_event)
+        history.addWidget(self.history_rows)
+        actions = QHBoxLayout()
+        history.addLayout(actions)
+        self.button(actions, "Actualiser le journal", "Refresh history", self.reset_history)
+        self.button(actions, "Afficher les événements précédents", "Load earlier events",
+                    self.load_history)
+        self.more_history = self.buttons[-1]
+        self.button(actions, "Exporter le journal et les métadonnées", "Export audit and evidence metadata",
+                    self.export_case_report, primary=True)
+        actions.addStretch()
+        self.history_before = None
+        self.history_page = history.parentWidget()
         self.navigation_group("SYSTÈME", "SYSTEM")
         settings_page = self.page("Diagnostic", "Diagnostics")
         self.diagnostics = QListWidget()
@@ -309,6 +332,8 @@ class Workspace(QMainWindow):
             index = item.data(Qt.ItemDataRole.UserRole)
             if index is not None:
                 self.pages.setCurrentIndex(index)
+                if self.pages.currentWidget() is self.history_page:
+                    self.reset_history()
 
     def page(self, french, english, *, heading=True):
         widget = QWidget()
@@ -446,6 +471,7 @@ class Workspace(QMainWindow):
         self.settings.setValue("active_case_id", target_id)
         self.settings.sync()
         self.refresh_evidence()
+        self.reset_history()
 
     def confirm_case_selection(self, current, target):
         dialog = QMessageBox(self)
@@ -496,6 +522,47 @@ class Workspace(QMainWindow):
             return
         for evidence_id, path, digest in rows:
             self.add_row(self.evidence, f"{path}  ·  {digest}", evidence_id)
+
+    def reset_history(self, *_):
+        self.history_rows.clear()
+        self.history_before = None
+        self.load_history()
+
+    def load_history(self):
+        self.more_history.setEnabled(False)
+        if not self.active_case_id:
+            return
+        try:
+            with storage.database(self.database_path) as connection:
+                rows = case_events(
+                    connection, self.active_case_id, self.history_filter.text().strip(),
+                    self.history_before, PAGE_SIZE + 1,
+                )
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
+            return
+        for row in rows[:PAGE_SIZE]:
+            self.add_row(self.history_rows,
+                         f"{row['timestamp']}  ·  {row['operator']}  ·  {row['action']}",
+                         row["details"])
+            self.history_before = row["sequence"]
+        self.more_history.setEnabled(len(rows) > PAGE_SIZE)
+
+    def export_case_report(self):
+        case_id = self.active_case_id
+        if not case_id:
+            self.notify("Confirmez une affaire dans l’onglet Affaires.",
+                        "Confirm a case in the Cases tab.")
+            return
+        self.run_task(
+            lambda: case_report(self.database_path, case_id),
+            lambda path: self.notify("Rapport JSON et manifeste enregistrés.",
+                                     "JSON report and manifest saved.", str(path)),
+        )
+
+    def show_event(self, item):
+        self.notify("Événement d’audit de l’affaire", "Case audit event",
+                    item.data(Qt.ItemDataRole.UserRole))
 
     def refresh_operators(self, selected=None):
         if selected is None:
