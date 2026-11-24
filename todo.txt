@@ -19,7 +19,8 @@ PHASE 00 — AUDIT
 PHASE 01 — SECURITE
 [ ] Broker privilégié limité ; suppression NOPASSWD générique.
     Post-install sans génération NOPASSWD. Transition manuelle administrateur
-    documentée. Broker et recette en VM ouverts.
+    documentée. Helper candidat ext4 à autorisation explicite et sudo
+    interactif raccordé à Qt, activation et recette en VM ouvertes.
 [x] Remplacer pickle checksafe par du TSV borné (c5dc118 ; fixtures unittest).
 [ ] Protection bloc/montage et MTP distinct.
 [ ] Validation des destinations et identités ; contexte immuable par run.

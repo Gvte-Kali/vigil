@@ -178,8 +178,9 @@ D. Registre, CLI et compatibilité
 [ ] Dans Affaire en cours, vérifier l’état /investigation sur toutes les
     vues. En VM synthétique, comparer une source montée et démontée,
     le point de montage, le système de fichiers et le mode ro/rw.
-    Les boutons indiquent le parcours administrateur tant que le broker
-    reste ouvert. Vérifier la mise à jour de l’état en trois secondes environ.
+    Les boutons demandent le helper administrateur sur un poste non équipé.
+    En VM uniquement, tester le helper ext4, sudo interactif, la partition
+    approuvée, le refus RW et les traces dans l’audit et syslog. Vérifier la mise à jour de l’état en trois secondes environ.
 
 [ ] Sur une VM cible avec AppArmor, exécuter le post-install depuis
     /opt/vigil. Vérifier le venv, le lanceur Qt, les données dans data/state,

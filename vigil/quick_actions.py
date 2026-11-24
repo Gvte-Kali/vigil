@@ -1,6 +1,7 @@
 """Command builders for Qt actions that do not require elevated privileges."""
 import os
 import shutil
+import stat
 import tempfile
 from pathlib import Path
 
@@ -49,3 +50,19 @@ def update_command(state):
         finally:
             generated.unlink(missing_ok=True)
     return [executable, f"--config-file={config}"]
+
+
+def mount_command(operation):
+    """Invoke only the system-installed helper, with interactive sudo."""
+
+    helper = Path("/usr/local/sbin/vigil-mount")
+    if operation not in {"mount", "unmount"}:
+        raise ValueError("unsupported mount operation")
+    for directory in reversed(helper.parents):
+        info = directory.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError("untrusted mount helper directory")
+    info = helper.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+        raise ValueError("untrusted mount helper")
+    return ["/usr/bin/sudo", "-k", "--", str(helper), operation]
