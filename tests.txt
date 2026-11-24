@@ -395,3 +395,10 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 [ ] Après les derniers octets de l’acquisition, vérifier les annonces de
     synchronisation, de relecture et, sur USB, de démontage. En cas
     d’attente prolongée, vérifier le rappel d’étape.
+
+
+[ ] Sur Parrot, brancher une clé RW après activation de la règle et constater
+    son passage en RO. Démonter toute zone Vigil et quitter. Vérifier la
+    restauration RW, puis le comportement normal au prochain branchement.
+    Vérifier qu’un support initialement RO reste RO et qu’une autre session
+    Vigil active conserve la protection.

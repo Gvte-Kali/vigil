@@ -53,7 +53,9 @@ PHASE 01 — SECURITE
     Étapes de synchronisation, de relecture et de démontage affichées
     avec rappel périodique si la destination tarde à répondre.
     Protection à chaud des disques physiques via udev pendant une session
-    autorisée au démarrage. Recette Parrot du verrouillage avant UDisks ouverte.
+    autorisée au démarrage. Restauration des modes bloc et de l’automontage
+    après la dernière session, avec vérification d’identité.
+    Recette Parrot du verrouillage avant UDisks et de sa restauration ouverte.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
     Le post-install prépare /investigation vide et démonté en root:root 0755.

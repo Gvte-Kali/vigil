@@ -1,17 +1,40 @@
 #!/usr/bin/python3 -I
 """Authorize a live Vigil session and write-protect new physical block devices."""
 import fcntl
+import json
 import os
 import re
+import select
+import subprocess
 import stat
 import struct
 import sys
+import syslog
+from contextlib import contextmanager
 from pathlib import Path
 
 SESSIONS = Path("/run/vigil-hotplug")
 PID = re.compile(r"[1-9][0-9]{0,9}")
 BLOCK_RO_SET = 0x125D
 BLOCK_RO_GET = 0x125E
+BLOCK_DISKSEQ_GET = 0x80081280
+
+
+@contextmanager
+def state_lock():
+    SESSIONS.mkdir(mode=0o755, exist_ok=True)
+    info = SESSIONS.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+        raise ValueError("invalid session directory")
+    with (SESSIONS / "lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
+def ledger():
+    path = SESSIONS / "devices"
+    path.mkdir(mode=0o700, exist_ok=True)
+    return path
 
 
 def process_identity(pid):
@@ -19,23 +42,52 @@ def process_identity(pid):
         raise ValueError("invalid process ID")
     process = Path("/proc") / pid
     info = (process / "stat").read_text()
-    start = info.rsplit(")", 1)[1].split()[19]
-    return f"{process.stat().st_uid} {start}"
+    fields = info.rsplit(")", 1)[1].split()
+    if fields[0] == "Z":
+        raise ProcessLookupError(pid)
+    return f"{process.stat().st_uid} {fields[19]}"
 
 
 def activate(pid):
     identity = process_identity(pid)
     if identity.split()[0] != os.environ.get("SUDO_UID"):
         raise ValueError("session process does not belong to the sudo caller")
-    SESSIONS.mkdir(mode=0o755, exist_ok=True)
-    info = SESSIONS.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
-        raise ValueError("invalid session directory")
-    path = SESSIONS / pid
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
-    with os.fdopen(fd, "w") as token:
-        token.write(identity + "\n")
-        os.fchmod(token.fileno(), 0o644)
+    if not hasattr(os, "pidfd_open"):
+        raise ValueError("Vigil hotplug requires Linux pidfd support")
+    watcher = os.pidfd_open(int(pid))
+    try:
+        with state_lock():
+            if process_identity(pid) != identity:
+                raise ValueError("session process changed")
+            path = SESSIONS / pid
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+            with os.fdopen(fd, "w") as token:
+                token.write(identity + "\n")
+                os.fchmod(token.fileno(), 0o644)
+            try:
+                child = os.fork()
+            except OSError:
+                path.unlink(missing_ok=True)
+                raise
+        if child:
+            return
+        try:
+            os.setsid()
+            with open("/dev/null", "r+b", buffering=0) as null:
+                for descriptor in (0, 1, 2):
+                    os.dup2(null.fileno(), descriptor)
+            poller = select.poll()
+            poller.register(watcher, select.POLLIN)
+            poller.poll()
+            with state_lock():
+                if not active():
+                    restore_devices()
+        except Exception as error:
+            syslog.syslog(syslog.LOG_ERR, f"vigil-hotplug: session cleanup: {error}")
+        finally:
+            os._exit(0)
+    finally:
+        os.close(watcher)
 
 
 def active():
@@ -43,6 +95,8 @@ def active():
         return False
     found = False
     for path in SESSIONS.iterdir():
+        if not PID.fullmatch(path.name):
+            continue
         try:
             found_session = path.read_text().strip() == process_identity(path.name)
         except (OSError, ValueError, IndexError):
@@ -54,28 +108,76 @@ def active():
     return found
 
 
+def device_identity(fd, major, minor):
+    info = os.fstat(fd)
+    if not stat.S_ISBLK(info.st_mode) or (os.major(info.st_rdev), os.minor(info.st_rdev)) != (major, minor):
+        raise ValueError("block identity changed")
+    return struct.unpack("Q", fcntl.ioctl(fd, BLOCK_DISKSEQ_GET, bytes(8)))[0]
+
+
+def mode(fd):
+    return struct.unpack("i", fcntl.ioctl(fd, BLOCK_RO_GET, bytes(4)))[0]
+
+
 def protect(device, major, minor):
-    if not active():
-        return
-    # UDisks must skip the volume even if the kernel rejects the RO request.
-    print("UDISKS_IGNORE=1")
-    print("VIGIL_HOTPLUG=1")
-    try:
-        fd = os.open(device, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+    with state_lock():
+        if not active():
+            return
+        print("VIGIL_HOTPLUG=1")
         try:
-            info = os.fstat(fd)
-            expected = int(major), int(minor)
-            if not stat.S_ISBLK(info.st_mode) or (os.major(info.st_rdev), os.minor(info.st_rdev)) != expected:
-                raise ValueError("block identity changed")
-            fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 1))
-            if struct.unpack("i", fcntl.ioctl(fd, BLOCK_RO_GET, bytes(4)))[0] != 1:
-                raise ValueError("kernel did not confirm RO")
-            print("VIGIL_HOTPLUG_RO=1")
-        finally:
-            os.close(fd)
-    except (OSError, ValueError) as error:
-        print("VIGIL_HOTPLUG_RO=0")
-        print(f"vigil-hotplug: {device}: {error}", file=sys.stderr)
+            major, minor = int(major), int(minor)
+            node = Path(f"/sys/dev/block/{major}:{minor}").resolve(strict=True)
+            fd = os.open(device, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+            try:
+                sequence = device_identity(fd, major, minor)
+                record = ledger() / f"{major}:{minor}"
+                if not record.exists() or json.loads(record.read_text())["sequence"] != sequence:
+                    record.write_text(json.dumps({
+                        "device": device, "sequence": sequence, "mode": mode(fd),
+                        "major": major, "minor": minor, "node": str(node),
+                        "partition": (node / "partition").exists(),
+                    }))
+                if mode(fd) != 1:
+                    fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 1))
+                if mode(fd) != 1:
+                    raise ValueError("kernel did not confirm RO")
+                print("VIGIL_HOTPLUG_RO=1")
+            finally:
+                os.close(fd)
+        except (OSError, ValueError) as error:
+            print("VIGIL_HOTPLUG_RO=0")
+            print(f"vigil-hotplug: {device}: {error}", file=sys.stderr)
+
+
+def restore_device(record):
+    node = Path(f"/sys/dev/block/{record['major']}:{record['minor']}")
+    if not node.exists() or node.resolve() != Path(record["node"]):
+        return
+    fd = os.open(record["device"], os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_EXCL)
+    try:
+        if device_identity(fd, record["major"], record["minor"]) != record["sequence"]:
+            return
+        # Devices already RO before Vigil are never forced RW.
+        if record["mode"] == 0 and mode(fd) != 0:
+            fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 0))
+            if mode(fd) != 0:
+                raise ValueError("kernel did not restore RW")
+    finally:
+        os.close(fd)
+    subprocess.run(["udevadm", "trigger", "--action=change", record["node"]],
+                   check=True, timeout=5)
+
+
+def restore_devices():
+    records = [(path, json.loads(path.read_text())) for path in ledger().iterdir()]
+    # Restore whole disks first, so inherited RO does not hide a partition's mode.
+    for path, record in sorted(records, key=lambda entry: entry[1]["partition"]):
+        try:
+            restore_device(record)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            syslog.syslog(syslog.LOG_ERR, f"vigil-hotplug: {record['device']}: {error}")
+        else:
+            path.unlink()
 
 
 def main():
@@ -85,6 +187,9 @@ def main():
         match sys.argv[1:]:
             case ["activate", pid]:
                 activate(pid)
+            case ["status"]:
+                with state_lock():
+                    print(f"VIGIL_HOTPLUG_ACTIVE={int(active())}")
             case ["protect", device, major, minor]:
                 protect(device, major, minor)
             case _:
