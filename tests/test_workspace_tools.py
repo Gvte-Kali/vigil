@@ -110,6 +110,24 @@ class WorkspaceToolsTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     list_evidence_directory(root, root, mount_id + 1)
 
+    def test_tracked_external_command_reports_operation_exit(self):
+        import subprocess
+        import sys
+        from vigil.external_terminal import launch_tracked, terminal_command
+
+        with tempfile.TemporaryDirectory() as tmp, patch("vigil.external_terminal.launch_terminal") as launch:
+            run = launch_tracked([sys.executable, "-c", "raise SystemExit(7)"],
+                                 Path(tmp), {"operation": "fixture", "operator": "Alice"}, "kitty")
+            self.assertIsNone(run.status())
+            args = launch.call_args.args[0]
+            self.assertEqual(subprocess.run(args, capture_output=True, timeout=5).returncode, 7)
+            self.assertEqual(run.status(), 7)
+        with patch.dict("os.environ", {"WAYLAND_DISPLAY": "wayland-1"}, clear=True), \
+                patch("vigil.external_terminal.shutil.which",
+                      side_effect=lambda name: f"/fixture/{name}" if name in {"foot", "xterm"} else None):
+            self.assertEqual(terminal_command(["/bin/echo", "path with spaces"], "xterm"),
+                             ["/fixture/foot", "/bin/echo", "path with spaces"])
+
     def test_external_action_keeps_exit_error_visible(self):
         import subprocess
 
