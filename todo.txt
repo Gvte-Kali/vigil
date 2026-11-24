@@ -127,8 +127,9 @@ PHASE 05 — TACHES
 
 PHASE 06 — INVESTIGATION
 [ ] Explorer paginé, index census validé, aperçu inerte, export contrôlé.
-    Explorateur Qt des fichiers enregistrés : dossiers, filtre et aperçu
-    borné hexadécimal/ASCII, métadonnées et empreinte enregistrée disponibles.
+    Explorateur Qt : fichiers enregistrés et montages système RO sous
+    /investigation, dossiers chargés à l’ouverture et aperçus inertes.
+    L’index census reste consultable séparément dans Analyses.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.
 [ ] Validation humaine.

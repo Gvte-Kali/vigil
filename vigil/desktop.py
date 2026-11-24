@@ -18,7 +18,7 @@ from . import storage
 from .adapters import CENSUS_LIMIT, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
-from .inspection import inspect_file
+from .inspection import inspect_file, investigation_mounts
 from .module_scaffold import create_module_draft
 from .evidence_panel import EvidencePanel
 from .entity import data_directory, legacy_base
@@ -275,11 +275,11 @@ class Workspace(QMainWindow):
         case_workspace = self.page("Affaire en cours", "Current case", heading=False)
         case_header = QHBoxLayout()
         case_workspace.addLayout(case_header)
-        case_title = QLabel()
-        case_title.setObjectName("pageTitle")
-        self.bind(case_title.setText, "Affaire en cours", "Current case")
-        case_header.addWidget(case_title)
-        case_header.addStretch()
+        self.case_title = QLabel()
+        self.case_title.setObjectName("pageTitle")
+        self.case_title.setTextFormat(Qt.TextFormat.PlainText)
+        self.case_title.setWordWrap(True)
+        case_header.addWidget(self.case_title, 1)
         self.button(case_header, "Monter périphérique/image", "Mount device/image",
                     self.request_mount, primary=True)
         self.button(case_header, "Démonter périphérique/image", "Unmount device/image",
@@ -763,6 +763,8 @@ class Workspace(QMainWindow):
         self.case_label.setText(label)
         self.integrity_context.setText(label)
         self.module_case.setText(label)
+        title = self.tr_pair("Affaire en cours", "Current case")
+        self.case_title.setText(f"{title} · {name}" if item else title)
         self.active_case.setText("·  " + self.active_case.fontMetrics().elidedText(
             name, Qt.TextElideMode.ElideRight, 200
         ))
@@ -788,6 +790,7 @@ class Workspace(QMainWindow):
             self.fail(error)
             return
         self.explorer.set_files(rows)
+        self.refresh_explorer_mounts()
         for evidence_id, path, digest in rows:
             label = f"{path}  ·  {digest}"
             self.add_row(self.evidence, label, evidence_id)
@@ -857,16 +860,17 @@ class Workspace(QMainWindow):
                 f"{event['timestamp']}  ·  {event['action']}  ·  {event['operator']}"
             )
 
-    def preview_evidence(self, name, digest):
+    def preview_evidence(self, name, digest, mount=None):
         if self.busy is not None:
             return
         case_id = self.active_case_id
 
         def display(snapshot):
-            if self.active_case_id == case_id:
+            if (self.active_case_id == case_id
+                    and (mount is None or (self.explorer.mounts or {}).get(mount[0]) == mount[1])):
                 self.explorer.show_preview(name, digest, snapshot)
 
-        self.run_task(lambda: inspect_file(Path(name)), display)
+        self.run_task(lambda: inspect_file(Path(name), mount=mount), display)
 
     def verify_integrity(self):
         self.verify_selected_file(self.integrity_files.currentItem())
@@ -1199,7 +1203,18 @@ class Workspace(QMainWindow):
         else:
             self.on_success(result)
 
+    def refresh_explorer_mounts(self):
+        if not self.active_case_id:
+            self.explorer.set_mounts({})
+            return
+        try:
+            mounts = investigation_mounts()
+        except OSError:
+            mounts = {}
+        self.explorer.set_mounts(mounts)
+
     def refresh_case_mount(self):
+        self.refresh_explorer_mounts()
         try:
             entries = read_zones()["/investigation"]
         except OSError:

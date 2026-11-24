@@ -118,6 +118,25 @@ class WorkspaceTest(unittest.TestCase):
             with patch.object(window, "confirm_case_selection", return_value=True):
                 window.case_clicked(window.cases.currentItem())
             self.assertIn("Second", window.active_case.text())
+            window.change_language("en")
+            self.assertEqual(window.case_title.text(), "Current case · Second")
+            window.change_language("fr")
+            self.assertEqual(window.case_title.text(), "Affaire en cours · Second")
+            window.change_language("en")
+            with patch("vigil.desktop.investigation_mounts", return_value={"/investigation/sdb1": 42}):
+                window.refresh_case_mount()
+            root_item = window.explorer.tree.topLevelItem(0)
+            self.assertEqual(root_item.text(0), "/investigation/sdb1")
+            with patch("vigil.evidence_panel.list_evidence_directory",
+                       return_value=[("docs", True), ("note.txt", False)]) as list_directory:
+                window.explorer.expand_directory(root_item)
+            list_directory.assert_called_once_with("/investigation/sdb1", "/investigation/sdb1", 42)
+            with patch.object(window.explorer, "request_preview") as preview:
+                window.explorer.inspect(root_item.child(1), 0)
+            preview.assert_called_once_with("/investigation/sdb1/note.txt", None, ("/investigation/sdb1", 42))
+            with patch("vigil.desktop.investigation_mounts", return_value={}):
+                window.refresh_case_mount()
+            self.assertEqual(window.explorer.tree.topLevelItemCount(), 0)
             self.assertNotEqual(window.active_case_id, first)
             self.close_workspace(window)
 

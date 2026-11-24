@@ -160,6 +160,13 @@ D. Registre, CLI et compatibilité
     profil utilisateur. Si la configuration système est lisible et celle de
     Vigil refusée, vérifier le diagnostic dans le terminal et demander les
     entrées AppArmor à l’administrateur.
+[ ] En VM, vérifier le titre Affaire en cours avec et sans affaire, en FR
+    et EN. Monter un support RO synthétique, déplier ses dossiers dans
+    Explorateur, ouvrir un fichier puis vérifier que l’arbre disparaît
+    après démontage. Vérifier le refus d’un lien et d’un montage RW.
+[ ] Simuler des erreurs de lecture pendant le census. Vérifier qu’aucun
+    nouvel index incomplet n’est publié et que les dossiers lisibles restent
+    parcourables dans Explorateur.
 [ ] Dans Explorateur, ouvrir un fichier enregistré et comparer métadonnées,
     hex et chaînes ASCII. Vérifier la limite 4 Kio et le refus d’un lien.
 [ ] Dans Intégrité, comparer un fichier inchangé puis modifié et exporter

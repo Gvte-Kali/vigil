@@ -1,10 +1,12 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from vigil.core import discover
-from vigil.inspection import PREVIEW_BYTES, inspect_file
+from vigil.inspection import PREVIEW_BYTES, inspect_file, list_evidence_directory
 from vigil.module_scaffold import create_module_draft
 from vigil.quick_actions import legacy_mount_command, update_command
 from vigil.storage import default_database
@@ -43,6 +45,30 @@ class WorkspaceToolsTest(unittest.TestCase):
             self.assertIn(f"VIGIL_LEGACY_SCAN_DIR={root / 'legacy-custody' / case / ('scan-' + run)}", argv)
             self.assertEqual(argv[-4:], ["--user", "Bob", "--log", "--pdf"])
             self.assertFalse(any("VIGIL_CASE_CENSUS" in item for item in argv))
+
+    def test_mounted_explorer_requires_a_read_only_matching_mount_and_skips_symlinks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "hello.txt"
+            target.write_text("synthetic content", encoding="ascii")
+            (root / "alias").symlink_to(target)
+            descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                info = Path(f"/proc/self/fdinfo/{descriptor}").read_text()
+                mount_id = int(next(line.split()[1] for line in info.splitlines()
+                                    if line.startswith("mnt_id:")))
+            finally:
+                os.close(descriptor)
+            with patch("vigil.inspection.os.fstatvfs", return_value=SimpleNamespace(f_flag=0)):
+                with self.assertRaises(ValueError):
+                    list_evidence_directory(root, root, mount_id)
+            with patch("vigil.inspection.os.fstatvfs", return_value=SimpleNamespace(f_flag=os.ST_RDONLY)):
+                self.assertEqual(list_evidence_directory(root, root, mount_id), [("hello.txt", False)])
+                self.assertEqual(inspect_file(target, mount=(root, mount_id))["strings"], "synthetic content")
+                with self.assertRaises(ValueError):
+                    inspect_file(root / "alias", mount=(root, mount_id))
+                with self.assertRaises(ValueError):
+                    list_evidence_directory(root, root, mount_id + 1)
 
     def test_external_action_keeps_exit_error_visible(self):
         import subprocess

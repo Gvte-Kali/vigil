@@ -278,13 +278,12 @@ RAW_LIST="$WORK_DIR/raw_list.tsv"
 : > "$RAW_LIST"
 
 # find -printf : %p chemin | %s taille | dates a/m/c/b | %A* atime | %T* mtime |
-# %C* ctime | %w btime (birth) | %f nom | %y type
-# btime (%w) n'est pas supporte par tous les FS ; on le capture quand meme
+# %C* ctime. Le champ btime reste vide : GNU find ne fournit pas %w.
 # (vide si absent).
-FIND_FORMAT="%p\t%s\t%AY%Am%Ad%AH%AM\t%TY%Tm%Td%TH%TM\t%CY%Cm%Cd%CH%CM\t%w\t%m\t%u\t%g\n"
+FIND_FORMAT="%p\t%s\t%AY%Am%Ad%AH%AM\t%TY%Tm%Td%TH%TM\t%CY%Cm%Cd%CH%CM\t\t%m\t%u\t%g\n"
 if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
     if ! find "${CENSUS_ROOTS[@]}" -xdev -type f -printf "$FIND_FORMAT" > "$RAW_LIST"; then
-        fail "Recensement automatique incomplet : parcourir le support a échoué."
+        fail "Recensement automatique incomplet : erreurs de parcours listées ci-dessus. Aucun nouvel index produit."
     fi
 else
     find "$INVESTIGATION_DIR" -type f -printf "$FIND_FORMAT" 2>/dev/null > "$RAW_LIST"
