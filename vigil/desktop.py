@@ -1082,8 +1082,10 @@ class Workspace(QMainWindow):
             return
         response = QMessageBox.question(
             self, "Vigil",
-            self.tr_pair("Confirmer l’opération sur la partition approuvée par l’administrateur ?",
-                         "Confirm the operation on the administrator-approved partition?"),
+            (self.tr_pair("Ouvrir la sélection de la partition USB dans le terminal ?",
+                          "Open USB partition selection in the terminal?")
+             if operation == "mount" else
+             self.tr_pair("Démonter la partition montée par Vigil ?", "Unmount the partition mounted by Vigil?")),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

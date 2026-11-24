@@ -42,11 +42,10 @@ validation.
 
 L’administrateur copie le fichier revu vers `/usr/local/sbin/vigil-mount`
 sous propriétaire root, mode 0755. Il prépare un point `/investigation`
-vide, root-owned et non modifiable par l’opérateur, et un fichier régulier
-`/etc/vigil/approved-partition` root-owned, non modifiable par l’opérateur,
-qui contient uniquement le nom de partition confirmé sous `/dev/disk/by-id`
-(sans le chemin). Le répertoire de configuration et ses parents doivent
-être sous contrôle administrateur.
+vide, root-owned et non modifiable par l’opérateur. Le helper détecte
+les partitions USB via leurs liens by-id et l’ascendance sysfs.
+Le fichier `/etc/vigil/approved-partition` des versions précédentes
+n’est plus utilisé.
 
 Si le poste délègue ces opérations à un groupe local `vigil-operators`,
 l’administrateur peut valider une règle limitée avec `visudo`, puis contrôler
@@ -58,20 +57,26 @@ invocations ci-dessous, avec authentification.
 ```
 
 Depuis Qt, l’opérateur confirme une affaire, choisit son identité et confirme
-l’action. Sudo s’exécute dans le terminal intégré. Les événements Qt restent
+l’action. Après sudo, le terminal intégré affiche une liste numérotée
+et propose `r` pour actualiser. Sélectionner la partition identifiée,
+puis saisir `OUI` pour demander le verrouillage bloc et le montage. Les événements Qt restent
 rattachés à l’affaire sélectionnée au lancement ; le helper consigne son
 résultat et l’UID appelant dans syslog. L’administrateur peut aussi lancer le
 helper depuis sa session d’administration.
 
-Le helper exige que le bloc et son parent soient déjà en lecture seule.
+Le helper demande l’ouverture exclusive du disque parent avant de
+positionner les blocs du disque et de la partition en lecture seule.
+Il contrôle les deux verrous et revalide la source avant de monter.
+Le verrou reste appliqué après démontage ou échec du montage.
 Il monte uniquement ext4 en `ro,noload,nosuid,nodev,noexec` sous
 `/investigation`. Le démontage vérifie le reçu du montage et refuse un
 montage étranger ou des sous-montages. Il ne lève aucun verrouillage RO.
 En cas de divergence ou de reçu orphelin, l’administrateur doit réconcilier
-l’état avant de réessayer. L’ouverture d’images et les autres formats restent
-hors de ce lot.
+l’état avant de réessayer. L’ouverture d’images, les autres formats, MTP et le triage HID de Vigil 1.0
+restent hors de ce lot.
 
-Recette VM : bon et mauvais by-id, support RW, parent RW, cible occupée,
+Recette VM : détection et rafraîchissement, refus d’un disque interne,
+annulation, support déjà utilisé, contrôle des verrous bloc, cible occupée,
 montage étranger, sous-montage, succès sur ext4 synthétique, vérification
 des flags, des empreintes avant/après et du journal, puis démontage.
 Rollback : retirer la délégation et le helper après réconciliation

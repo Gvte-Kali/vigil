@@ -13,19 +13,29 @@ LOADER.exec_module(HELPER)
 
 
 class MountPolicyTest(unittest.TestCase):
-    def test_refuses_unapproved_name_and_symlink_config(self):
+    def test_selection_requires_explicit_confirmation(self):
+        options = [(Path("/dev/disk/by-id/usb-fixture-part1"), "8:1")]
+        with patch.object(HELPER, "candidates", return_value=options), \
+                patch.object(HELPER.sys.stdin, "isatty", return_value=True), \
+                patch("builtins.print"), patch("builtins.input", side_effect=["r", "1", "OUI"]):
+            self.assertEqual(HELPER.select_source(), options[0])
+        with patch.object(HELPER, "candidates", return_value=options), \
+                patch.object(HELPER.sys.stdin, "isatty", return_value=True), \
+                patch("builtins.print"), patch("builtins.input", side_effect=["1", ""]):
+            with self.assertRaisesRegex(ValueError, "cancelled"):
+                HELPER.select_source()
+
+    def test_usb_partition_rejects_disk_without_usb_ancestry(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            approval = root / "approved-partition"
-            approval.write_text("../../sda1\n")
-            with patch.object(HELPER, "APPROVAL", approval), \
-                    patch.object(HELPER, "check_root_owned"):
-                with self.assertRaisesRegex(ValueError, "partition name"):
-                    HELPER.approved_source()
-                approval.rename(root / "other")
-                approval.symlink_to(root / "other")
-                with self.assertRaises(OSError):
-                    HELPER.approved_source()
+            disk = root / "internal" / "sda"
+            partition = disk / "sda1"
+            partition.mkdir(parents=True)
+            (partition / "partition").touch()
+            (root / "8:1").symlink_to(partition)
+            with patch.object(HELPER, "SYS_BLOCK", root):
+                with self.assertRaisesRegex(ValueError, "not attached through USB"):
+                    HELPER.usb_partition("8:1")
 
     def test_refuses_regular_file_and_foreign_mount(self):
         with tempfile.TemporaryFile() as stream:

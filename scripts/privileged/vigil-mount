@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Privileged mount of one administrator-approved, already-RO ext4 partition."""
+"""Interactive, constrained read-only mount of an external USB partition."""
 import ctypes
 import fcntl
 import os
@@ -11,11 +11,13 @@ import syslog
 from pathlib import Path
 
 TARGET = Path("/investigation")
-APPROVAL = Path("/etc/vigil/approved-partition")
 RUN = Path("/run/vigil-mount")
 BY_ID = Path("/dev/disk/by-id")
 FLAGS = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
 BLOCK_RO_GET = 0x125e
+BLOCK_RO_SET = 0x125d
+SYS_BLOCK = Path("/sys/dev/block")
+USB_BUS = Path("/sys/bus/usb")
 BY_ID_PARTITION = re.compile(r"[A-Za-z0-9._:+-]+-part[1-9][0-9]*")
 MOUNT_FLAGS = 1 | 2 | 4 | 8  # MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC
 LIBC = ctypes.CDLL(None, use_errno=True)
@@ -26,19 +28,67 @@ def check_root_owned(info):
         raise ValueError("expected a root-owned path without group or other write access")
 
 
-def approved_source():
-    check_root_owned(APPROVAL.parent.lstat())
-    if APPROVAL.parent.is_symlink():
-        raise ValueError("approval directory must not be a symbolic link")
-    with os.fdopen(os.open(APPROVAL, FLAGS), "rb") as stream:
-        info = os.fstat(stream.fileno())
-        check_root_owned(info)
-        if not stat.S_ISREG(info.st_mode):
-            raise ValueError("approval must be a regular file")
-        name = stream.read(256).decode("ascii").strip()
-    if not BY_ID_PARTITION.fullmatch(name):
-        raise ValueError("approval must contain one /dev/disk/by-id partition name")
-    return BY_ID / name
+def device_number(info):
+    if not stat.S_ISBLK(info.st_mode):
+        raise ValueError("source is not a block device")
+    return f"{os.major(info.st_rdev)}:{os.minor(info.st_rdev)}"
+
+
+def usb_partition(device):
+    node = (SYS_BLOCK / device).resolve(strict=True)
+    if not (node / "partition").is_file():
+        raise ValueError("source is not a partition")
+    if not any(
+        (ancestor / "subsystem").is_symlink()
+        and (ancestor / "subsystem").resolve() == USB_BUS
+        for ancestor in node.parents
+    ):
+        raise ValueError("source is not attached through USB")
+    return node
+
+
+def candidates():
+    found = {}
+    if not BY_ID.is_dir():
+        return []
+    for source in sorted(BY_ID.iterdir()):
+        if not BY_ID_PARTITION.fullmatch(source.name):
+            continue
+        try:
+            device = device_number(source.stat())
+            usb_partition(device)
+        except (OSError, ValueError):
+            continue
+        found.setdefault(device, source)
+    return [(source, device) for device, source in found.items()]
+
+
+def select_source():
+    if not sys.stdin.isatty():
+        raise ValueError("an interactive terminal is required")
+    while True:
+        options = candidates()
+        print("USB partitions (ext4 mount only):")
+        for index, (source, _) in enumerate(options, 1):
+            print(f"  {index}. {source.name} → {source.resolve().name}")
+        print("  r. Refresh / Actualiser    q. Cancel / Annuler")
+        choice = input("Partition number / Numéro de partition: ").strip().lower()
+        if choice == "r":
+            continue
+        if choice == "q":
+            raise ValueError("mount cancelled")
+        if choice.isascii() and choice.isdigit() and len(choice) <= 6:
+            index = int(choice) - 1
+            if 0 <= index < len(options):
+                source, device = options[index]
+                confirmation = input(
+                    f"Lock {source.name} and its USB disk read-only, then mount? "
+                    "Type YES / Saisir OUI: "
+                )
+                if confirmation.strip().upper() in {"YES", "OUI"}:
+                    return source, device
+                raise ValueError("mount cancelled")
+        print("Invalid selection / Choix invalide")
 
 
 def mounts():
@@ -54,19 +104,32 @@ def mounts():
 
 
 def require_ro_partition(descriptor):
-    info = os.fstat(descriptor)
-    if not stat.S_ISBLK(info.st_mode):
-        raise ValueError("approved source is not a block device")
-    device = f"{os.major(info.st_rdev)}:{os.minor(info.st_rdev)}"
-    node = Path("/sys/dev/block", device).resolve(strict=True)
-    if not (node / "partition").is_file():
-        raise ValueError("approved source is not a partition")
+    device = device_number(os.fstat(descriptor))
+    node = usb_partition(device)
     if (node.parent / "ro").read_text().strip() != "1":
         raise ValueError("parent device is not read-only")
     result = fcntl.ioctl(descriptor, BLOCK_RO_GET, bytes(4))
     if struct.unpack("i", result)[0] != 1:
         raise ValueError("partition is not read-only")
     return device
+
+
+def lock_partition(block, node):
+    parent = node.parent
+    if (parent / "dev").read_text().strip() == (node / "dev").read_text().strip():
+        raise ValueError("invalid parent device")
+    # An exclusive open of the whole disk refuses mounted partitions and
+    # existing block holders before altering either read-only flag.
+    disk = os.open(Path("/dev") / parent.name, FLAGS | os.O_EXCL)
+    try:
+        if device_number(os.fstat(disk)) != (parent / "dev").read_text().strip():
+            raise ValueError("parent device identity changed")
+        readonly = struct.pack("i", 1)
+        fcntl.ioctl(disk, BLOCK_RO_SET, readonly)
+        fcntl.ioctl(block, BLOCK_RO_SET, readonly)
+        require_ro_partition(block)
+    finally:
+        os.close(disk)
 
 
 def checked_call(result):
@@ -78,16 +141,21 @@ def checked_call(result):
 def mount_partition(receipt):
     if receipt.exists() or mounts():
         raise ValueError("investigation is occupied or needs administrator reconciliation")
-    source = approved_source()
+    source, selected_device = select_source()
     with os.fdopen(os.open(source.resolve(strict=True), FLAGS), "rb") as block:
         target = os.open(TARGET, FLAGS | os.O_DIRECTORY)
         try:
             check_root_owned(os.fstat(target))
             if os.listdir(target):
                 raise ValueError("investigation directory must be empty")
-            device = require_ro_partition(block.fileno())
-            if source.stat().st_rdev != os.fstat(block.fileno()).st_rdev or mounts():
+            device = device_number(os.fstat(block.fileno()))
+            if device != selected_device or device_number(source.stat()) != device or mounts():
                 raise ValueError("source or mount state changed")
+            node = usb_partition(device)
+            lock_partition(block.fileno(), node)
+            if device_number(source.stat()) != device or mounts():
+                raise ValueError("source or mount state changed after locking")
+            require_ro_partition(block.fileno())
             checked_call(LIBC.mount(
                 f"/proc/self/fd/{block.fileno()}".encode(),
                 f"/proc/self/fd/{target}".encode(), b"ext4",
@@ -134,7 +202,7 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             syslog.syslog(syslog.LOG_NOTICE, f"vigil-mount {operation} uid={caller} start")
             {"mount": mount_partition, "unmount": unmount_partition}[operation](receipt)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, EOFError) as error:
         syslog.syslog(syslog.LOG_ERR, f"vigil-mount {operation} uid={caller} failed: {error}")
         print(error, file=sys.stderr)
         return 1
