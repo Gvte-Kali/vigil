@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 ZONES = ("/investigation", "/stockage")
-LSBLK_COLUMNS = "NAME,PATH,TYPE,SIZE,FSTYPE,PARTTYPE,PTTYPE,MODEL,FSAVAIL,FSUSE%"
+LSBLK_COLUMNS = "NAME,PATH,TYPE,SIZE,FSTYPE,PARTTYPE,PTTYPE,RO,MODEL,FSAVAIL,FSUSE%"
 ESCAPE = re.compile(r"\\([0-7]{3})")
 
 

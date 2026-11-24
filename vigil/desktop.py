@@ -8,7 +8,7 @@ from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSe
 from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QApplication, QButtonGroup, QComboBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QStackedWidget,
     QVBoxLayout, QWidget,
 )
@@ -18,6 +18,8 @@ from .adapters import CENSUS_LIMIT, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 from .system_panel import SystemPanel
+from .terminal_panel import TerminalPanel
+from .quick_actions import scan_command, tool, update_command
 
 STYLE = """
 QWidget { background: #101318; color: #DCE3EC; font-size: 13px; }
@@ -172,7 +174,10 @@ class Workspace(QMainWindow):
         layout.addLayout(body, 1)
         self.navigation = QListWidget()
         self.navigation.setObjectName("navigation")
-        self.navigation.setFixedWidth(184)
+        self.group_items = {}
+        self.group_open = {}
+        self.current_group = None
+        self.navigation.setFixedWidth(224)
         self.bind(self.navigation.setAccessibleName, "Navigation", "Navigation")
         self.navigation.currentItemChanged.connect(self.open_page)
         body.addWidget(self.navigation)
@@ -225,7 +230,10 @@ class Workspace(QMainWindow):
 
 
         self.navigation_group("INVESTIGATION", "INVESTIGATION")
-        modules = self.page("Modules", "Modules")
+        modules = self.page("Affaire en cours", "Current case")
+        self.module_case = QLabel()
+        self.module_case.setTextFormat(Qt.TextFormat.PlainText)
+        modules.addWidget(self.module_case)
         self.modules = QListWidget()
         modules.addWidget(self.modules)
         module_actions = QHBoxLayout()
@@ -241,6 +249,23 @@ class Workspace(QMainWindow):
         settings_page.addLayout(diagnostic_actions)
         self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
         diagnostic_actions.addStretch()
+        self.navigation_group("ACTIONS RAPIDES", "QUICK ACTIONS")
+        for french, english, action in (
+            ("Scan antivirus", "Antivirus scan", self.quick_scan),
+            ("Mettre à jour l’antivirus", "Update antivirus", self.quick_update),
+            ("Ajouter un périphérique de stockage", "Add a storage device", self.quick_storage),
+        ):
+            page = self.page(french, english)
+            self.button(page, french, english, action, primary=True)
+            page.addStretch()
+
+        self.terminal = TerminalPanel()
+        self.terminal.completed.connect(self.quick_finished)
+        self.terminal_dock = QDockWidget(self)
+        self.bind(self.terminal_dock.setWindowTitle, "Terminal", "Terminal")
+        self.terminal_dock.setWidget(self.terminal)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.terminal_dock)
+        self.terminal_dock.hide()
         self.refresh_operators()
         self.translate()
         self.refresh_cases()
@@ -255,8 +280,29 @@ class Workspace(QMainWindow):
     def navigation_group(self, french, english):
         item = QListWidgetItem(self.navigation)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
-        item.setForeground(QColor("#91A1B3"))
-        self.bind(item.setText, french, english)
+        button = QPushButton()
+        button.setStyleSheet("text-align: left; background: #101318; border: none; color: #B9CAD9;")
+        item.setSizeHint(button.sizeHint())
+        self.navigation.setItemWidget(item, button)
+        key = french
+        self.current_group = key
+        self.group_items[key] = []
+        self.group_open[key] = True
+
+        def label(value):
+            item.setText(value)
+            arrow = "▾" if self.group_open[key] else "▸"
+            button.setText(f"{arrow}  {value}")
+            button.setAccessibleName(value)
+
+        def toggle():
+            self.group_open[key] = not self.group_open[key]
+            for child in self.group_items[key]:
+                child.setHidden(not self.group_open[key])
+            label(self.tr_pair(french, english))
+
+        self.bind(label, french, english)
+        button.clicked.connect(toggle)
 
     def open_page(self, item, _previous):
         if item is not None:
@@ -269,6 +315,7 @@ class Workspace(QMainWindow):
         widget.setProperty("workspacePage", True)
         item = QListWidgetItem(self.navigation)
         item.setData(Qt.ItemDataRole.UserRole, self.pages.addWidget(widget))
+        self.group_items[self.current_group].append(item)
         self.bind(item.setText, french, english)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -426,6 +473,7 @@ class Workspace(QMainWindow):
         name = item.text() if item else self.tr_pair("Aucune affaire active", "No active case")
         label = self.tr_pair("Affaire verrouillée", "Locked case") + f"  ·  {name}" if item else name
         self.case_label.setText(label)
+        self.module_case.setText(label)
         self.active_case.setText("·  " + self.active_case.fontMetrics().elidedText(
             name, Qt.TextElideMode.ElideRight, 200
         ))
@@ -650,6 +698,48 @@ class Workspace(QMainWindow):
         else:
             self.on_success(result)
 
+    def start_quick_action(self, command):
+        if self.terminal.session is not None:
+            self.terminal_dock.show()
+            self.notify("Une commande est déjà en cours.", "A command is already running.")
+            return
+        try:
+            self.terminal_dock.show()
+            self.resizeDocks([self.terminal_dock], [270], Qt.Orientation.Vertical)
+            self.terminal.start(command())
+        except (OSError, ValueError) as error:
+            self.fail(error)
+
+    def quick_scan(self):
+        file = self.choose_file()
+        if file:
+            self.start_quick_action(lambda: scan_command(Path(file), self.database_path))
+
+    def quick_update(self):
+        response = QMessageBox.question(
+            self, "Vigil",
+            self.tr_pair("Télécharger les signatures ClamAV dans le profil Vigil ?",
+                         "Download ClamAV signatures into the Vigil profile?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if response == QMessageBox.StandardButton.Yes:
+            self.start_quick_action(lambda: update_command(self.database_path))
+
+    def quick_storage(self):
+        self.start_quick_action(lambda: [
+            tool("lsblk"), "-o", "NAME,PATH,TYPE,SIZE,FSTYPE,RO,MOUNTPOINTS",
+        ])
+        self.system_panel.refresh()
+        self.statusBar().showMessage(self.tr_pair(
+            "Connectez le périphérique puis relancez l’inventaire. Montage réservé à l’administrateur.",
+            "Connect the device and refresh the inventory. Mounting requires an administrator.",
+        ), 10000)
+
+    def quick_finished(self, code):
+        self.terminal.appendPlainText(self.tr_pair(f"Code de sortie : {code}", f"Exit code: {code}"))
+        self.system_panel.refresh()
+
     def confirm_close(self):
         dialog = QMessageBox(self)
         dialog.setWindowTitle(self.tr_pair("Fermer Vigil", "Close Vigil"))
@@ -689,7 +779,7 @@ class Workspace(QMainWindow):
             raise ValueError("could not save workspace preferences")
 
     def closeEvent(self, event):
-        if self.busy is not None:
+        if self.busy is not None or self.terminal.session is not None:
             event.ignore()
             self.notify("Attendez la fin de l’opération avant de fermer Vigil.",
                         "Wait for the operation to finish before closing Vigil.")

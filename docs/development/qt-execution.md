@@ -24,3 +24,16 @@ PTY reste à raccorder à l’interface pour les scripts interactifs.
 Recette sur profils et index synthétiques dans `tests.txt`. Retour par
 revert du commit sur la branche dédiée. Les fiches et événements ajoutés
 utilisent le schéma SQLite existant et restent lisibles par le Core.
+
+
+## Actions rapides et contrôle au démarrage
+
+La branche main associe le scan ClamAV aux archives et alertes de chiffrement,
+la mise à jour à un service système et le stockage à des opérations privilégiées
+(montage et passage RW). Qt exécute ClamAV sur un fichier choisi et FreshClam
+dans le profil utilisateur après confirmation réseau, dans un terminal PTY
+intégré. Les limites et codes de sortie restent ceux des outils. L’action
+stockage inventorie les périphériques ; l’administrateur reste responsable
+du montage pendant la transition du broker. Le tableau de bord lit le RO
+bloc via lsblk au démarrage et conserve l’état des montages séparément.
+Un état déclaré RO ne garantit pas la protection physique d’une preuve.

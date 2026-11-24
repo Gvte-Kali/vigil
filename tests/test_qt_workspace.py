@@ -190,6 +190,40 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(window.pages.currentIndex(), 1)
             self.close_workspace(window)
 
+    def test_group_can_collapse_and_reopen(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            header = window.navigation.itemWidget(window.navigation.item(0))
+            header.click()
+            self.assertTrue(window.navigation.item(1).isHidden())
+            header.click()
+            self.assertFalse(window.navigation.item(1).isHidden())
+            self.close_workspace(window)
+
+    def test_integrated_pty_drains_output_and_reports_exit(self):
+        import sys
+
+        from vigil.terminal_panel import TerminalPanel
+
+        panel = TerminalPanel()
+        codes = []
+        panel.completed.connect(codes.append)
+        panel.start([sys.executable, "-c", "print('fixture terminal'); raise SystemExit(3)"])
+        for _ in range(250):
+            self.app.processEvents()
+            if codes:
+                break
+            time.sleep(0.01)
+        self.assertEqual(codes, [3])
+        self.assertIn("fixture terminal", panel.toPlainText())
+        panel.close()
+
     def wait_for_task(self, window):
         for _ in range(200):
             self.app.processEvents()

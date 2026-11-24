@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 dependencies = ["pydantic>=2,<3", "PyYAML>=6,<7", "typer>=0.12,<1"]
 
 [project.optional-dependencies]
-desktop = ["PySide6-Essentials>=6.7,<7"]
+desktop = ["PySide6-Essentials>=6.7,<7", "pyte>=0.8,<1"]
 
 [project.scripts]
 vigil2 = "vigil.cli:app"

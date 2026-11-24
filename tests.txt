@@ -118,6 +118,21 @@ D. Registre, CLI et compatibilité
     Les libellés Tk et les messages bruts des scripts suivent leur
     localisation historique. Le bouton FR/EN agit dans Qt.
 
+[ ] Replier et déplier chaque groupe de navigation. Dans Investigation,
+    ouvrir Affaire en cours et tenter la requête census avec puis sans
+    affaire active.
+[ ] Dans Actions rapides, choisir un fichier synthétique pour ClamAV.
+    Comparer le code de sortie et le résultat dans le terminal intégré.
+    Vérifier aussi le traitement de ClamAV absent.
+[ ] Pour FreshClam, annuler la confirmation puis, sur un environnement
+    de test connecté, vérifier que les signatures restent dans le profil
+    utilisateur Vigil. Comparer le scan avant et après la mise à jour.
+[ ] Ajouter un périphérique de stockage ouvre l’inventaire lsblk dans
+    le terminal. En VM, vérifier l’apparition d’un périphérique synthétique
+    et confirmer qu’aucun montage ni changement RO/RW ne se produit.
+[ ] Au démarrage, comparer la synthèse de protection bloc avec lsblk
+    et distinguer cet état des options de montage dans Zones Vigil.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,

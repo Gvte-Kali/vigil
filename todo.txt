@@ -67,7 +67,10 @@ PHASE 04 — WORKSPACE QT ET MODULES
     distingue disques, partitions et états de montage par couleur.
     Fermeture confirmée et sauvegarde contrôlée. Les futurs modules
     doivent enregistrer leurs modifications dans leur affaire avant fermeture.
-    Parité historique et panneau terminal ouverts.
+    Menus dépliants, Affaire en cours et actions rapides accessibles.
+    Terminal PTY Qt pour ClamAV local, FreshClam utilisateur et inventaire
+    stockage. Lecture de l’état RO bloc au démarrage. Montage via le broker
+    et migration des autres modules interactifs restent ouverts.
     Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.
 [ ] Catalogue officiel séparé : index, recherche, cache, revue et CI.

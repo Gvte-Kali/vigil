@@ -49,6 +49,9 @@ class SystemPanel(QWidget):
             )
             cards.addWidget(card, index // 2, index % 2)
             self.cards.append(card)
+        self.protection = QLabel()
+        self.protection.setWordWrap(True)
+        layout.addWidget(self.protection)
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
         self.tree.setToolTipDuration(10000)
@@ -113,6 +116,35 @@ class SystemPanel(QWidget):
         ]
         for card, (title, value) in zip(self.cards, values):
             card.setText(f"{title}\n{value}")
+        writable = readonly = unknown = 0
+        pending = list(self.devices or ())
+        while pending:
+            device = pending.pop()
+            pending.extend(device.get("children") or ())
+            if device.get("type") not in {"disk", "part"}:
+                continue
+            ro = device.get("ro")
+            if ro in (True, 1, "1"):
+                readonly += 1
+            elif ro in (False, 0, "0"):
+                writable += 1
+            else:
+                unknown += 1
+        if not (readonly or writable or unknown):
+            protection = tr("Protection bloc : état indisponible", "Block protection: unavailable")
+        elif writable or unknown:
+            protection = tr(
+                f"Protection bloc non confirmée pour tous : {writable} en écriture, {unknown} inconnus",
+                f"Block protection is not confirmed for all devices: {writable} writable, {unknown} unknown",
+            )
+        else:
+            protection = tr(
+                f"Lecture seule bloc signalée sur les {readonly} disques et partitions visibles",
+                f"Block read-only reported for all {readonly} visible disks and partitions",
+            )
+        self.protection.setText(protection)
+        color = "#80D7A4" if readonly and not (writable or unknown) else "#EBC47A"
+        self.protection.setStyleSheet(f"color: {color}; font-weight: 600;")
         self.tree.clear()
         mounts = self.add(self.tree, tr("Zones Vigil", "Vigil zones"), "#57C7D4")
         for zone in ZONES:
@@ -155,7 +187,12 @@ class SystemPanel(QWidget):
         device_type = device.get("type")
         color = {"disk": "#57C7D4", "part": "#BB9AF7"}.get(device_type, "#DCE3EC")
         item = self.add(parent, title, color)
+        ro = device.get("ro")
+        mode = tr("Lecture seule", "Read-only") if ro in (True, 1, "1") else (
+            tr("Écriture autorisée", "Writable") if ro in (False, 0, "0") else None
+        )
         fields = (
+            (tr("Mode du bloc", "Block mode"), mode),
             (tr("Modèle", "Model"), device.get("model")),
             (tr("Table", "Table"), device.get("pttype")),
             (tr("Type de partition", "Partition type"), device.get("parttype")),
