@@ -34,23 +34,14 @@ class ShutdownStateTest(unittest.TestCase):
                 baseline, path = capture_startup_state(root / "cases.sqlite")
             self.assertEqual(json.loads(path.read_text())["block_devices"], baseline)
 
-    def test_shutdown_rejects_mounts_and_reports_block_mode_changes(self):
-        before = {"sda1": {"sysfs": "/sys/sda1", "major_minor": "8:1",
-                           "disk_sequence": "21", "mode": "rw"}}
-        mounted = {**EMPTY_ZONES, "/stockage": [("/stockage/volume", "/dev/sdb1", "ext4", "rw")]}
-        with patch("vigil.shutdown_state.read_zones", return_value=mounted):
-            with self.assertRaisesRegex(ShutdownBlocked, "/stockage/volume"):
-                check_shutdown_state(before)
-        after = {"sda1": {**before["sda1"], "mode": "ro"}}
-        with patch("vigil.shutdown_state.read_zones", return_value=EMPTY_ZONES):
-            with patch("vigil.shutdown_state.read_block_modes", return_value=after):
-                self.assertEqual(check_shutdown_state(before), [("sda1", {"mode": "rw"}, {"mode": "ro", "parent": None})])
-            with patch("vigil.shutdown_state.read_block_modes", return_value=before):
-                self.assertEqual(check_shutdown_state(before), [])
+    def test_shutdown_checks_only_the_two_mount_zones(self):
+        for zone, target in (("/stockage", "/stockage/volume"), ("/investigation", "/investigation")):
+            mounted = {**EMPTY_ZONES, zone: [(target, "/dev/sdb1", "ext4", "ro")]}
+            with self.subTest(target=target), patch("vigil.shutdown_state.read_zones", return_value=mounted):
+                with self.assertRaisesRegex(ShutdownBlocked, target):
+                    check_shutdown_state()
 
-    def test_shutdown_ignores_identity_changes_when_mode_matches(self):
-        before = {"sdb": {"mode": "rw", "disk_sequence": "2"}}
-        after = {"sdb": {"mode": "rw", "disk_sequence": "7"}}
         with patch("vigil.shutdown_state.read_zones", return_value=EMPTY_ZONES), \
-                patch("vigil.shutdown_state.read_block_modes", return_value=after):
-            self.assertEqual(check_shutdown_state(before), [])
+                patch("vigil.shutdown_state.read_block_modes") as read_modes:
+            check_shutdown_state()
+            read_modes.assert_not_called()

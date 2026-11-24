@@ -436,7 +436,7 @@ class WorkspaceTest(unittest.TestCase):
                 self.assertIn("Close blocked", notify.call_args.args[1])
             self.close_workspace(window)
 
-    def test_close_with_block_change_requires_explicit_acknowledgment(self):
+    def test_close_saves_with_empty_zones_without_comparing_block_modes(self):
         from vigil.desktop import Workspace
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -445,18 +445,15 @@ class WorkspaceTest(unittest.TestCase):
                 QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
                 root / "cases.sqlite",
             )
-            changes = [("sdb1", {"mode": "ro"}, {"mode": "rw"})]
             with patch.object(window, "confirm_close", return_value=True), \
-                    patch("vigil.desktop.check_shutdown_state", return_value=changes):
-                with patch.object(window, "confirm_block_changes", return_value=None):
-                    self.assertFalse(window.close())
-                with patch.object(window, "confirm_block_changes", return_value={"sdb1": "ro"}), \
-                        patch.object(window, "notify") as notify:
-                    self.assertFalse(window.close())
-                    self.assertIn("/dev/sdb1: RW → RO", notify.call_args.args[2])
-                with patch.object(window, "confirm_block_changes", return_value={"sdb1": "rw"}) as confirm:
-                    self.assertTrue(window.close())
-                    confirm.assert_called_once_with(changes)
+                    patch("vigil.shutdown_state.read_zones", return_value={"/investigation": [], "/stockage": []}), \
+                    patch("vigil.shutdown_state.read_block_modes") as read_modes, \
+                    patch.object(window, "save_before_close") as save, \
+                    patch.object(window, "notify") as notify:
+                self.assertTrue(window.close())
+                read_modes.assert_not_called()
+                save.assert_called_once()
+                notify.assert_not_called()
 
     def test_antivirus_case_is_hidden_from_case_picker(self):
         from vigil import storage

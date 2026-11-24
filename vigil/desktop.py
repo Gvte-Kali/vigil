@@ -144,7 +144,7 @@ class Workspace(QMainWindow):
         self.closing_checks = False
         self.startup_state_error = None
         try:
-            self.startup_block_modes, self.startup_snapshot_path = capture_startup_state(database_path)
+            capture_startup_state(database_path)
         except (OSError, ValueError) as error:
             self.startup_state_error = error
         self.active_case_id = ""
@@ -1477,66 +1477,6 @@ class Workspace(QMainWindow):
         if self.settings.status() != QSettings.Status.NoError:
             raise ValueError("could not save workspace preferences")
 
-    def confirm_block_changes(self, changes):
-        tr = self.tr_pair
-        dialog = QDialog(self)
-        dialog.setWindowTitle(tr("Modes d’accès aux périphériques", "Device access modes"))
-        layout = QVBoxLayout(dialog)
-
-        def text(value):
-            label = QLabel(value)
-            label.setWordWrap(True)
-            label.setTextFormat(Qt.TextFormat.PlainText)
-            layout.addWidget(label)
-
-        def mode(record):
-            if record is None:
-                return tr("absent", "absent")
-            return tr("lecture seule (RO)", "read-only (RO)") if record["mode"] == "ro" else (
-                tr("lecture-écriture (RW)", "read-write (RW)")
-            )
-
-        text(tr(
-            "Les zones Vigil sont démontées. Les écarts ci-dessous concernent le verrou "
-            "logiciel au niveau bloc dans Linux. Ils ne décrivent ni le mode d’un montage "
-            "ni un verrou matériel de l’appareil.",
-            "The Vigil zones are unmounted. The differences below concern Linux block-level "
-            "software protection. They do not describe filesystem mount options or hardware locks.",
-        ))
-        text(tr(
-            "Choisis le mode bloc souhaité pour chaque entrée. Si le mode actuel est différent, "
-            "Vigil restera ouvert pour qu’un administrateur vérifie et applique le changement.",
-            "Choose the desired block mode for each entry. If it differs from the current mode, "
-            "Vigil stays open so an administrator can verify and apply the change.",
-        ))
-        choices = {}
-        for name, before, after in changes:
-            record = after if after is not None else before
-            parent = record.get("parent")
-            level = (tr(f"partition du disque /dev/{parent}", f"partition of disk /dev/{parent}")
-                     if parent else tr("périphérique bloc entier", "whole block device"))
-            text(f"/dev/{name} · {level}\n"
-                 f"{tr('Au démarrage', 'At startup')} : {mode(before)}"
-                 f" → {tr('Maintenant', 'Now')} : {mode(after)}")
-            if after is not None:
-                choice = QComboBox()
-                choice.addItem(tr("Lecture seule (RO)", "Read-only (RO)"), "ro")
-                choice.addItem(tr("Lecture-écriture (RW)", "Read-write (RW)"), "rw")
-                choice.setCurrentIndex(choice.findData(after["mode"]))
-                choice.setAccessibleName(f"/dev/{name}")
-                layout.addWidget(choice)
-                choices[name] = choice
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Vérifier et fermer", "Check and close"))
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("Rester dans Vigil", "Stay in Vigil"))
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setDefault(True)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return None
-        return {name: choice.currentData() for name, choice in choices.items()}
-
     def closeEvent(self, event):
         if self.closing_checks:
             event.ignore()
@@ -1552,8 +1492,7 @@ class Workspace(QMainWindow):
 
         self.closing_checks = True
         progress = QProgressDialog(
-            self.tr_pair("Vérification des montages et des modes bloc…",
-                         "Checking mounts and block-device modes…"),
+            self.tr_pair("Vérification des montages Vigil…", "Checking Vigil mounts…"),
             "", 0, 0, self,
         )
         progress.setWindowTitle(self.tr_pair("Vérification avant fermeture", "Shutdown checks"))
@@ -1565,38 +1504,11 @@ class Workspace(QMainWindow):
         error = None
         stage = "system"
         try:
-            if self.startup_state_error is not None:
-                raise self.startup_state_error
-            changes = check_shutdown_state(self.startup_block_modes)
-            if changes:
-                progress.hide()
-                desired = self.confirm_block_changes(changes)
-                if desired is None:
-                    event.ignore()
-                    return
-                pending = [
-                    f"/dev/{name}: {after['mode'].upper()} → {desired[name].upper()}"
-                    for name, _, after in changes if after is not None and after["mode"] != desired[name]
-                ]
-                if pending:
-                    event.ignore()
-                    self.notify(
-                        "Le mode choisi n’est pas encore appliqué. Fais vérifier ces périphériques "
-                        "par un administrateur, puis réessaie. Vigil n’a changé aucun verrou.",
-                        "The selected mode is not yet active. Have an administrator check these "
-                        "devices, then retry. Vigil has not changed any lock.",
-                        "\n".join(pending),
-                    )
-                    return
-                progress.show()
+            check_shutdown_state()
             stage = "save"
             self.save_before_close()
             stage = "system"
-            if check_shutdown_state(self.startup_block_modes) != changes:
-                raise ValueError(self.tr_pair(
-                    "L’état des périphériques a changé pendant la vérification. Réessayez.",
-                    "Device state changed during the check. Try again.",
-                ))
+            check_shutdown_state()
         except (OSError, ValueError, sqlite3.Error) as failure:
             error = failure
         finally:
@@ -1615,8 +1527,8 @@ class Workspace(QMainWindow):
                 self.notify("La sauvegarde a échoué. Vigil reste ouvert.",
                             "Saving failed. Vigil will stay open.", str(error))
             else:
-                self.notify("L’état système n’a pas pu être vérifié. Vigil reste ouvert.",
-                            "System state could not be verified. Vigil will stay open.", str(error))
+                self.notify("Impossible de vérifier les montages Vigil. Vigil reste ouvert.",
+                            "Could not check Vigil mounts. Vigil will stay open.", str(error))
             return
         self.mount_timer.stop()
         self.system_panel.stop()

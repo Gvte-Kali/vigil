@@ -238,11 +238,8 @@ D. Registre, CLI et compatibilité
 
 [ ] En VM synthétique, confirmer la fermeture avec un montage direct ou
     imbriqué sous /investigation ou /stockage. Vérifier le blocage et la
-    source indiquée. Après démontage, vérifier qu’un écart bloc affiche
-    le périphérique et les modes avant/après. Refuser puis confirmer la
-    fermeture. Vérifier le niveau bloc (disque ou partition avec
-    parent) et choisir RO puis RW. Un mode différent du mode constaté
-    doit garder Vigil ouvert et indiquer quoi faire vérifier.
+    source indiquée. Après démontage, vérifier que la fermeture aboutit
+    même si le mode bloc RO/RW a changé pendant la session.
 [ ] Vérifier la fenêtre de contrôle à la fermeture, la sauvegarde de
     l’affaire et la présence du JSON system-snapshots créé au lancement.
 

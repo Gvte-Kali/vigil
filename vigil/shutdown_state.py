@@ -50,17 +50,11 @@ def capture_startup_state(state):
     return snapshot["block_devices"], path
 
 
-def check_shutdown_state(baseline):
+def check_shutdown_state():
+    """Block shutdown while either Vigil zone contains a mount."""
     mounted = [row for entries in read_zones().values() for row in entries]
     if mounted:
         raise ShutdownBlocked("\n".join(
             f"{target} · {source} · {filesystem} · {mode}"
             for target, source, filesystem, mode in mounted
         ))
-    current = read_block_modes()
-    return [
-        (name, {"mode": baseline[name]["mode"]},
-         {"mode": current[name]["mode"], "parent": current[name].get("parent")})
-        for name in sorted(baseline.keys() & current.keys())
-        if baseline[name]["mode"] != current[name]["mode"]
-    ]
