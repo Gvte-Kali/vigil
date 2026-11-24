@@ -9,7 +9,7 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTabWidget,
+    QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QSplitter, QTabWidget,
     QVBoxLayout, QWidget,
 )
 
@@ -17,12 +17,14 @@ from . import storage
 from .adapters import CENSUS_LIMIT, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
+from .system_panel import SystemPanel
 
 STYLE = """
 QWidget { background: #101318; color: #DCE3EC; font-size: 13px; }
 QFrame#header { background: #1A2029; border: 1px solid #35404E; border-radius: 10px; }
 QFrame#header QLabel { background: transparent; }
 QLabel#brand { font-size: 21px; font-weight: 700; }
+QTreeWidget { background: #121820; border: 1px solid #3B495B; border-radius: 7px; }
 QLabel#sectionContext { color: #B9CAD9; padding: 3px 0; }
 QLineEdit, QComboBox, QListWidget {
     background: #121820; border: 1px solid #3B495B; border-radius: 7px;
@@ -112,7 +114,7 @@ class Workspace(QMainWindow):
         self.busy = None
         self.worker = None
         self.buttons = []
-        self.resize(900, 580)
+        self.resize(1130, 660)
         self.setWindowTitle("Vigil 2.0")
         self.setStyleSheet(STYLE)
 
@@ -136,6 +138,10 @@ class Workspace(QMainWindow):
         brand = QLabel("Vigil 2.0")
         brand.setObjectName("brand")
         header.addWidget(brand)
+        self.active_case = QLabel()
+        self.active_case.setObjectName("sectionContext")
+        self.active_case.setTextFormat(Qt.TextFormat.PlainText)
+        header.addWidget(self.active_case)
         header.addStretch()
         self.operator = QComboBox()
         self.operator.setMinimumWidth(145)
@@ -162,7 +168,32 @@ class Workspace(QMainWindow):
         layout.addWidget(self.tabs)
         self.setCentralWidget(root)
 
+        home = self.page("Accueil", "Home")
+        home_splitter = QSplitter(Qt.Orientation.Horizontal)
+        home_splitter.setChildrenCollapsible(False)
+        home.addWidget(home_splitter)
+        self.system_panel = SystemPanel(self.tr_pair)
+        home_splitter.addWidget(self.system_panel)
+        home_context = QWidget()
+        home_context.setProperty("workspacePage", True)
+        home_details = QVBoxLayout(home_context)
+        self.home_case = QLabel()
+        self.home_case.setTextFormat(Qt.TextFormat.PlainText)
+        self.home_case.setWordWrap(True)
+        home_details.addWidget(self.home_case)
+        self.button(home_details, "Ouvrir les affaires", "Open cases",
+                    lambda: self.tabs.setCurrentIndex(1), primary=True)
+        home_details.addStretch()
+        home_splitter.addWidget(home_context)
+        home_splitter.setSizes([460, 600])
+
         cases = self.page("Affaires", "Cases")
+        self.case_search = QLineEdit()
+        self.case_search.setClearButtonEnabled(True)
+        self.bind(self.case_search.setPlaceholderText, "Rechercher une affaire", "Search cases")
+        self.bind(self.case_search.setAccessibleName, "Rechercher une affaire", "Search cases")
+        self.case_search.textChanged.connect(self.filter_cases)
+        cases.addWidget(self.case_search)
         self.cases = QListWidget()
         cases.addWidget(self.cases)
         self.case_name = QLineEdit()
@@ -259,6 +290,7 @@ class Workspace(QMainWindow):
         if self.operator.count():
             self.operator.setItemText(0, self.tr_pair("Choisir un opérateur", "Choose an operator"))
         self.refresh_diagnostics()
+        self.system_panel.render()
         self.update_case_label()
 
     def notify(self, french, english, details=""):
@@ -293,6 +325,10 @@ class Workspace(QMainWindow):
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
             return
+        current = self.cases.currentItem()
+        if selected is None and current is not None:
+            selected = current.data(Qt.ItemDataRole.UserRole)
+        self.cases.blockSignals(True)
         self.cases.clear()
         for case_id, name in rows:
             self.add_row(self.cases, name, case_id)
@@ -300,6 +336,15 @@ class Workspace(QMainWindow):
                 self.cases.setCurrentRow(self.cases.count() - 1)
         if self.cases.currentRow() < 0 and rows:
             self.cases.setCurrentRow(0)
+        self.filter_cases(self.case_search.text())
+        self.cases.blockSignals(False)
+        self.refresh_evidence()
+
+    def filter_cases(self, text):
+        query = text.strip().casefold()
+        for index in range(self.cases.count()):
+            item = self.cases.item(index)
+            item.setHidden(query not in item.text().casefold())
 
     @staticmethod
     def add_row(widget, label, identifier):
@@ -310,7 +355,13 @@ class Workspace(QMainWindow):
     def update_case_label(self):
         item = self.cases.currentItem()
         name = item.text() if item else self.tr_pair("Aucune affaire", "No case selected")
-        self.case_label.setText(self.tr_pair("Affaire active", "Active case") + f"  ·  {name}")
+        label = self.tr_pair("Affaire active", "Active case") + f"  ·  {name}"
+        self.case_label.setText(label)
+        self.home_case.setText(label)
+        self.active_case.setText("·  " + self.active_case.fontMetrics().elidedText(
+            name, Qt.TextElideMode.ElideRight, 200
+        ))
+        self.active_case.setToolTip(name)
 
     def refresh_evidence(self, *_):
         self.update_case_label()
@@ -536,6 +587,7 @@ class Workspace(QMainWindow):
             event.ignore()
             self.notify("Une opération est en cours.", "An operation is in progress.")
         else:
+            self.system_panel.stop()
             super().closeEvent(event)
 
 

@@ -27,7 +27,7 @@ class WorkspaceTest(unittest.TestCase):
             database = Path(tmp) / "cases.sqlite"
             window = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertFalse(window.windowIcon().pixmap(40, 40).isNull())
-            self.assertEqual(window.tabs.tabText(0), "Affaires")
+            self.assertEqual(window.tabs.tabText(1), "Affaires")
             for language in ("fr", "en"):
                 self.assertFalse(window.language_buttons[language].icon().isNull())
             flag = window.language_buttons["fr"].icon().pixmap(QSize(24, 16), 2).toImage()
@@ -35,16 +35,21 @@ class WorkspaceTest(unittest.TestCase):
             window.add_operator("Alice")
             window.case_name.setText("Test & preuve")
             window.create_case()
+            window.case_search.setText("unmatched")
+            self.assertTrue(window.cases.item(0).isHidden())
+            self.assertIn("Test & preuve", window.active_case.text())
+            window.case_search.setText("PREUVE")
+            self.assertFalse(window.cases.item(0).isHidden())
             window.language_buttons["en"].click()
-            self.assertEqual(window.tabs.tabText(0), "Cases")
+            self.assertEqual(window.tabs.tabText(1), "Cases")
             self.assertEqual(window.case_label.text(), "Active case  ·  Test & preuve")
             window.close()
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
-            self.assertEqual(reopened.tabs.tabText(0), "Cases")
+            self.assertEqual(reopened.tabs.tabText(1), "Cases")
             self.assertEqual(reopened.operator.currentText(), "Alice")
             self.assertTrue(reopened.language_buttons["en"].isChecked())
             reopened.language_buttons["fr"].click()
-            self.assertEqual(reopened.tabs.tabText(1), "Preuves")
+            self.assertEqual(reopened.tabs.tabText(2), "Preuves")
             reopened.close()
 
     def test_background_file_registration_and_verification(self):
