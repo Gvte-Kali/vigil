@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 try:
-    from PySide6.QtCore import QSettings
+    from PySide6.QtCore import QSettings, QSize
     from PySide6.QtWidgets import QApplication
 except ImportError:
     QApplication = None
@@ -28,17 +28,21 @@ class WorkspaceTest(unittest.TestCase):
             window = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertFalse(window.windowIcon().pixmap(40, 40).isNull())
             self.assertEqual(window.tabs.tabText(0), "Affaires")
+            for language in ("fr", "en"):
+                self.assertFalse(window.language_buttons[language].icon().isNull())
+            flag = window.language_buttons["fr"].icon().pixmap(QSize(24, 16), 2).toImage()
+            self.assertEqual(flag.pixelColor(46, 16).name(), "#ed2939")
             window.operator.setText("Alice")
             window.case_name.setText("Test & preuve")
             window.create_case()
-            window.switch.click()
+            window.language_buttons["en"].click()
             self.assertEqual(window.tabs.tabText(0), "Cases")
             self.assertEqual(window.case_label.text(), "Active case  ·  Test & preuve")
             window.close()
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertEqual(reopened.tabs.tabText(0), "Cases")
-            self.assertTrue(reopened.switch.isChecked())
-            reopened.switch.click()
+            self.assertTrue(reopened.language_buttons["en"].isChecked())
+            reopened.language_buttons["fr"].click()
             self.assertEqual(reopened.tabs.tabText(1), "Preuves")
             reopened.close()
 

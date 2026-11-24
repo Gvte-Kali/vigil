@@ -31,12 +31,15 @@ A. Installation et mises à jour
 
 B. Langue et navigation Qt
 [ ] Vérifier le français sur un profil de recette neuf.
-[ ] Cliquer sur FR / EN. Les onglets, boutons, champs, messages et dialogues
+[ ] Vérifier que les deux boutons FR et EN affichent leurs drapeaux entiers
+    et que la langue active est mise en évidence. Cliquer sur EN. Les onglets, boutons, champs, messages et dialogues
     s’affichent en anglais. Vérifier au clavier avec Tab puis Espace.
 [ ] Fermer puis rouvrir. Vérifier que l’anglais reste actif. Revenir au
     français et vérifier sa persistance après un second redémarrage.
 [ ] Changer de langue sur chaque onglet avec une affaire sélectionnée.
     Les noms d’affaires, chemins et empreintes restent identiques.
+[ ] Vérifier le contraste des actions principales en cyan et des actions
+    secondaires, ainsi que le focus clavier et les onglets sélectionnés.
 [ ] Tester petite fenêtre, agrandissement, navigation clavier et écrans HiDPI.
 [ ] Si disponibles, comparer un lancement X11 et un lancement Wayland.
     Indiquer la session utilisée et noter les erreurs de plugin Qt.

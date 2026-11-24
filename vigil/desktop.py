@@ -4,10 +4,11 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QLibraryInfo, QObject, QSettings, QThread, QTranslator, Qt, Signal, Slot
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTranslator, Qt, Signal, Slot
+from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QApplication, QButtonGroup, QFileDialog, QFrame, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTabWidget,
     QVBoxLayout, QWidget,
 )
@@ -17,13 +18,69 @@ from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 
 STYLE = """
-QWidget { background: #101318; color: #DCE3EC; }
-QLineEdit, QListWidget, QTabWidget::pane { background: #1A2029; border: 1px solid #35404E; }
-QPushButton, QTabBar::tab { background: #242D38; padding: 7px 12px; }
-QPushButton:focus, QLineEdit:focus { border: 1px solid #57C7D4; }
-QTabBar::tab:selected, QListWidget::item:selected { background: #57C7D4; color: #101318; }
-QPushButton:disabled { color: #81909F; }
+QWidget { background: #101318; color: #DCE3EC; font-size: 13px; }
+QFrame#header { background: #1A2029; border: 1px solid #35404E; border-radius: 10px; }
+QFrame#header QLabel { background: transparent; }
+QLabel#brand { font-size: 21px; font-weight: 700; }
+QLabel#sectionContext { color: #B9CAD9; padding: 3px 0; }
+QLineEdit, QListWidget {
+    background: #121820; border: 1px solid #3B495B; border-radius: 7px;
+    padding: 8px; selection-background-color: #57C7D4; selection-color: #101318;
+}
+QListWidget::item { padding: 8px; border-radius: 4px; }
+QListWidget::item:hover:!selected { background: #263444; }
+QListWidget::item:selected { background: #57C7D4; color: #101318; }
+QTabWidget::pane {
+    background: #1A2029; border: 1px solid #35404E; border-radius: 8px;
+}
+QWidget[workspacePage="true"] { background: #1A2029; }
+QTabBar::tab {
+    background: #1A2029; color: #C4D1E0; padding: 10px 18px;
+    margin-right: 4px; border: 1px solid #35404E;
+    border-top-left-radius: 7px; border-top-right-radius: 7px;
+}
+QTabBar::tab:hover { background: #283648; }
+QTabBar::tab:selected {
+    background: #253744; color: #EAFBFF;
+    border-bottom: 3px solid #57C7D4; font-weight: 700;
+}
+QPushButton {
+    background: #273447; color: #F1F6FC; border: 1px solid #4B6076;
+    border-radius: 7px; padding: 8px 13px; font-weight: 600;
+}
+QPushButton:hover { background: #35475D; border-color: #7393AE; }
+QPushButton:pressed { background: #1C2939; }
+QPushButton[primary="true"] { background: #57C7D4; color: #101318; border-color: #72DAE5; }
+QPushButton[primary="true"]:hover { background: #80DEE8; }
+QPushButton[primary="true"]:pressed { background: #44AAB8; }
+QPushButton[languageButton="true"] { padding: 6px 9px; }
+QPushButton[languageButton="true"]:checked {
+    background: #284753; border-color: #57C7D4; color: #F0FCFF;
+}
+QPushButton:focus, QLineEdit:focus, QListWidget:focus { border-color: #A3F3FC; }
+QPushButton:disabled { background: #202A36; color: #91A1B3; border-color: #35404E; }
 """
+
+FLAGS = {
+    "fr": '<path fill="#002395" d="M0 0h10v20H0z"/><path fill="#fff" d="M10 0h10v20H10z"/>'
+          '<path fill="#ED2939" d="M20 0h10v20H20z"/>',
+    "en": '<path fill="#012169" d="M0 0h30v20H0z"/>'
+          '<path stroke="#fff" stroke-width="4" d="M0 0l30 20m0-20L0 20"/>'
+          '<path stroke="#C8102E" stroke-width="1.6" d="M0 0l30 20m0-20L0 20"/>'
+          '<path stroke="#fff" stroke-width="6" d="M15 0v20M0 10h30"/>'
+          '<path stroke="#C8102E" stroke-width="3.6" d="M15 0v20M0 10h30"/>',
+}
+
+
+def flag_icon(language):
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 20">{FLAGS[language]}</svg>'
+    renderer = QSvgRenderer(QByteArray(svg.encode("ascii")))
+    pixmap = QPixmap(48, 32)
+    pixmap.setDevicePixelRatio(2)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    with QPainter(pixmap) as painter:
+        renderer.render(painter, QRectF(0, 0, 24, 16))
+    return QIcon(pixmap)
 
 
 class Worker(QObject):
@@ -48,7 +105,7 @@ class Workspace(QMainWindow):
         super().__init__()
         self.settings = settings
         self.database_path = database_path
-        self.language = settings.value("language", "fr")
+        self.language = "en" if settings.value("language") == "en" else "fr"
         self.translator = QTranslator(self)
         self.localized = []
         self.busy = None
@@ -60,7 +117,13 @@ class Workspace(QMainWindow):
 
         root = QWidget()
         layout = QVBoxLayout(root)
-        header = QHBoxLayout()
+        layout.setContentsMargins(18, 16, 18, 12)
+        layout.setSpacing(14)
+        header_frame = QFrame()
+        header_frame.setObjectName("header")
+        header = QHBoxLayout(header_frame)
+        header.setContentsMargins(14, 10, 14, 10)
+        header.setSpacing(10)
         logo = QLabel()
         logo_path = Path(__file__).resolve().parents[1] / "data/icons/vigil.svg"
         if not logo_path.is_file():
@@ -69,17 +132,28 @@ class Workspace(QMainWindow):
         self.setWindowIcon(icon)
         logo.setPixmap(icon.pixmap(40, 40))
         header.addWidget(logo)
-        header.addWidget(QLabel("Vigil 2.0"))
+        brand = QLabel("Vigil 2.0")
+        brand.setObjectName("brand")
+        header.addWidget(brand)
         header.addStretch()
         self.operator = QLineEdit()
         self.bind(self.operator.setPlaceholderText, "Opérateur", "Operator")
         header.addWidget(self.operator)
-        self.switch = QPushButton()
-        self.switch.setCheckable(True)
-        self.switch.setChecked(self.language == "en")
-        self.switch.toggled.connect(self.change_language)
-        header.addWidget(self.switch)
-        layout.addLayout(header)
+        self.languages = QButtonGroup(self)
+        self.language_buttons = {}
+        for language, name in (("fr", "Français"), ("en", "English")):
+            button = QPushButton(flag_icon(language), language.upper())
+            button.setProperty("languageButton", True)
+            button.setIconSize(QSize(24, 16))
+            button.setCheckable(True)
+            button.setChecked(self.language == language)
+            button.setAccessibleName(name)
+            button.setToolTip(name)
+            self.languages.addButton(button)
+            self.language_buttons[language] = button
+            button.clicked.connect(lambda _, code=language: self.change_language(code))
+            header.addWidget(button)
+        layout.addWidget(header_frame)
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
         self.setCentralWidget(root)
@@ -89,19 +163,27 @@ class Workspace(QMainWindow):
         cases.addWidget(self.cases)
         self.case_name = QLineEdit()
         self.bind(self.case_name.setPlaceholderText, "Nom de l’affaire", "Case name")
-        cases.addWidget(self.case_name)
-        self.button(cases, "Créer une affaire", "Create case", self.create_case)
-        self.button(cases, "Importer un ancien projet", "Import legacy project", self.import_case)
+        case_actions = QHBoxLayout()
+        cases.addLayout(case_actions)
+        case_actions.addWidget(self.case_name, 1)
+        self.button(case_actions, "Créer une affaire", "Create case", self.create_case, primary=True)
+        self.button(case_actions, "Importer un ancien projet", "Import legacy project", self.import_case)
 
         evidence = self.page("Preuves", "Evidence")
         self.case_label = QLabel()
+        self.case_label.setObjectName("sectionContext")
         self.case_label.setTextFormat(Qt.TextFormat.PlainText)
         evidence.addWidget(self.case_label)
         self.evidence = QListWidget()
         evidence.addWidget(self.evidence)
-        self.button(evidence, "Ajouter un fichier à l’affaire", "Add a file to the case", self.add_file)
-        self.button(evidence, "Vérifier SHA-256", "Verify SHA-256", self.verify_file)
-        self.button(evidence, "Inspecter une image RAW", "Inspect a RAW image", self.inspect_image)
+        evidence_actions = QHBoxLayout()
+        evidence.addLayout(evidence_actions)
+        self.button(evidence_actions, "Ajouter un fichier à l’affaire", "Add a file to the case",
+                    self.add_file, primary=True)
+        self.button(evidence_actions, "Vérifier SHA-256", "Verify SHA-256", self.verify_file)
+        self.button(evidence_actions, "Inspecter une image RAW", "Inspect a RAW image", self.inspect_image)
+        evidence_actions.addStretch()
+
 
         modules = self.page("Modules", "Modules")
         self.modules = QListWidget()
@@ -109,7 +191,10 @@ class Workspace(QMainWindow):
         settings_page = self.page("Diagnostic", "Diagnostics")
         self.diagnostics = QListWidget()
         settings_page.addWidget(self.diagnostics)
-        self.button(settings_page, "Actualiser", "Refresh", self.refresh_diagnostics)
+        diagnostic_actions = QHBoxLayout()
+        settings_page.addLayout(diagnostic_actions)
+        self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
+        diagnostic_actions.addStretch()
         self.cases.currentItemChanged.connect(self.refresh_evidence)
         self.translate()
         self.refresh_cases()
@@ -122,19 +207,27 @@ class Workspace(QMainWindow):
 
     def page(self, french, english):
         widget = QWidget()
+        widget.setProperty("workspacePage", True)
         index = self.tabs.addTab(widget, "")
         self.bind(lambda label: self.tabs.setTabText(index, label), french, english)
-        return QVBoxLayout(widget)
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(12)
+        return layout
 
-    def button(self, layout, french, english, action):
+    def button(self, layout, french, english, action, *, primary=False):
         button = QPushButton()
+        if primary:
+            button.setProperty("primary", True)
         self.bind(button.setText, french, english)
         button.clicked.connect(action)
         self.buttons.append(button)
         layout.addWidget(button)
 
-    def change_language(self, english):
-        self.language = "en" if english else "fr"
+    def change_language(self, language):
+        if language == self.language:
+            return
+        self.language = language
         self.settings.setValue("language", self.language)
         self.settings.sync()
         self.translate()
@@ -150,11 +243,9 @@ class Workspace(QMainWindow):
                 app.installTranslator(self.translator)
         for setter, french, english in self.localized:
             setter(self.tr_pair(french, english))
-        self.switch.setText(self.tr_pair("FR / EN · Français", "FR / EN · English"))
         self.statusBar().showMessage(
             self.tr_pair("Calcul en cours…", "Computing…") if self.busy else ""
         )
-        self.switch.setAccessibleName(self.tr_pair("Langue de l’interface", "Interface language"))
         self.refresh_diagnostics()
         self.update_case_label()
 
