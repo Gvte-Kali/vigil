@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTranslator, Qt, Signal, Slot
-from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
@@ -189,9 +189,11 @@ class Workspace(QMainWindow):
         cases.addWidget(self.case_search)
         self.cases = QListWidget()
         cases.addWidget(self.cases)
-        self.button(cases, "Sélectionner l’affaire", "Select case", self.select_case, primary=True)
         self.cases.itemClicked.connect(self.case_clicked)
-        self.cases.itemActivated.connect(self.case_clicked)
+        for key in ("Return", "Enter"):
+            shortcut = QShortcut(QKeySequence(key), self.cases)
+            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+            shortcut.activated.connect(lambda: self.case_clicked(self.cases.currentItem()))
         self.case_name = QLineEdit()
         self.bind(self.case_name.setPlaceholderText, "Nom de l’affaire", "Case name")
         case_actions = QHBoxLayout()
@@ -355,20 +357,13 @@ class Workspace(QMainWindow):
         ), None)
 
     def case_clicked(self, item):
-        if self.active_case_id and item.data(Qt.ItemDataRole.UserRole) != self.active_case_id:
-            self.select_case()
-
-    def select_case(self):
-        item = self.cases.currentItem()
         if item is None or item.isHidden():
-            self.notify("Choisissez une affaire dans la liste.", "Choose a case from the list.")
             return
         target_id = item.data(Qt.ItemDataRole.UserRole)
-        if target_id == self.active_case_id:
-            return
         current = self.active_case_item()
-        if current is not None and not self.confirm_case_change(current.text(), item.text()):
-            if current.isHidden():
+        previous = current.text() if current is not None and current is not item else None
+        if not self.confirm_case_selection(previous, item.text()):
+            if current is None or current.isHidden():
                 self.cases.setCurrentRow(-1)
             else:
                 self.cases.setCurrentItem(current)
@@ -378,17 +373,21 @@ class Workspace(QMainWindow):
         self.settings.sync()
         self.refresh_evidence()
 
-    def confirm_case_change(self, current, target):
+    def confirm_case_selection(self, current, target):
         dialog = QMessageBox(self)
-        dialog.setWindowTitle(self.tr_pair("Changer d’affaire", "Switch case"))
+        title = (self.tr_pair("Changer d’affaire", "Switch case") if current is not None
+                 else self.tr_pair("Confirmer l’affaire", "Confirm case"))
+        dialog.setWindowTitle(title)
         dialog.setTextFormat(Qt.TextFormat.PlainText)
-        dialog.setText(self.tr_pair(
-            f"Passer de « {current} » à « {target} » ?",
-            f"Switch from “{current}” to “{target}”?",
-        ))
-        accept = dialog.addButton(self.tr_pair("Changer d’affaire", "Switch case"),
+        if current is None:
+            dialog.setText(self.tr_pair(f"Activer l’affaire « {target} » ?",
+                                        f"Activate case “{target}”?"))
+        else:
+            dialog.setText(self.tr_pair(f"Passer de « {current} » à « {target} » ?",
+                                        f"Switch from “{current}” to “{target}”?"))
+        accept = dialog.addButton(self.tr_pair("Confirmer", "Confirm"),
                                   QMessageBox.ButtonRole.AcceptRole)
-        cancel = dialog.addButton(self.tr_pair("Garder l’affaire active", "Keep active case"),
+        cancel = dialog.addButton(self.tr_pair("Annuler", "Cancel"),
                                   QMessageBox.ButtonRole.RejectRole)
         dialog.setDefaultButton(cancel)
         dialog.setEscapeButton(cancel)
@@ -521,7 +520,7 @@ class Workspace(QMainWindow):
     def add_file(self):
         case = self.active_case_item()
         if case is None:
-            self.notify("Verrouillez une affaire dans l’onglet Affaires.", "Lock a case in the Cases tab.")
+            self.notify("Confirmez une affaire dans l’onglet Affaires.", "Confirm a case in the Cases tab.")
             return
         operator = self.require_operator()
         if not operator or not (path := self.choose_file()):
@@ -571,7 +570,7 @@ class Workspace(QMainWindow):
     def query_index(self):
         case = self.active_case_item()
         if case is None:
-            self.notify("Verrouillez une affaire dans l’onglet Affaires.", "Lock a case in the Cases tab.")
+            self.notify("Confirmez une affaire dans l’onglet Affaires.", "Confirm a case in the Cases tab.")
             return
         operator = self.require_operator()
         if not operator or not (path := self.choose_file()):

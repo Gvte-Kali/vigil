@@ -35,7 +35,8 @@ class WorkspaceTest(unittest.TestCase):
             window.add_operator("Alice")
             window.case_name.setText("Test & preuve")
             window.create_case()
-            window.select_case()
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
             window.case_search.setText("unmatched")
             self.assertTrue(window.cases.item(0).isHidden())
             self.assertIn("Test & preuve", window.active_case.text())
@@ -65,7 +66,8 @@ class WorkspaceTest(unittest.TestCase):
             window.add_operator("Alice")
             window.case_name.setText("Fixture")
             window.create_case()
-            window.select_case()
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
             source = root / "synthetic.raw"
             source.write_bytes(b"fixture")
             with patch.object(window, "choose_file", return_value=str(source)):
@@ -93,17 +95,27 @@ class WorkspaceTest(unittest.TestCase):
                 window.create_case()
             self.assertEqual(window.active_case_id, "")
             window.cases.setCurrentRow(0)
-            window.select_case()
+            with patch.object(window, "confirm_case_selection", return_value=False) as confirm:
+                window.case_clicked(window.cases.currentItem())
+            confirm.assert_called_once_with(None, "First")
+            self.assertEqual(window.active_case_id, "")
+            window.cases.setCurrentRow(0)
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
             first = window.active_case_id
+            with patch.object(window, "confirm_case_selection", return_value=False) as confirm:
+                window.case_clicked(window.cases.currentItem())
+            confirm.assert_called_once_with(None, "First")
+            self.assertEqual(window.active_case_id, first)
 
             window.cases.setCurrentRow(1)
-            with patch.object(window, "confirm_case_change", return_value=False) as confirm:
+            with patch.object(window, "confirm_case_selection", return_value=False) as confirm:
                 window.case_clicked(window.cases.currentItem())
             confirm.assert_called_once_with("First", "Second")
             self.assertEqual(window.active_case_id, first)
             self.assertEqual(window.cases.currentRow(), 0)
             window.cases.setCurrentRow(1)
-            with patch.object(window, "confirm_case_change", return_value=True):
+            with patch.object(window, "confirm_case_selection", return_value=True):
                 window.case_clicked(window.cases.currentItem())
             self.assertIn("Second", window.active_case.text())
             self.assertNotEqual(window.active_case_id, first)

@@ -57,9 +57,10 @@ B. Langue et navigation Qt
     à partir des fixtures ou dans une VM dédiée. Lecture seule pour ce test.
 [ ] Rechercher une affaire par fragment et avec une casse différente.
     Vérifier que le filtre ne change pas l’affaire active. Sélectionner
-    un résultat puis cliquer sur Sélectionner l’affaire. Vérifier le nom
-    près de Vigil 2.0. Cliquer sur une autre affaire, refuser puis accepter
-    le changement. Vérifier les preuves et la restauration après relance.
+    un résultat en cliquant ou avec Entrée. Refuser puis confirmer la
+    première activation. Vérifier le nom près de Vigil 2.0. Cliquer sur
+    l’affaire active puis sur une autre et vérifier la confirmation à
+    chaque clic, les preuves et la restauration après relance.
 
 C. Affaires et fichiers de preuve
 [ ] Cliquer sur Opérateurs…, créer Alice et un second opérateur. Vérifier
