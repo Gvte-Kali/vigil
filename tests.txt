@@ -126,8 +126,8 @@ D. Registre, CLI et compatibilité
 [ ] Vérifier que les titres des groupes sont en cyan. Ouvrir l’entrée
     Actions rapides et vérifier les sections Antivirus et Stockage dans
     la même page, en FR et EN. Replier Système et vérifier que l’entrée
-    Actions rapides reste visible.
-[ ] Dans Actions rapides, choisir un fichier synthétique pour ClamAV.
+    Actions rapides est masquée, puis réapparaît en dépliant Système.
+[ ] Dans Actions rapides, tester ClamAV en VM avec un support synthétique.
     Comparer le code de sortie et le résultat dans le terminal externe.
     Vérifier aussi le traitement de ClamAV absent.
 [ ] Pour FreshClam, annuler la confirmation puis, sur un environnement

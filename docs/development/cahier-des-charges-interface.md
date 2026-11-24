@@ -1266,3 +1266,23 @@ En cas de blocage, documenter précisément la cause et proposer une solution.
 - État actualisé de la roadmap.
 
 Les choix esthétiques secondaires peuvent être réalisés de manière autonome, à condition de respecter l'identité visuelle, la cohérence ergonomique et les exigences de sécurité définies dans ce document.
+
+
+## Recette de la branche Vigil 2.0
+
+Le bouton Qt de montage du stockage transmettait `False`, valeur du
+signal `clicked(bool)`, au paramètre `operation` du callback. Vigil
+exige une opération explicite. L’action autonome transmet l’opérateur
+et écrit ses journaux dans `storage-operations` sous le répertoire d’état.
+
+La préférence de terminal se trouve dans la barre d’état. Les exécutions
+externes conservent le contexte et le résultat réel sous `terminal-runs`.
+Un terminal qui attend la touche Entrée après publication du résultat
+n’empêche pas la fermeture de Vigil. Si le processus de suivi disparaît
+sans résultat, Vigil indique un état inconnu.
+
+Recette manuelle à compléter dans une VM avec bureau Linux. Vérifier les
+parcours sur X11 et sous Hyprland/Wayland, puis suivre la checklist dans
+`tests.txt`. Pour revenir à l’interface précédente, annuler les commits
+du chantier dans l’ordre inverse. Le chantier ne requiert aucune
+migration de la base d’affaires.
