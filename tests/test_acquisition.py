@@ -142,3 +142,39 @@ class AcquisitionTest(unittest.TestCase):
             "check_disk": lambda *_: None,
         }), patch("shutil.which", return_value=None), patch("builtins.input", return_value=""), redirect_stdout(io.StringIO()):
             self.assertEqual(target_disks(source, "42"), [target])
+
+
+    def test_tty_progress_redraws_and_non_tty_has_no_control_sequences(self):
+        from contextlib import redirect_stdout
+        import vigil_progress
+
+        class PseudoTerminal(io.StringIO):
+            def isatty(self):
+                return True
+
+        class PlainStream(io.StringIO):
+            def isatty(self):
+                return False
+
+        for stream in (PseudoTerminal(), PlainStream()):
+            with self.subTest(tty=stream.isatty()), redirect_stdout(stream), \
+                    patch.dict("os.environ", {"TERM": "xterm-256color"}, clear=True), \
+                    patch.object(vigil_progress.time, "monotonic", side_effect=[0, 6, 12]):
+                progress = vigil_progress.Progress("Copie", 10000)
+                progress.update(9999)
+                progress.update(10000)
+            rendered = stream.getvalue()
+            self.assertIn("99.9 %", rendered)
+            self.assertIn("100.0 %", rendered)
+            self.assertEqual(chr(13) in rendered, stream.isatty())
+            self.assertEqual(chr(27) in rendered, stream.isatty())
+            self.assertEqual(rendered.count(chr(10)), 1 if stream.isatty() else 2)
+
+    def test_non_tty_sync_has_no_spinner_or_estimate(self):
+        from contextlib import redirect_stdout
+        import vigil_progress
+
+        with redirect_stdout(io.StringIO()) as stream:
+            with vigil_progress.indeterminate("Synchronisation"):
+                pass
+        self.assertEqual(stream.getvalue(), "\nSynchronisation…\n")

@@ -338,14 +338,14 @@ def create_image(source, size, directory, filename, owner=None, timings=None):
                 os.fchown(target.fileno(), *owner)
         fd = os.open(sums, flags, 0o600, dir_fd=folder)
         created.append((sums, os.fstat(fd)))
-        with os.fdopen(fd, "w", encoding="ascii") as manifest:
-            manifest.write(f"{digest}  {filename}\n")
-            manifest.flush()
-            if owner is not None:
-                os.fchown(manifest.fileno(), *owner)
-            with indeterminate("Synchronisation du manifeste SHA-256"):
+        with indeterminate("Synchronisation du manifeste SHA-256"):
+            with os.fdopen(fd, "w", encoding="ascii") as manifest:
+                manifest.write(f"{digest}  {filename}\n")
+                manifest.flush()
+                if owner is not None:
+                    os.fchown(manifest.fileno(), *owner)
                 os.fsync(manifest.fileno())
-                os.fsync(folder)
+            os.fsync(folder)
         return digest
     except BaseException:
         for name, original in reversed(created):
