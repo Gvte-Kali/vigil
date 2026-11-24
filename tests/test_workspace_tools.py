@@ -20,6 +20,7 @@ class WorkspaceToolsTest(unittest.TestCase):
                 self.assertIn("VIGIL_LEGACY_PROJECT=../case", argv)
                 self.assertIn(f"VIGIL_LEGACY_CASE_DIR={root / 'legacy-custody' / case}", argv)
                 self.assertEqual(Path(argv[-1]).name, script)
+                self.assertEqual(any("VIGIL_CASE_CENSUS=1" in item for item in argv), action == "mount")
             self.assertFalse((root / "active_project").exists())
 
     def test_antivirus_reuses_dedicated_case_and_isolates_run_outputs(self):
@@ -38,6 +39,7 @@ class WorkspaceToolsTest(unittest.TestCase):
             self.assertIn("VIGIL_LEGACY_PROJECT=Scan antivirus", argv)
             self.assertIn(f"VIGIL_LEGACY_SCAN_DIR={root / 'legacy-custody' / case / ('scan-' + run)}", argv)
             self.assertEqual(argv[-4:], ["--user", "Bob", "--log", "--pdf"])
+            self.assertFalse(any("VIGIL_CASE_CENSUS" in item for item in argv))
 
     def test_external_action_keeps_exit_error_visible(self):
         import subprocess

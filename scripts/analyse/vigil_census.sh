@@ -60,7 +60,7 @@ export VIGIL_BASE VIGIL_DATA_DIR
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 ACTIVE_PROJECT_FILE="$VIGIL_BASE/data/active_project"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+CONFIG_FILE="$VIGIL_DATA_DIR/config/system.json"
 INVESTIGATION_DIR="${VIGIL_INVESTIGATION_DIR:-/investigation}"
 STOCKAGE_DIR="${VIGIL_STOCKAGE_DIR:-/stockage}"
 STAMP=$(date +"%Y%m%d_%H%M%S")
@@ -107,6 +107,14 @@ else
     exit 1
 fi
 ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    if [ -z "${VIGIL_LEGACY_PROJECT:-}" ] || [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ] ||
+       [ "$INVESTIGATION_DIR" != /investigation ] || [ "$DO_NO_PROJECT" -eq 1 ]; then
+        echo "Recensement automatique : contexte d’affaire incomplet." >&2
+        exit 1
+    fi
+    ACTIVE_PROJECT="$VIGIL_LEGACY_PROJECT"
+fi
 if [ "$DO_NO_PROJECT" -eq 1 ]; then
     # Mode autonome (recherche de menaces) : pas de projet, l'index SQLite
     # est un livrable de la chasse ecrit dans hunt/ (racine du projet,
@@ -121,7 +129,9 @@ if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     ACTIVE_ENTITY=$(jq -r '.entity_name // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
     [ -z "$ACTIVE_ENTITY" ] && ACTIVE_ENTITY="(non configurée)"
 fi
-if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    PROJECT_LOG_DIR="$VIGIL_LEGACY_CASE_DIR"
+elif [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     if [ "$DO_NO_PROJECT" -eq 1 ]; then
         PROJECT_LOG_DIR="$VIGIL_BASE/hunt"
         mkdir -p "$PROJECT_LOG_DIR" 2>/dev/null || true
@@ -220,6 +230,14 @@ echo ""
 echo -e "${BLUE}=== Vérification des périphériques montés ===${NC}"
 MOUNTED_DIRS=0
 MOUNT_INFO=""
+CENSUS_ROOTS=()
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    if ! python3 -I "$VIGIL_BASE/scripts/analyse/vigil_census_mount_guard.py" > "$WORK_DIR/mounts"; then
+        fail "Recensement automatique refusé : protections ou identité non confirmées."
+    fi
+    mapfile -d '' -t CENSUS_ROOTS < "$WORK_DIR/mounts"
+    MOUNTED_DIRS="${#CENSUS_ROOTS[@]}"
+else
 while IFS= read -r -d '' dir; do
     # Un dossier est considere comme un peripherique monte s'il apparait
     # comme mountpoint, OU (fallback dev/test sans privileges root) s'il
@@ -237,6 +255,7 @@ while IFS= read -r -d '' dir; do
         MOUNT_INFO="${MOUNT_INFO}${dir}\n"
     fi
 done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+fi
 
 if [ "$MOUNTED_DIRS" -eq 0 ]; then
     echo -e "${YELLOW}⚠️  Aucun périphérique monté dans /investigation/.${NC}"
@@ -262,8 +281,14 @@ RAW_LIST="$WORK_DIR/raw_list.tsv"
 # %C* ctime | %w btime (birth) | %f nom | %y type
 # btime (%w) n'est pas supporte par tous les FS ; on le capture quand meme
 # (vide si absent).
-find "$INVESTIGATION_DIR" -type f -printf "%p\t%s\t%AY%Am%Ad%AH%AM\t%TY%Tm%Td%TH%TM\t%CY%Cm%Cd%CH%CM\t%w\t%m\t%u\t%g\n" 2>/dev/null \
-    > "$RAW_LIST"
+FIND_FORMAT="%p\t%s\t%AY%Am%Ad%AH%AM\t%TY%Tm%Td%TH%TM\t%CY%Cm%Cd%CH%CM\t%w\t%m\t%u\t%g\n"
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    if ! find "${CENSUS_ROOTS[@]}" -xdev -type f -printf "$FIND_FORMAT" > "$RAW_LIST"; then
+        fail "Recensement automatique incomplet : parcourir le support a échoué."
+    fi
+else
+    find "$INVESTIGATION_DIR" -type f -printf "$FIND_FORMAT" 2>/dev/null > "$RAW_LIST"
+fi
 
 TOTAL_FILES=$(wc -l < "$RAW_LIST")
 echo -e "${GREEN}✅ ${TOTAL_FILES} fichier(s) recensé(s).${NC}"

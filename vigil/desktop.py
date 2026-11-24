@@ -1241,8 +1241,8 @@ class Workspace(QMainWindow):
             return
         response = QMessageBox.question(
             self, "Vigil",
-            (self.tr_pair("Ouvrir le montage Vigil 1.0 dans le terminal par défaut ?",
-                          "Open Vigil 1.0 mounting in the default terminal?")
+            (self.tr_pair("Monter le support et lancer automatiquement son recensement ?",
+                          "Mount the device and start its census automatically?")
              if operation == "mount" else
              self.tr_pair("Ouvrir le démontage Vigil 1.0 dans le terminal par défaut ?", "Open Vigil 1.0 unmounting in the default terminal?")),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -1259,7 +1259,8 @@ class Workspace(QMainWindow):
             return
         try:
             case = self.active_case_item()
-            launch_terminal(legacy_mount_command(
+            launcher = launch_action if operation == "mount" else launch_terminal
+            launcher(legacy_mount_command(
                 operation, self.database_path, case_id, case.text(), operator,
             ))
         except (OSError, ValueError) as error:

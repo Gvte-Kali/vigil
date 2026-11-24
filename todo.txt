@@ -27,6 +27,9 @@ PHASE 01 — SECURITE
     affaire technique Scan antivirus masquée et un dossier de résultats
     par exécution. Détection des montages directs et imbriqués, accès aux
     rapports consolidés depuis Actions rapides.
+    Depuis Affaire en cours, recensement automatique après montage
+    réussi et vérification d’identité et des protections RO. Aucun index
+    de recensement dans le parcours antivirus rapide.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
     Le post-install prépare /investigation vide et démonté en root:root 0755.

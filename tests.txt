@@ -247,6 +247,13 @@ D. Registre, CLI et compatibilité
     data/state, et l’original du PDF dans le run plus une copie distincte
     sous /opt/vigil/rapports. Répéter pour vérifier l’absence d’écrasement.
 
+[ ] En VM synthétique, monter depuis Affaire en cours, terminer les
+    invites du terminal et vérifier le lancement du recensement. Vérifier
+    census_*.sqlite dans legacy-custody/<id-affaire> et le PDF.
+[ ] Tester le refus avec un montage déjà présent, un montage RW, un bloc
+    parent RW ou une source dont l’identité ne se vérifie pas. Dans le
+    scan antivirus rapide, vérifier l’absence d’index census.
+
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
     doublons, médias, Office, archives, formats inconnus, chiffrement,
