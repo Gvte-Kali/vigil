@@ -121,6 +121,10 @@ D. Registre, CLI et compatibilité
 [ ] Replier et déplier chaque groupe de navigation. Dans Investigation,
     ouvrir Affaire en cours et tenter la requête census avec puis sans
     affaire active.
+[ ] Vérifier que les titres des groupes sont en cyan. Ouvrir l’entrée
+    Actions rapides et vérifier les sections Antivirus et Stockage dans
+    la même page, en FR et EN. Replier Système et vérifier que l’entrée
+    Actions rapides reste visible.
 [ ] Dans Actions rapides, choisir un fichier synthétique pour ClamAV.
     Comparer le code de sortie et le résultat dans le terminal intégré.
     Vérifier aussi le traitement de ClamAV absent.

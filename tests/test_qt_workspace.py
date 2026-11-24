@@ -224,6 +224,33 @@ class WorkspaceTest(unittest.TestCase):
         self.assertIn("fixture terminal", panel.toPlainText())
         panel.close()
 
+    def test_quick_actions_are_one_standalone_page(self):
+        from PySide6.QtWidgets import QLabel, QPushButton
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            sidebar = window.navigation
+            quick = sidebar.item(sidebar.count() - 1)
+            self.assertEqual(quick.text(), "Actions rapides")
+            sidebar.itemWidget(sidebar.item(sidebar.count() - 3)).click()
+            self.assertFalse(quick.isHidden())
+            sidebar.setCurrentItem(quick)
+            page = window.pages.currentWidget()
+            self.assertEqual(
+                [label.text() for label in page.findChildren(QLabel, "quickActionTitle")],
+                ["Antivirus", "Stockage"],
+            )
+            self.assertEqual(len(page.findChildren(QPushButton)), 3)
+            window.language_buttons["en"].click()
+            self.assertEqual(quick.text(), "Quick actions")
+            self.assertEqual(page.findChildren(QLabel, "quickActionTitle")[1].text(), "Storage")
+            self.close_workspace(window)
+
     def wait_for_task(self, window):
         for _ in range(200):
             self.app.processEvents()

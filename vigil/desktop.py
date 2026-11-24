@@ -45,6 +45,8 @@ QListWidget#navigation::item { min-height: 31px; padding: 4px 11px; border-radiu
 QListWidget#navigation::item:hover:!selected { background: #1B2834; }
 QListWidget#navigation::item:selected { background: #203741; color: #80DEE8; }
 QListWidget#navigation::item:disabled { background: transparent; color: #91A1B3; }
+QFrame#quickActionSection { background: #1A2029; border: 1px solid #35404E; border-radius: 8px; }
+QLabel#quickActionTitle { color: #57C7D4; background: transparent; font-weight: 700; }
 QLabel#pageTitle { font-size: 20px; font-weight: 700; }
 QWidget[workspacePage="true"] { background: #101318; }
 QPushButton {
@@ -272,15 +274,14 @@ class Workspace(QMainWindow):
         settings_page.addLayout(diagnostic_actions)
         self.button(diagnostic_actions, "Actualiser", "Refresh", self.refresh_diagnostics)
         diagnostic_actions.addStretch()
-        self.navigation_group("ACTIONS RAPIDES", "QUICK ACTIONS")
-        for french, english, action in (
-            ("Scan antivirus", "Antivirus scan", self.quick_scan),
-            ("Mettre à jour l’antivirus", "Update antivirus", self.quick_update),
-            ("Ajouter un périphérique de stockage", "Add a storage device", self.quick_storage),
-        ):
-            page = self.page(french, english)
-            self.button(page, french, english, action, primary=True)
-            page.addStretch()
+        quick_actions = self.page("Actions rapides", "Quick actions", grouped=False)
+        antivirus = self.quick_action_section(quick_actions, "Antivirus", "Antivirus")
+        self.button(antivirus, "Scan antivirus", "Antivirus scan", self.quick_scan, primary=True)
+        self.button(antivirus, "Mettre à jour l’antivirus", "Update antivirus", self.quick_update)
+        storage_actions = self.quick_action_section(quick_actions, "Stockage", "Storage")
+        self.button(storage_actions, "Ajouter un périphérique de stockage",
+                    "Add a storage device", self.quick_storage, primary=True)
+        quick_actions.addStretch()
 
         self.terminal = TerminalPanel()
         self.terminal.completed.connect(self.quick_finished)
@@ -302,9 +303,14 @@ class Workspace(QMainWindow):
 
     def navigation_group(self, french, english):
         item = QListWidgetItem(self.navigation)
-        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         button = QPushButton()
-        button.setStyleSheet("text-align: left; background: #101318; border: none; color: #B9CAD9;")
+        button.setStyleSheet(
+            "QPushButton { text-align: left; background: #101318; "
+            "border: 1px solid transparent; color: #57C7D4; } "
+            "QPushButton:hover { background: #203741; color: #80DEE8; } "
+            "QPushButton:focus { border-color: #57C7D4; }"
+        )
         item.setSizeHint(button.sizeHint())
         self.navigation.setItemWidget(item, button)
         key = french
@@ -335,12 +341,13 @@ class Workspace(QMainWindow):
                 if self.pages.currentWidget() is self.history_page:
                     self.reset_history()
 
-    def page(self, french, english, *, heading=True):
+    def page(self, french, english, *, heading=True, grouped=True):
         widget = QWidget()
         widget.setProperty("workspacePage", True)
         item = QListWidgetItem(self.navigation)
         item.setData(Qt.ItemDataRole.UserRole, self.pages.addWidget(widget))
-        self.group_items[self.current_group].append(item)
+        if grouped:
+            self.group_items[self.current_group].append(item)
         self.bind(item.setText, french, english)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -351,6 +358,20 @@ class Workspace(QMainWindow):
             self.bind(title.setText, french, english)
             layout.addWidget(title)
         return layout
+
+    def quick_action_section(self, page, french, english):
+        section = QFrame()
+        section.setObjectName("quickActionSection")
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(14, 12, 14, 12)
+        title = QLabel()
+        title.setObjectName("quickActionTitle")
+        self.bind(title.setText, french, english)
+        layout.addWidget(title)
+        actions = QHBoxLayout()
+        layout.addLayout(actions)
+        page.addWidget(section)
+        return actions
 
     def button(self, layout, french, english, action, *, primary=False):
         button = QPushButton()
