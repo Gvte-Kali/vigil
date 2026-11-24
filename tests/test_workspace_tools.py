@@ -20,7 +20,10 @@ class WorkspaceToolsTest(unittest.TestCase):
                 self.assertIn("VIGIL_LEGACY_PROJECT=../case", argv)
                 self.assertIn(f"VIGIL_LEGACY_CASE_DIR={root / 'legacy-custody' / case}", argv)
                 self.assertEqual(Path(argv[-1]).name, script)
-                self.assertEqual(any("VIGIL_CASE_CENSUS=1" in item for item in argv), action == "mount")
+                wrapper = argv[argv.index("-c") + 1]
+                self.assertEqual(wrapper.count("VIGIL_CASE_CENSUS=1"), 2 if action == "mount" else 0)
+                if action == "mount":
+                    self.assertIn('VIGIL_CASE_CENSUS=1 /usr/bin/bash "$@"', wrapper)
             self.assertFalse((root / "active_project").exists())
 
     def test_antivirus_reuses_dedicated_case_and_isolates_run_outputs(self):

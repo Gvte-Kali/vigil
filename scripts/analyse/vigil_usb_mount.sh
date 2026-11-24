@@ -934,7 +934,7 @@ if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
         # Cas fréquent : un périphérique USB est déjà monté ailleurs
         # (ex. dans /stockage via le montage de stockage). On le signale et
         # on propose de le démonter pour pouvoir l'analyser en lecture seule.
-        if [ "$MOUNTED_NUM" -gt 0 ]; then
+        if [ "$MOUNTED_NUM" -gt 0 ] && [ "${VIGIL_CASE_CENSUS:-0}" != "1" ]; then
             echo ""
             echo -e "${YELLOW}⚠️  ${MOUNTED_NUM} périphérique(s) USB déjà monté(s) :${NC}"
             for i in "${!MOUNTED_USB[@]}"; do
@@ -986,6 +986,30 @@ if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
     fi
 fi
 
+    _case_lock_block_ro() {
+        local dev="$1"
+        if ! sudo blockdev --setro "$dev" ||
+           [ "$(sudo blockdev --getro "$dev")" != "1" ]; then
+            echo "Montage refusé : lecture seule au niveau bloc non confirmée pour $dev."
+            log_action "set_ro" "$dev" "" "failed" "Protection bloc RO non confirmée"
+            return 1
+        fi
+        echo "Lecture seule au niveau bloc confirmée : $dev"
+        log_action "set_ro" "$dev" "" "success" "Protection bloc RO confirmée"
+    }
+
+    _case_lock_disk_ro() {
+        local disk="$1" mountpoints
+        if [ "$(lsblk -dnro TYPE -- "$disk")" != "disk" ] ||
+           ! mountpoints=$(lsblk -nr -o MOUNTPOINTS -- "$disk") ||
+           [[ "$mountpoints" =~ [^[:space:]] ]]; then
+            echo "Montage refusé : disque $disk déjà utilisé ou absence de montage non vérifiable."
+            log_action "set_ro" "$disk" "" "failed" "Disque parent non vérifié ou déjà monté"
+            return 1
+        fi
+        _case_lock_block_ro "$disk"
+    }
+
     # --- Helper : montage lecture seule d'un device dans un point de montage ---
     # Renvoie 0 si OK, 1 si échec. Affiche le détail et log la custody.
     _mount_single_ro() {
@@ -998,7 +1022,12 @@ fi
             return 1
         }
 
-        if command -v blockdev >/dev/null 2>&1; then
+        if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ]; then
+            _case_lock_block_ro "$dev" || {
+                sudo rmdir "$mnt" 2>/dev/null || true
+                return 1
+            }
+        elif command -v blockdev >/dev/null 2>&1; then
             sudo blockdev --setro "$dev" 2>/dev/null || true
         fi
 
@@ -1012,9 +1041,17 @@ fi
             btrfs)      mount_opts="$mount_opts,subvolid=0" ;;
         esac
 
-        if ! sudo mount $mount_opts "$dev" "$mnt" 2>/dev/null; then
+        local mount_rc=0
+        if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ]; then
+            sudo mount $mount_opts "$dev" "$mnt" || mount_rc=$?
+        else
+            sudo mount $mount_opts "$dev" "$mnt" 2>/dev/null || mount_rc=$?
+        fi
+        if [ "$mount_rc" -ne 0 ]; then
             echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
-            sudo mount $mount_opts "$dev" "$mnt" 2>&1 || true
+            if [ "${VIGIL_CASE_CENSUS:-0}" != "1" ]; then
+                sudo mount $mount_opts "$dev" "$mnt" 2>&1 || true
+            fi
             log_action "mount" "$dev" "$mnt" "failed" "Échec du montage"
             sudo rmdir "$mnt" 2>/dev/null || true
             return 1
@@ -1025,7 +1062,9 @@ fi
             echo -e "${RED}❌ $dev n'est pas monté en lecture seule !${NC}"
             sudo umount "$mnt" 2>/dev/null || true
             sudo rmdir "$mnt" 2>/dev/null || true
-            command -v blockdev >/dev/null 2>&1 && sudo blockdev --setrw "$dev" 2>/dev/null || true
+            if [ "${VIGIL_CASE_CENSUS:-0}" != "1" ]; then
+                command -v blockdev >/dev/null 2>&1 && sudo blockdev --setrw "$dev" 2>/dev/null || true
+            fi
             log_action "mount" "$dev" "$mnt" "failed" "Périphérique non monté en lecture seule"
             return 1
         fi
@@ -1185,7 +1224,9 @@ display_usb_devices() {
         if [ "$SELECTED_KIND" = "whole" ]; then
             # Monter toutes les partitions du disque sous /investigation/<disk>/<part>
             echo -e "${YELLOW}Montage de toutes les partitions de /dev/$SELECTED_DEVICE...${NC}"
-            if command -v blockdev >/dev/null 2>&1; then
+            if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ]; then
+                _case_lock_disk_ro "/dev/$SELECTED_DEVICE" || exit 1
+            elif command -v blockdev >/dev/null 2>&1; then
                 if sudo blockdev --setro "/dev/$SELECTED_DEVICE" 2>/dev/null; then
                     echo -e "${GREEN}✅ Mode RO forcé au niveau block device (/dev/$SELECTED_DEVICE).${NC}"
                     log_action "set_ro" "/dev/$SELECTED_DEVICE" "" "success" "Mode RO forcé au niveau block device"
@@ -1217,6 +1258,10 @@ display_usb_devices() {
             echo -e "${GREEN}✅ $_ok partition(s) montée(s), $_fail échec(s) sous /investigation/$SELECTED_DEVICE/${NC}"
             log_action "mount_whole" "/dev/$SELECTED_DEVICE" "/investigation/$SELECTED_DEVICE" "success" "$_ok partition(s) montée(s), $_fail échec(s)"
 
+            if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ] && [ "$_ok" -eq 0 ]; then
+                exit 1
+            fi
+
             # Hash global du disque (union de toutes les partitions montées)
             _compute_hash "/dev/$SELECTED_DEVICE" "/investigation/$SELECTED_DEVICE" "$SELECTED_DEVICE"
 
@@ -1235,7 +1280,18 @@ display_usb_devices() {
             MOUNT_POINT="/investigation/$SELECTED_DEVICE"
             echo -e "${YELLOW}Montage de ${GREEN}$DEVICE_PATH${YELLOW} dans $MOUNT_POINT...${NC}"
 
-            if command -v blockdev >/dev/null 2>&1; then
+            if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ]; then
+                _disk="$DEVICE_PATH"
+                if [ "$SELECTED_KIND" = "part" ]; then
+                    _parent=$(lsblk -dnro PKNAME -- "$DEVICE_PATH")
+                    if [ -z "$_parent" ] || [ "$_parent" != "$SELECTED_PKNAME" ]; then
+                        echo "Montage refusé : disque parent non confirmé pour $DEVICE_PATH."
+                        exit 1
+                    fi
+                    _disk="/dev/$_parent"
+                fi
+                _case_lock_disk_ro "$_disk" || exit 1
+            elif command -v blockdev >/dev/null 2>&1; then
                 if sudo blockdev --setro "$DEVICE_PATH" 2>/dev/null; then
                     echo -e "${GREEN}✅ Mode RO forcé au niveau block device.${NC}"
                     log_action "set_ro" "$DEVICE_PATH" "" "success" "Mode RO forcé au niveau block device"

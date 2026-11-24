@@ -107,7 +107,7 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
     if operation == "mount":
         wrapper = (
             '/usr/bin/python3 -I "$VIGIL_BASE/scripts/analyse/vigil_census_mount_guard.py" '
-            '--before-mount && /usr/bin/sudo -v && /usr/bin/bash "$@" && '
+            '--before-mount && /usr/bin/sudo -v && /usr/bin/env VIGIL_CASE_CENSUS=1 /usr/bin/bash "$@" && '
             'exec /usr/bin/env VIGIL_CASE_CENSUS=1 /usr/bin/bash '
             '"$VIGIL_BASE/scripts/analyse/vigil_census.sh" --user "$VIGIL_ACTIVE_USER"'
         )

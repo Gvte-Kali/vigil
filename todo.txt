@@ -28,7 +28,9 @@ PHASE 01 — SECURITE
     par exécution. Détection des montages directs et imbriqués, accès aux
     rapports consolidés depuis Actions rapides.
     Depuis Affaire en cours, recensement automatique après montage
-    réussi et vérification d’identité et des protections RO. Aucun index
+    réussi et vérification d’identité et des protections RO. Le montage
+    d’affaire verrouille et vérifie aussi le disque parent avant une
+    partition, et refuse un disque déjà monté. Aucun index
     de recensement dans le parcours antivirus rapide.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
