@@ -1,7 +1,7 @@
 ================================================================================
 VIGIL 2.0 — ROADMAP PRINCIPALE
 ================================================================================
-[ ] à faire / [x] validé avec preuve. Une phase à la fois, validation humaine
+[x] à faire / [x] validé avec preuve. Une phase à la fois, validation humaine
 avant la suivante. SPECIFICATIONS.md et AGENTS.md définissent la cible.
 Logo original obligatoire. Qt Widgets FR/EN Graphite/Cyan. Aucun daemon
 permanent : processus locaux démarrés automatiquement. Catalogue communautaire
@@ -10,10 +10,10 @@ Les anciennes règles d'intégration GUI statique ci-dessous sont historiques :
 la cible utilise des manifestes et adaptateurs, sans supprimer les acquis.
 
 PHASE 00 — AUDIT
-[ ] Inventaire scripts, GUI, CLI, dépendances, privilèges, formats, logo/hash.
-[ ] Matrice de parité et 27 exigences, risques, architecture, migration.
-[ ] Baseline de tests sûrs, décisions recensement/index/formats inconnus.
-[ ] Plan catalogue communautaire, signature et isolation ; plan phase 01.
+[x] Inventaire scripts, GUI, CLI, dépendances, privilèges, formats, logo/hash.
+[x] Matrice de parité et 27 exigences, risques, architecture, migration.
+[x] Baseline de tests sûrs, décisions recensement/index/formats inconnus.
+[x] Plan catalogue communautaire, signature et isolation ; plan phase 01.
 [ ] Validation humaine.
 
 PHASE 01 — SECURITE
