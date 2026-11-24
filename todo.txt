@@ -139,6 +139,9 @@ PHASE 06 — INVESTIGATION
     ou calculer et comparer leur SHA-256, y compris dans les dossiers montés.
     Lorsqu’un montage est visible, une preuve enregistrée y apparaît une
     seule fois dans l’explorateur et reste listée dans Preuves.
+    L’explorateur conserve l’arborescence et la sélection après ajout.
+    Copies privées mode 0400, SHA-256, export complet tar.gz et manifestes.
+    Sélecteur depuis le titre, avec la recherche et la gestion des affaires.
     L’index census reste consultable séparément dans Analyses.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.

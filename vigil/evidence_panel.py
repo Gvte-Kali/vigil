@@ -4,9 +4,9 @@ from pathlib import Path
 
 from .inspection import list_evidence_directory
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QLabel, QMenu, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
+    QAbstractItemView, QLabel, QMenu, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
     QVBoxLayout, QWidget,
 )
 
@@ -63,19 +63,42 @@ class EvidencePanel(QWidget):
         self.tabs.setTabText(1, tr("Hexadécimal", "Hex"))
         self.tabs.setTabText(2, tr("Chaînes ASCII", "ASCII strings"))
 
-    def set_files(self, rows):
+    def set_files(self, rows, *, keep_state=True):
         self.registered_files = {name: digest for _, name, digest in rows}
-        self.rebuild_tree()
+        self.rebuild_tree(keep_state=keep_state)
 
     def set_mounts(self, mounts):
         if mounts != self.mounts:
             self.mounts = dict(mounts)
             self.rebuild_tree()
 
-    def rebuild_tree(self):
+    @staticmethod
+    def item_key(item):
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if data and len(data) == 4:
+            return ("mounted", data[0], tuple(data[2]))
+        return ("registered", data[0]) if data else ("group", item.text(0))
+
+    def rebuild_tree(self, *, keep_state=False):
+        expanded, collapsed, selected, populated = set(), set(), set(), set()
+        scroll = self.tree.verticalScrollBar()
+        position = scroll.value()
+        current = self.tree.currentItem()
+        current_key = self.item_key(current) if current and keep_state else None
+        if keep_state:
+            iterator = QTreeWidgetItemIterator(self.tree)
+            while item := iterator.value():
+                key = self.item_key(item)
+                (expanded if item.isExpanded() else collapsed).add(key)
+                if item.childCount():
+                    populated.add(key)
+                if item.isSelected():
+                    selected.add(key)
+                iterator += 1
         self.tree.clear()
-        for view in self.views:
-            view.clear()
+        if not keep_state:
+            for view in self.views:
+                view.clear()
         groups = {}
         for name, digest in self.registered_files.items():
             if self.registered_source(name)[1] is not None:
@@ -88,9 +111,22 @@ class EvidencePanel(QWidget):
             item.setData(0, Qt.ItemDataRole.UserRole, (name, digest))
             item.setToolTip(0, name)
         for group in groups.values():
-            group.setExpanded(True)
+            group.setExpanded(self.item_key(group) not in collapsed)
         for root, mount_id in sorted(self.mounts.items()):
             self.add_live_item(self.tree, root, Path(root), (root, mount_id), True)
+        if keep_state:
+            iterator = QTreeWidgetItemIterator(self.tree)
+            while item := iterator.value():
+                key = self.item_key(item)
+                if key in expanded:
+                    item.setExpanded(True)
+                elif key in populated:
+                    self.expand_directory(item)
+                if key == current_key:
+                    self.tree.setCurrentItem(item, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
+                item.setSelected(key in selected)
+                iterator += 1
+            scroll.setValue(position)
         self.retranslate()
         self.apply_filter(self.filter.text())
 

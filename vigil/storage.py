@@ -4,12 +4,13 @@ import json
 import os
 import sqlite3
 import stat
+import tempfile
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from .inspection import list_evidence_directory, open_evidence_path
+from .inspection import investigation_mounts, list_evidence_directory, open_evidence_path
 
 ANTIVIRUS_CASE_NAME = "Scan antivirus"
 SCHEMA_VERSION = 1
@@ -141,13 +142,13 @@ def read_legacy_project(path):
     return parsed.get("name", path.name), raw
 
 
-def fingerprint(path, *, mount=None):
+def fingerprint(path, *, mount=None, copy_to=None):
     flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
     if mount is None:
-        return fingerprint_descriptor(os.open(path, flags), lambda: path.stat(follow_symlinks=False))
+        return fingerprint_descriptor(os.open(path, flags), lambda: path.stat(follow_symlinks=False), copy_to)
     with open_evidence_path(path, *mount) as source:
         descriptor = os.open(f"/proc/self/fd/{source}", os.O_RDONLY | os.O_CLOEXEC)
-        return fingerprint_descriptor(descriptor, lambda: mounted_file_stat(path, mount))
+        return fingerprint_descriptor(descriptor, lambda: mounted_file_stat(path, mount), copy_to)
 
 
 def mounted_file_stat(path, mount):
@@ -155,12 +156,19 @@ def mounted_file_stat(path, mount):
         return os.fstat(descriptor)
 
 
-def fingerprint_descriptor(descriptor, current_stat):
+def fingerprint_descriptor(descriptor, current_stat, copy_to):
     with os.fdopen(descriptor, "rb") as stream:
         before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode):
             raise ValueError("evidence must be a regular file")
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if copy_to is None:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        else:
+            sha = hashlib.sha256()
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                copy_to.write(chunk)
+                sha.update(chunk)
+            digest = sha.hexdigest()
         after = os.fstat(stream.fileno())
         if not (file_identity(before) == file_identity(after) == file_identity(current_stat())):
             raise ValueError("evidence changed during hashing")
@@ -171,8 +179,7 @@ def file_identity(info):
     return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
 
 
-def add_evidence(connection, case_id, path, size, digest, operator):
-    evidence_id = uuid4().hex
+def add_evidence(connection, case_id, path, size, digest, operator, evidence_id):
     connection.execute(
         "INSERT INTO evidence VALUES (?, ?, ?, ?, ?)",
         (evidence_id, case_id, str(path), size, digest),
@@ -182,24 +189,89 @@ def add_evidence(connection, case_id, path, size, digest, operator):
     return evidence_id
 
 
-def register_file(state, case_id, path, operator):
+def evidence_copy_path(state, case_id, evidence_id):
+    for identifier in (case_id, evidence_id):
+        if len(identifier) != 32 or any(char not in "0123456789abcdef" for char in identifier):
+            raise ValueError("invalid evidence or case ID")
+    path = state.parent / "legacy-custody" / case_id / "preuves" / evidence_id
+    if path.resolve() != path.absolute() or path.resolve().is_relative_to("/investigation"):
+        raise ValueError("invalid evidence storage directory")
+    return path / "contenu"
+
+
+def register_file(state, case_id, path, operator, *, mount=None):
     path = path.absolute()
     if state.exists() and state.samefile(path):
         raise ValueError("database and evidence must be separate files")
-    size, digest = fingerprint(path)
+    if mount is None and path.resolve().is_relative_to("/investigation"):
+        roots = investigation_mounts()
+        root = max((root for root in roots if path.is_relative_to(root)), key=len, default=None)
+        if root is None:
+            raise ValueError("no verified read-only mount covers this evidence path")
+        mount = root, roots[root]
+
     with database(state) as connection:
-        evidence_id = add_evidence(connection, case_id, path, size, digest, operator)
-    return {"id": evidence_id, "size": size, "sha256": digest}
+        existing = connection.execute(
+            "SELECT id, size, sha256 FROM evidence WHERE case_id = ? AND path = ? ORDER BY rowid",
+            (case_id, str(path)),
+        ).fetchall()
+    for row in existing:
+        if evidence_copy_path(state, case_id, row["id"]).exists():
+            return {**dict(row), "existing": True}
+
+    new_id = uuid4().hex
+    stage_dir = evidence_copy_path(state, case_id, new_id).parent.parent
+    stage_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    published = []
+    try:
+        with tempfile.NamedTemporaryFile(dir=stage_dir) as stream:
+            size, digest = fingerprint(path, mount=mount, copy_to=stream)
+            stream.flush()
+            os.fchmod(stream.fileno(), 0o400)
+            os.fsync(stream.fileno())
+            with database(state) as connection:
+                # Another registration may have completed while this file was copied.
+                records = connection.execute(
+                    "SELECT id, size, sha256 FROM evidence WHERE case_id = ? AND path = ? ORDER BY rowid",
+                    (case_id, str(path)),
+                ).fetchall()
+                if records:
+                    matching = [row for row in records if (row["size"], row["sha256"]) == (size, digest)]
+                    if not matching:
+                        raise ValueError("source no longer matches the recorded evidence fingerprint")
+                    for row in matching:
+                        target = evidence_copy_path(state, case_id, row["id"])
+                        if not target.exists():
+                            target.parent.mkdir(mode=0o700, exist_ok=True)
+                            os.link(stream.name, target, follow_symlinks=False)
+                            published.append(target)
+                            audit(connection, operator, case_id, "evidence.copy",
+                                  {"evidence_id": row["id"], "sha256": digest})
+                    evidence_id = matching[0]["id"]
+                else:
+                    evidence_id = new_id
+                    target = evidence_copy_path(state, case_id, evidence_id)
+                    target.parent.mkdir(mode=0o700)
+                    os.link(stream.name, target, follow_symlinks=False)
+                    published.append(target)
+                    add_evidence(connection, case_id, path, size, digest, operator, evidence_id)
+    except BaseException:
+        for target in published:
+            target.unlink()
+        raise
+    return {"id": evidence_id, "size": size, "sha256": digest, "existing": bool(records)}
 
 
-def verify_file(state, evidence_id, operator):
+def verify_file(state, evidence_id, operator, *, use_copy=False):
     with database(state) as connection:
         record = connection.execute(
             "SELECT * FROM evidence WHERE id = ?", (evidence_id,)
         ).fetchone()
     if record is None:
         raise ValueError("unknown evidence ID")
-    size, digest = fingerprint(Path(record["path"]))
+    stored = evidence_copy_path(state, record["case_id"], evidence_id)
+    path = stored if use_copy and stored.exists() else Path(record["path"])
+    size, digest = fingerprint(path)
     result = {
         "id": evidence_id, "expected_sha256": record["sha256"], "sha256": digest,
         "matches": size == record["size"] and digest == record["sha256"],
@@ -229,6 +301,10 @@ def process_explorer_selection(state, case_id, operator, sources, *, register):
                 raise ValueError("no verified read-only mount covers this evidence path")
             if state.exists() and state.samefile(path):
                 raise ValueError("database and evidence must be separate files")
+            if register:
+                result = register_file(state, case_id, path, operator, mount=mount)
+                results.append((str(path), result["sha256"], "existing" if result["existing"] else "added", []))
+                continue
             size, digest = fingerprint(path, mount=mount)
         except (OSError, ValueError) as error:
             errors.append((str(path), str(error)))
@@ -238,19 +314,16 @@ def process_explorer_selection(state, case_id, operator, sources, *, register):
                 "SELECT id, size, sha256 FROM evidence WHERE case_id = ? AND path = ?",
                 (case_id, str(path)),
             ).fetchall()
-            if register and not records:
-                add_evidence(connection, case_id, path, size, digest, operator)
-            elif not register:
-                if not records:
-                    audit(connection, operator, case_id, "evidence.hash",
-                          {"path": str(path), "sha256": digest, "size": size})
-                for record in records:
-                    audit(connection, operator, case_id, "evidence.verify", {
-                        "id": record["id"], "expected_sha256": record["sha256"], "sha256": digest,
-                        "matches": size == record["size"] and digest == record["sha256"],
-                    })
+            if not records:
+                audit(connection, operator, case_id, "evidence.hash",
+                      {"path": str(path), "sha256": digest, "size": size})
+            for record in records:
+                audit(connection, operator, case_id, "evidence.verify", {
+                    "id": record["id"], "expected_sha256": record["sha256"], "sha256": digest,
+                    "matches": size == record["size"] and digest == record["sha256"],
+                })
         expected = [record["sha256"] for record in records]
-        status = ("existing" if records else "added") if register else (
+        status = (
             "calculated" if not records else
             "matches" if all(size == row["size"] and digest == row["sha256"] for row in records)
             else "changed"

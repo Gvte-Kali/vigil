@@ -54,6 +54,31 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(reopened.case_navigation.item(1).text(), "Preuves")
             self.close_workspace(reopened)
 
+    def test_case_picker_reuses_controls_and_restores_cases_page(self):
+        from vigil.desktop import QDialog, Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.add_operator("Alice")
+            window.case_name.setText("Fixture")
+            window.create_case()
+
+            def select():
+                dialog = window.case_picker
+                self.assertTrue(dialog.isAncestorOf(window.case_search))
+                self.assertTrue(dialog.isAncestorOf(window.cases))
+                window.case_clicked(window.cases.item(0))
+                return dialog.result()
+
+            with patch.object(window, "confirm_case_selection", return_value=True), \
+                    patch.object(QDialog, "exec", autospec=True, side_effect=select):
+                window.choose_case()
+            self.assertTrue(window.active_case_id)
+            self.assertIs(window.case_controls.parentWidget(), window.cases_page_layout.parentWidget())
+            self.close_workspace(window)
+
     def test_background_file_registration_and_verification(self):
         from vigil.desktop import Workspace
 
@@ -133,6 +158,14 @@ class WorkspaceTest(unittest.TestCase):
                        return_value=[("docs", True), ("note.txt", False)]) as list_directory:
                 window.explorer.expand_directory(root_item)
             list_directory.assert_called_once_with("/investigation/sdb1", "/investigation/sdb1", 42)
+            root_item.setExpanded(True)
+            root_item.child(1).setSelected(True)
+            with patch("vigil.evidence_panel.list_evidence_directory",
+                       return_value=[("docs", True), ("note.txt", False)]):
+                window.explorer.set_files([("id", "/investigation/sdb1/note.txt", "fixture-digest")])
+            root_item = window.explorer.tree.topLevelItem(0)
+            self.assertTrue(root_item.isExpanded())
+            self.assertTrue(root_item.child(1).isSelected())
             with patch.object(window.explorer, "request_preview") as preview:
                 window.explorer.inspect(root_item.child(1), 0)
             preview.assert_called_once_with("/investigation/sdb1/note.txt", "fixture-digest", ("/investigation/sdb1", 42))
@@ -333,7 +366,7 @@ class WorkspaceTest(unittest.TestCase):
                 window.case_navigation.item(i).text() for i in range(window.case_navigation.count())
             ]
             self.assertEqual(sections, [
-                "Explorateur", "Preuves", "Analyses", "Actions et journal", "Intégrité", "Rapports PDF",
+                "Explorateur", "Preuves", "Analyses", "Actions et journal", "Intégrité", "Rapports PDF", "Exporter l’affaire",
             ])
             window.case_navigation.setCurrentRow(2)
             self.assertTrue(window.case_pages.currentWidget().isAncestorOf(window.modules))

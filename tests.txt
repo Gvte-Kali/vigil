@@ -288,3 +288,13 @@ E. Recette à reprendre quand les parcours correspondants seront livrés
 
 Les cases de ce fichier sont la recette opérateur. Voir todo.txt pour
 l’état d’avancement et todo_tests.txt pour les scénarios historiques.
+
+
+[ ] Ajouter un fichier à l’affaire depuis Preuves et depuis Explorateur.
+    Vérifier le maintien des dossiers ouverts, de la sélection et du filtre.
+    Vérifier la copie privée dans legacy-custody/<id>/preuves et son mode 0400.
+[ ] Depuis le titre Affaire en cours, ouvrir Choisir l’affaire. Tester la
+    recherche, la confirmation, l’annulation, la création et l’import.
+[ ] Depuis Exporter l’affaire, publier l’archive complète. Vérifier l’empreinte
+    externe puis SHA256SUMS après extraction, le dossier preuves et le mode
+    0400 de son contenu. Essayer une copie manquante ou altérée.

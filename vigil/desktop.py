@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import storage
+from .case_export import export_case
 from .adapters import CENSUS_LIMIT, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
@@ -249,7 +250,12 @@ class Workspace(QMainWindow):
         home.addWidget(self.dashboard_events)
 
 
-        cases = self.page("Affaires", "Cases")
+        self.cases_page_layout = self.page("Affaires", "Cases")
+        self.case_controls = QWidget()
+        self.cases_page_layout.addWidget(self.case_controls)
+        cases = QVBoxLayout(self.case_controls)
+        cases.setContentsMargins(0, 0, 0, 0)
+        self.case_picker = None
         self.case_search = QLineEdit()
         self.case_search.setClearButtonEnabled(True)
         self.bind(self.case_search.setPlaceholderText, "Rechercher une affaire", "Search cases")
@@ -280,6 +286,7 @@ class Workspace(QMainWindow):
         self.case_title.setTextFormat(Qt.TextFormat.PlainText)
         self.case_title.setWordWrap(True)
         case_header.addWidget(self.case_title, 1)
+        self.button(case_header, "Choisir l’affaire", "Choose case", self.choose_case)
         self.button(case_header, "Monter périphérique/image", "Mount device/image",
                     self.request_mount, primary=True)
         self.button(case_header, "Démonter périphérique/image", "Unmount device/image",
@@ -301,6 +308,7 @@ class Workspace(QMainWindow):
         self.case_navigation.currentRowChanged.connect(self.open_case_view)
 
         explorer = self.case_view("Explorateur", "Evidence explorer")
+        self.explorer_case_id = None
         self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence, self.process_explorer_selection)
         explorer.addWidget(self.explorer)
 
@@ -393,6 +401,18 @@ class Workspace(QMainWindow):
         self.button(reports, "Actualiser la liste", "Refresh list", self.refresh_pdf_reports)
         self.button(reports, "Ouvrir le dossier du rapport", "Open report folder",
                     self.open_pdf_folder, primary=True)
+
+        export = self.case_view("Exporter l’affaire", "Export case")
+        export_intro = QLabel()
+        export_intro.setWordWrap(True)
+        self.bind(export_intro.setText,
+                  "L’archive complète contient les preuves copiées, les résultats, le journal et les empreintes SHA-256.",
+                  "The full archive contains saved evidence, results, audit history and SHA-256 checksums.")
+        export.addWidget(export_intro)
+        self.button(export, "Créer l’archive complète", "Create full archive",
+                    self.export_full_case, primary=True)
+        self.button(export, "Exporter l’audit de l’affaire", "Export case audit", self.export_case_report)
+        export.addStretch()
 
         quick_actions = self.page("Actions rapides", "Quick actions", grouped=False)
         antivirus = self.quick_action_section(quick_actions, "Antivirus", "Antivirus")
@@ -714,6 +734,22 @@ class Workspace(QMainWindow):
             if self.cases.item(index).data(Qt.ItemDataRole.UserRole) == self.active_case_id
         ), None)
 
+    def choose_case(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(self.tr_pair("Choisir l’affaire", "Choose case"))
+        dialog.resize(660, 440)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(self.case_controls)
+        self.case_picker = dialog
+        self.case_controls.show()
+        try:
+            dialog.exec()
+        finally:
+            self.case_picker = None
+            self.cases_page_layout.addWidget(self.case_controls)
+            self.case_controls.show()
+            dialog.deleteLater()
+
     def case_clicked(self, item):
         if item is None or item.isHidden():
             return
@@ -729,6 +765,8 @@ class Workspace(QMainWindow):
         self.active_case_id = target_id
         self.refresh_evidence()
         self.reset_history()
+        if self.case_picker is not None:
+            self.case_picker.accept()
 
     def confirm_case_selection(self, current, target):
         dialog = QMessageBox(self)
@@ -766,10 +804,13 @@ class Workspace(QMainWindow):
         self.evidence.clear()
         self.integrity_files.clear()
         self.refresh_pdf_reports()
-        self.explorer.set_files([])
+        keep_explorer = self.explorer_case_id == self.active_case_id
+        self.explorer_case_id = self.active_case_id
         self.refresh_dashboard()
         case = self.active_case_item()
         if case is None:
+            self.explorer.set_files([], keep_state=False)
+            self.refresh_explorer_mounts()
             return
         try:
             with storage.database(self.database_path) as connection:
@@ -780,7 +821,7 @@ class Workspace(QMainWindow):
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
             return
-        self.explorer.set_files(rows)
+        self.explorer.set_files(rows, keep_state=keep_explorer)
         self.refresh_explorer_mounts()
         for evidence_id, path, digest in rows:
             label = f"{path}  ·  {digest}"
@@ -913,6 +954,25 @@ class Workspace(QMainWindow):
         if not directory.is_dir() or not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
             self.notify("Impossible d’ouvrir le dossier du rapport.",
                         "Could not open the report folder.", str(directory))
+
+    def export_full_case(self):
+        case_id = self.active_case_id
+        if not case_id:
+            self.notify("Choisissez d’abord une affaire.", "Choose a case first.")
+            return
+        operator = self.require_operator()
+        if not operator:
+            return
+        destination = QFileDialog.getExistingDirectory(
+            self, self.tr_pair("Destination de l’archive", "Archive destination"),
+        )
+        if not destination:
+            return
+        self.run_task(
+            lambda: export_case(self.database_path, case_id, operator, Path(destination)),
+            lambda path: self.notify("Archive et empreinte SHA-256 enregistrées.",
+                                     "Archive and SHA-256 checksum saved.", str(path)),
+        )
 
     def export_case_report(self):
         case_id = self.active_case_id
@@ -1147,7 +1207,7 @@ class Workspace(QMainWindow):
             return
         evidence_id = item.data(Qt.ItemDataRole.UserRole)
         self.run_task(
-            lambda: storage.verify_file(self.database_path, evidence_id, operator),
+            lambda: storage.verify_file(self.database_path, evidence_id, operator, use_copy=True),
             self.show_verification,
         )
 

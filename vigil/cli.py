@@ -8,6 +8,7 @@ from typing import Annotated, Optional
 import typer
 
 from . import storage
+from .case_export import export_case
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 
@@ -75,6 +76,14 @@ def import_case(path: Path, operator: str = typer.Option(...), db: DatabaseOptio
         with storage.database(db or storage.default_database()) as connection:
             case_id = storage.create_case(connection, name, operator, str(path), raw)
         emit({"id": case_id, "legacy_path": str(path)})
+
+
+@cases.command("export")
+def export(case_id: str, destination: Path, operator: str = typer.Option(...),
+           db: DatabaseOption = None):
+    with command():
+        path = export_case(db or storage.default_database(), case_id, operator, destination)
+        emit({"directory": str(path), "archive": str(path / "affaire.tar.gz")})
 
 
 @evidence.command("add")
