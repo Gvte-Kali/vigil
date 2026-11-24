@@ -377,3 +377,12 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 [ ] Choisir la seule clé USB comme source d’une image vers USB externe.
     Vérifier que le message identifie la source et propose un second
     support USB démonté ou une destination locale.
+
+
+[ ] Sur une VM avec bureau et udev, installer la règle, ouvrir Vigil et
+    authentifier sudo. Brancher un support de test et vérifier RO sur
+    le disque et les partitions avant tout montage, puis UDISKS_IGNORE=1.
+    Vérifier l’absence de changement sur les supports déjà présents.
+[ ] En acquisition, choisir la source puis brancher la cible à l’invite.
+    Vérifier qu’elle apparaît après Entrée, qu’elle ne passe en RW qu’après
+    confirmation, puis que son mode initial est restauré à la sortie.

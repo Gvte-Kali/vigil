@@ -1,0 +1,99 @@
+#!/usr/bin/python3 -I
+"""Authorize a live Vigil session and write-protect new physical block devices."""
+import fcntl
+import os
+import re
+import stat
+import struct
+import sys
+from pathlib import Path
+
+SESSIONS = Path("/run/vigil-hotplug")
+PID = re.compile(r"[1-9][0-9]{0,9}")
+BLOCK_RO_SET = 0x125D
+BLOCK_RO_GET = 0x125E
+
+
+def process_identity(pid):
+    if not PID.fullmatch(pid):
+        raise ValueError("invalid process ID")
+    process = Path("/proc") / pid
+    info = (process / "stat").read_text()
+    start = info.rsplit(")", 1)[1].split()[19]
+    return f"{process.stat().st_uid} {start}"
+
+
+def activate(pid):
+    identity = process_identity(pid)
+    if identity.split()[0] != os.environ.get("SUDO_UID"):
+        raise ValueError("session process does not belong to the sudo caller")
+    SESSIONS.mkdir(mode=0o755, exist_ok=True)
+    info = SESSIONS.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+        raise ValueError("invalid session directory")
+    path = SESSIONS / pid
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w") as token:
+        token.write(identity + "\n")
+        os.fchmod(token.fileno(), 0o644)
+
+
+def active():
+    if not SESSIONS.is_dir():
+        return False
+    found = False
+    for path in SESSIONS.iterdir():
+        try:
+            found_session = path.read_text().strip() == process_identity(path.name)
+        except (OSError, ValueError, IndexError):
+            found_session = False
+        if found_session:
+            found = True
+        else:
+            path.unlink(missing_ok=True)
+    return found
+
+
+def protect(device, major, minor):
+    if not active():
+        return
+    # UDisks must skip the volume even if the kernel rejects the RO request.
+    print("UDISKS_IGNORE=1")
+    print("VIGIL_HOTPLUG=1")
+    try:
+        fd = os.open(device, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            info = os.fstat(fd)
+            expected = int(major), int(minor)
+            if not stat.S_ISBLK(info.st_mode) or (os.major(info.st_rdev), os.minor(info.st_rdev)) != expected:
+                raise ValueError("block identity changed")
+            fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 1))
+            if struct.unpack("i", fcntl.ioctl(fd, BLOCK_RO_GET, bytes(4)))[0] != 1:
+                raise ValueError("kernel did not confirm RO")
+            print("VIGIL_HOTPLUG_RO=1")
+        finally:
+            os.close(fd)
+    except (OSError, ValueError) as error:
+        print("VIGIL_HOTPLUG_RO=0")
+        print(f"vigil-hotplug: {device}: {error}", file=sys.stderr)
+
+
+def main():
+    if os.geteuid() != 0:
+        return 1
+    try:
+        match sys.argv[1:]:
+            case ["activate", pid]:
+                activate(pid)
+            case ["protect", device, major, minor]:
+                protect(device, major, minor)
+            case _:
+                return 2
+    except (OSError, ValueError, IndexError) as error:
+        print(f"vigil-hotplug: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

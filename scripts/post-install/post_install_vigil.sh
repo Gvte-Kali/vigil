@@ -49,6 +49,9 @@ sudo install -d -o root -g root -m 0755 /investigation
 sudo mkdir -p /stockage /opt/vigil/{data,scripts,logs,rapports}
 echo "✅ Répertoires de base présents."
 
+# Install the hotplug rule without replaying events for devices already connected.
+sh /opt/vigil/scripts/post-install/install-hotplug.sh
+
 # --- 2. Installer les dependances depuis requirements.txt ---
 # Les paquets y sont documentes (un commentaire par paquet).
 # La liste ci-dessous reste synchronisee avec ce fichier : elle sert de

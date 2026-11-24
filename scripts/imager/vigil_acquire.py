@@ -15,7 +15,7 @@ import sys
 import tempfile
 import textwrap
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 BLOCK_RO_SET = 0x125D
@@ -324,13 +324,61 @@ def create_image(source, size, directory, filename, owner=None):
         os.close(folder)
 
 
+def target_disks(source, sequence):
+    section("Branchement du support de destination")
+    print("Branchez un autre support USB. Démontez-le si un montage existe déjà.")
+    answer = input(terminal_style("Entrée pour détecter la cible, ou q pour annuler : ", "1;93")).strip()
+    if answer.lower() == "q":
+        raise InterruptedError("Acquisition annulée.")
+    udevadm = shutil.which("udevadm")
+    if udevadm:
+        command(udevadm, "settle", "--timeout=5")
+    check_disk(source, sequence)
+    return [row for row in devices() if row["type"] == "disk" and row["tran"] == "usb"
+            and row["maj:min"] != source["maj:min"] and idle(row)]
+
+
+@contextmanager
+def writable_target(disk, sequence, partition=None):
+    """Permit writes only to the confirmed destination, and restore its block modes."""
+    check_disk(disk, sequence)
+    with ExitStack() as stack:
+        descriptors = []
+        for row in (disk, partition) if partition else (disk,):
+            fd = os.open(row["name"], os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+            stack.callback(os.close, fd)
+            validate_fd(fd, row)
+            descriptors.append((fd, block_mode(fd)))
+        check_disk(disk, sequence)
+        try:
+            for fd, _ in descriptors:
+                if block_mode(fd):
+                    fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 0))
+                if block_mode(fd):
+                    raise ValueError("Impossible de rendre la destination confirmée inscriptible.")
+            yield
+        finally:
+            errors = []
+            for fd, original in reversed(descriptors):
+                # Use the open descriptor so unplugging cannot restore a replacement device.
+                try:
+                    if block_mode(fd) != original:
+                        fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", original))
+                    if block_mode(fd) != original:
+                        raise ValueError("mode bloc non restauré")
+                except (OSError, ValueError) as error:
+                    errors.append(str(error))
+            if errors:
+                raise ValueError(f"Restauration de {disk['name']} : " + "; ".join(errors))
+
+
 def run(operation, local_default, *, local_directory=None, external=False):
     disks = [row for row in devices() if row["type"] == "disk" and row["size"] > 0 and idle(row)]
     source = choose(disks, "Disque source entier, démonté")
     sequence = disk_sequence(source)
-    targets = [row for row in disks if row["maj:min"] != source["maj:min"] and row["tran"] == "usb"]
     size = source["size"]
     if operation == "clone":
+        targets = target_disks(source, sequence)
         target = choose([row for row in targets if row["size"] >= size], "Cible USB à écraser")
         target_sequence = disk_sequence(target)
         section("Confirmation du clonage")
@@ -341,8 +389,9 @@ def run(operation, local_default, *, local_directory=None, external=False):
         if input(terminal_style(f"\nSaisissez {confirmation} : ", "1;93")).strip() != confirmation:
             raise InterruptedError("Clonage annulé.")
         with block_device(source, sequence, source=True) as origin:
-            with block_device(target, target_sequence, source=False) as output:
-                digest = transfer(origin, output, size)
+            with writable_target(target, target_sequence):
+                with block_device(target, target_sequence, source=False) as output:
+                    digest = transfer(origin, output, size)
         print(terminal_style(f"\nClone vérifié · SHA-256 : {digest}", "92"))
         return
 
@@ -364,6 +413,7 @@ def run(operation, local_default, *, local_directory=None, external=False):
         if not local.is_dir() or local.stat().st_uid != owner[0] or local.is_relative_to("/investigation"):
             raise ValueError("Choisissez un dossier local existant qui vous appartient, hors de /investigation.")
     else:
+        targets = target_disks(source, sequence)
         partitions = [(disk, part) for disk in targets for part in disk.get("children", ())
                       if part["type"] == "part" and part["fstype"] in FILESYSTEMS]
         if not partitions:
@@ -390,9 +440,10 @@ def run(operation, local_default, *, local_directory=None, external=False):
         if mode == "1":
             digest = create_image(origin, size, local, filename, owner)
         else:
-            with external_directory(target, target_sequence, selected, owner) as directory:
-                digest = create_image(origin, size, directory, filename,
-                                      owner if selected["fstype"] == "ext4" else None)
+            with writable_target(target, target_sequence, selected):
+                with external_directory(target, target_sequence, selected, owner) as directory:
+                    digest = create_image(origin, size, directory, filename,
+                                          owner if selected["fstype"] == "ext4" else None)
             print(terminal_style(f"Destination démontée : {selected['name']}", "92"))
     print(terminal_style(f"\nImage vérifiée : {filename} · SHA-256 : {digest}", "92"))
 

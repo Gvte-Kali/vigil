@@ -282,8 +282,13 @@ class Workspace(QMainWindow):
         dashboard_body = QHBoxLayout()
         dashboard_body.setSpacing(14)
         home.addLayout(dashboard_body, 1)
+        self.hotplug_status = QLabel()
+        self.hotplug_status.setWordWrap(True)
+        hotplug_column = QVBoxLayout()
+        dashboard_body.addLayout(hotplug_column, 3)
+        hotplug_column.addWidget(self.hotplug_status)
         self.system_panel = SystemPanel(self.tr_pair)
-        dashboard_body.addWidget(self.system_panel, 3)
+        hotplug_column.addWidget(self.system_panel, 1)
         dashboard_side = QVBoxLayout()
         dashboard_body.addLayout(dashboard_side, 2)
         recent = QLabel()
@@ -562,6 +567,7 @@ class Workspace(QMainWindow):
         self.case_navigation.setCurrentRow(0)
         self.mount_timer = QTimer(self)
         self.mount_timer.timeout.connect(self.refresh_case_mount)
+        self.mount_timer.timeout.connect(self.refresh_hotplug_status)
         self.mount_timer.start(2000)
 
     def tr_pair(self, french, english):
@@ -743,6 +749,7 @@ class Workspace(QMainWindow):
         self.refresh_diagnostics()
         self.refresh_pdf_reports()
         self.system_panel.render()
+        self.refresh_hotplug_status()
         self.explorer.retranslate()
         self.entity_panel.retranslate()
         self.update_terminal_toggle(not self.terminal_dock.isHidden())
@@ -1593,6 +1600,41 @@ class Workspace(QMainWindow):
         else:
             self.on_success(result)
 
+    def refresh_hotplug_status(self):
+        token = Path("/run/vigil-hotplug") / str(os.getpid())
+        try:
+            start = Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19]
+            active = token.stat().st_uid == 0 and token.read_text().strip() == f"{os.getuid()} {start}"
+        except (OSError, IndexError):
+            active = False
+        if active:
+            text = self.tr_pair("Protection des nouveaux disques active", "New disk protection active")
+        elif Path("/usr/local/sbin/vigil-hotplug").is_file():
+            text = self.tr_pair("Protection des nouveaux disques inactive · autorisation sudo requise",
+                                "New disk protection inactive · sudo authorisation required")
+        else:
+            text = self.tr_pair("Protection des nouveaux disques non installée",
+                                "New disk protection is not installed")
+        self.hotplug_status.setText(text)
+        self.hotplug_status.setStyleSheet(
+            f"color: {'#80D7A4' if active else '#EBC47A'}; font-weight: 600;"
+        )
+
+    def start_hotplug_protection(self):
+        helper = "/usr/local/sbin/vigil-hotplug"
+        if not Path(helper).is_file():
+            return
+        try:
+            launch_terminal([
+                "/usr/bin/bash", "-c",
+                'printf "%s\n" "Vigil · Protection des nouveaux disques"; '
+                'if /usr/bin/sudo -- "$@"; then exit 0; fi; '
+                'read -r -p "Protection inactive. Entrée / Enter"; exit 1',
+                "vigil", helper, "activate", str(os.getpid()),
+            ])
+        except (OSError, ValueError) as error:
+            self.statusBar().showMessage(str(error), 10000)
+
     def refresh_explorer_mounts(self):
         if not self.active_case_id:
             self.explorer.set_mounts({})
@@ -1940,6 +1982,7 @@ def main():
         window.system_panel.stop()
         return 0
     window.showMaximized()
+    window.start_hotplug_protection()
     return app.exec()
 
 

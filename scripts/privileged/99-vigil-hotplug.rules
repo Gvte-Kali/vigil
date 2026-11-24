@@ -1,0 +1,4 @@
+# Keep UDisks from auto-mounting a volume already handled by Vigil.
+ACTION=="change", SUBSYSTEM=="block", IMPORT{db}="VIGIL_HOTPLUG", ENV{VIGIL_HOTPLUG}=="1", ENV{UDISKS_IGNORE}="1"
+# Only physical block disks/partitions added while an authenticated session is active.
+ACTION=="add", SUBSYSTEM=="block", DEVPATH!="/devices/virtual/*", ENV{DEVTYPE}=="disk|partition", IMPORT{program}="/usr/local/sbin/vigil-hotplug protect $env{DEVNAME} $major $minor"

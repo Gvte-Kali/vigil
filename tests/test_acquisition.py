@@ -116,7 +116,20 @@ class AcquisitionTest(unittest.TestCase):
                   "maj:min": "8:16", "children": [{"name": "/dev/sdb1", "fstype": "ntfs"}]}
         with patch.dict(run.__globals__, {
             "devices": lambda: [source], "idle": lambda _: True, "disk_sequence": lambda _: "42",
-            "choose": lambda rows, _: rows[0],
+            "choose": lambda rows, _: rows[0], "target_disks": lambda *_: [],
         }), patch.dict("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000"}), redirect_stdout(io.StringIO()):
             with self.assertRaisesRegex(ValueError, "disque source /dev/sdb"):
                 run("image", "/tmp", external=True)
+
+
+    def test_target_list_is_refreshed_after_prompt(self):
+        from contextlib import redirect_stdout
+
+        target_disks = acquisition["target_disks"]
+        source = {"name": "/dev/sdb", "maj:min": "8:16", "type": "disk", "tran": "usb"}
+        target = {"name": "/dev/sdc", "maj:min": "8:32", "type": "disk", "tran": "usb"}
+        with patch.dict(target_disks.__globals__, {
+            "devices": lambda: [source, target], "idle": lambda _: True,
+            "check_disk": lambda *_: None,
+        }), patch("shutil.which", return_value=None), patch("builtins.input", return_value=""), redirect_stdout(io.StringIO()):
+            self.assertEqual(target_disks(source, "42"), [target])

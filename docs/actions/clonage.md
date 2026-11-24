@@ -13,7 +13,10 @@ Dans **Actions rapides → Acquisition**, choisir **Cloner un disque** ou
 **Créer une image RAW**. Les deux actions ouvrent le terminal par défaut
 et demandent une authentification sudo.
 
-Le clonage sélectionne deux disques démontés, dont une cible USB. La
+Après le choix de la source, le terminal invite à brancher une cible USB
+et renouvelle l’inventaire. Le clonage utilise deux disques démontés. La
+cible est autorisée en écriture après confirmation et son mode bloc est
+restauré à la sortie. La
 confirmation reprend le chemin de la cible. La copie écrase les premiers
 octets de la cible sur la longueur exacte de la source. Le SHA-256 est
 comparé après relecture de cette même plage.
