@@ -30,6 +30,10 @@ A. Installation et mises à jour
     si les dépendances ou le point d’entrée changent.
 
 B. Langue et navigation Qt
+[ ] Vérifier la navigation verticale et les groupes Espace de travail,
+    Investigation et Système. Parcourir les pages au clavier et vérifier
+    que la page active reste en surbrillance cyan lors de la bascule FR/EN.
+
 [ ] Vérifier le français sur un profil de recette neuf.
 [ ] Vérifier que les deux boutons FR et EN affichent leurs drapeaux entiers
     et que la langue active est mise en évidence. Cliquer sur EN. Les onglets, boutons, champs, messages et dialogues

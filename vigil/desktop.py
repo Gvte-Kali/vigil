@@ -5,11 +5,11 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTranslator, Qt, Signal, Slot
-from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTabWidget,
+    QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QStackedWidget,
     QVBoxLayout, QWidget,
 )
 
@@ -33,20 +33,16 @@ QLineEdit, QComboBox, QListWidget {
 QListWidget::item { padding: 8px; border-radius: 4px; }
 QListWidget::item:hover:!selected { background: #263444; }
 QListWidget::item:selected { background: #57C7D4; color: #101318; }
-QTabWidget::pane {
-    background: #1A2029; border: 1px solid #35404E; border-radius: 8px;
+QListWidget#navigation {
+    background: #101318; border: none; padding: 0 7px 0 0;
+    selection-background-color: #203741; selection-color: #80DEE8;
 }
-QWidget[workspacePage="true"] { background: #1A2029; }
-QTabBar::tab {
-    background: #1A2029; color: #C4D1E0; padding: 10px 18px;
-    margin-right: 4px; border: 1px solid #35404E;
-    border-top-left-radius: 7px; border-top-right-radius: 7px;
-}
-QTabBar::tab:hover { background: #283648; }
-QTabBar::tab:selected {
-    background: #253744; color: #EAFBFF;
-    border-bottom: 3px solid #57C7D4; font-weight: 700;
-}
+QListWidget#navigation::item { min-height: 31px; padding: 4px 11px; border-radius: 6px; }
+QListWidget#navigation::item:hover:!selected { background: #1B2834; }
+QListWidget#navigation::item:selected { background: #203741; color: #80DEE8; }
+QListWidget#navigation::item:disabled { background: transparent; color: #91A1B3; }
+QLabel#pageTitle { font-size: 20px; font-weight: 700; }
+QWidget[workspacePage="true"] { background: #101318; }
 QPushButton {
     background: #273447; color: #F1F6FC; border: 1px solid #4B6076;
     border-radius: 7px; padding: 8px 13px; font-weight: 600;
@@ -171,11 +167,21 @@ class Workspace(QMainWindow):
             button.clicked.connect(lambda _, code=language: self.change_language(code))
             header.addWidget(button)
         layout.addWidget(header_frame)
-        self.tabs = QTabWidget()
-        layout.addWidget(self.tabs)
+        body = QHBoxLayout()
+        body.setSpacing(14)
+        layout.addLayout(body, 1)
+        self.navigation = QListWidget()
+        self.navigation.setObjectName("navigation")
+        self.navigation.setFixedWidth(184)
+        self.bind(self.navigation.setAccessibleName, "Navigation", "Navigation")
+        self.navigation.currentItemChanged.connect(self.open_page)
+        body.addWidget(self.navigation)
+        self.pages = QStackedWidget()
+        body.addWidget(self.pages, 1)
         self.setCentralWidget(root)
 
-        home = self.page("Accueil", "Home")
+        self.navigation_group("ESPACE DE TRAVAIL", "WORKSPACE")
+        home = self.page("Accueil", "Home", heading=False)
         self.system_panel = SystemPanel(self.tr_pair)
         home.addWidget(self.system_panel)
 
@@ -218,6 +224,7 @@ class Workspace(QMainWindow):
         evidence_actions.addStretch()
 
 
+        self.navigation_group("INVESTIGATION", "INVESTIGATION")
         modules = self.page("Modules", "Modules")
         self.modules = QListWidget()
         modules.addWidget(self.modules)
@@ -226,6 +233,7 @@ class Workspace(QMainWindow):
         self.button(module_actions, "Consulter un index de recensement",
                     "Query a census index", self.query_index, primary=True)
         module_actions.addStretch()
+        self.navigation_group("SYSTÈME", "SYSTEM")
         settings_page = self.page("Diagnostic", "Diagnostics")
         self.diagnostics = QListWidget()
         settings_page.addWidget(self.diagnostics)
@@ -236,6 +244,7 @@ class Workspace(QMainWindow):
         self.refresh_operators()
         self.translate()
         self.refresh_cases()
+        self.navigation.setCurrentRow(1)
 
     def tr_pair(self, french, english):
         return english if self.language == "en" else french
@@ -243,14 +252,32 @@ class Workspace(QMainWindow):
     def bind(self, setter, french, english):
         self.localized.append((setter, french, english))
 
-    def page(self, french, english):
+    def navigation_group(self, french, english):
+        item = QListWidgetItem(self.navigation)
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        item.setForeground(QColor("#91A1B3"))
+        self.bind(item.setText, french, english)
+
+    def open_page(self, item, _previous):
+        if item is not None:
+            index = item.data(Qt.ItemDataRole.UserRole)
+            if index is not None:
+                self.pages.setCurrentIndex(index)
+
+    def page(self, french, english, *, heading=True):
         widget = QWidget()
         widget.setProperty("workspacePage", True)
-        index = self.tabs.addTab(widget, "")
-        self.bind(lambda label: self.tabs.setTabText(index, label), french, english)
+        item = QListWidgetItem(self.navigation)
+        item.setData(Qt.ItemDataRole.UserRole, self.pages.addWidget(widget))
+        self.bind(item.setText, french, english)
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
+        if heading:
+            title = QLabel()
+            title.setObjectName("pageTitle")
+            self.bind(title.setText, french, english)
+            layout.addWidget(title)
         return layout
 
     def button(self, layout, french, english, action, *, primary=False):

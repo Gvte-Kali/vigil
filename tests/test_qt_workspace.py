@@ -27,7 +27,7 @@ class WorkspaceTest(unittest.TestCase):
             database = Path(tmp) / "cases.sqlite"
             window = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertFalse(window.windowIcon().pixmap(40, 40).isNull())
-            self.assertEqual(window.tabs.tabText(1), "Affaires")
+            self.assertEqual(window.navigation.item(2).text(), "Affaires")
             for language in ("fr", "en"):
                 self.assertFalse(window.language_buttons[language].icon().isNull())
             flag = window.language_buttons["fr"].icon().pixmap(QSize(24, 16), 2).toImage()
@@ -43,15 +43,15 @@ class WorkspaceTest(unittest.TestCase):
             window.case_search.setText("PREUVE")
             self.assertFalse(window.cases.item(0).isHidden())
             window.language_buttons["en"].click()
-            self.assertEqual(window.tabs.tabText(1), "Cases")
+            self.assertEqual(window.navigation.item(2).text(), "Cases")
             self.assertEqual(window.case_label.text(), "Locked case  ·  Test & preuve")
             self.close_workspace(window)
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
-            self.assertEqual(reopened.tabs.tabText(1), "Cases")
+            self.assertEqual(reopened.navigation.item(2).text(), "Cases")
             self.assertEqual(reopened.operator.currentText(), "Alice")
             self.assertTrue(reopened.language_buttons["en"].isChecked())
             reopened.language_buttons["fr"].click()
-            self.assertEqual(reopened.tabs.tabText(2), "Preuves")
+            self.assertEqual(reopened.navigation.item(3).text(), "Preuves")
             self.close_workspace(reopened)
 
     def test_background_file_registration_and_verification(self):
@@ -169,6 +169,25 @@ class WorkspaceTest(unittest.TestCase):
                     with patch.object(window, "notify") as notify:
                         self.assertFalse(window.close())
                         self.assertIn("Saving failed", notify.call_args.args[1])
+            self.close_workspace(window)
+
+    def test_sidebar_switches_pages_and_localizes_groups(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            self.assertEqual(window.navigation.currentItem().text(), "Accueil")
+            self.assertEqual(window.pages.currentIndex(), 0)
+            window.navigation.setCurrentRow(2)
+            self.assertEqual(window.pages.currentIndex(), 1)
+            window.language_buttons["en"].click()
+            self.assertEqual(window.navigation.item(0).text(), "WORKSPACE")
+            self.assertEqual(window.navigation.currentItem().text(), "Cases")
+            self.assertEqual(window.pages.currentIndex(), 1)
             self.close_workspace(window)
 
     def wait_for_task(self, window):

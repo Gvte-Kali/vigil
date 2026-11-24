@@ -4,7 +4,7 @@ import shutil
 
 from PySide6.QtCore import QProcess, QTimer, Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from .system_info import LSBLK_COLUMNS, ZONES, read_zones, system_metrics
 
@@ -32,21 +32,22 @@ class SystemPanel(QWidget):
         self.summary.setWordWrap(True)
         self.summary.setStyleSheet("font-size: 19px; font-weight: 700;")
         layout.addWidget(self.summary)
-        cards = QHBoxLayout()
+        cards = QGridLayout()
+        cards.setSpacing(8)
         layout.addLayout(cards)
         self.cards = []
-        for accent in ("#57C7D4", "#BB9AF7", "#EBC47A", "#80D7A4"):
+        for index, accent in enumerate(("#57C7D4", "#BB9AF7", "#80D7A4", "#EBC47A")):
             card = QLabel()
             card.setTextFormat(Qt.TextFormat.PlainText)
             card.setWordWrap(True)
             card.setMinimumHeight(64)
-            card.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             card.setStyleSheet(
                 f"color: {accent}; background: #242D38; border: 1px solid #455569; "
                 f"border-left: 4px solid {accent}; border-radius: 6px; padding: 6px; "
                 "font-weight: 600;"
             )
-            cards.addWidget(card, 1)
+            cards.addWidget(card, index // 2, index % 2)
             self.cards.append(card)
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
@@ -96,7 +97,7 @@ class SystemPanel(QWidget):
     def render(self, *_):
         tr = self.tr_pair
         self.refresh_button.setText(tr("Actualiser le système", "Refresh system"))
-        self.summary.setText(tr("Système et stockage", "System and storage"))
+        self.summary.setText(tr("Tableau de bord", "Dashboard"))
         memory, uptime, load, cpu_count = self.metrics
         unavailable = tr("Indisponible", "Unavailable")
         values = [
