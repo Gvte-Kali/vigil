@@ -35,6 +35,7 @@ class WorkspaceTest(unittest.TestCase):
             window.add_operator("Alice")
             window.case_name.setText("Test & preuve")
             window.create_case()
+            window.select_case()
             window.case_search.setText("unmatched")
             self.assertTrue(window.cases.item(0).isHidden())
             self.assertIn("Test & preuve", window.active_case.text())
@@ -42,7 +43,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertFalse(window.cases.item(0).isHidden())
             window.language_buttons["en"].click()
             self.assertEqual(window.tabs.tabText(1), "Cases")
-            self.assertEqual(window.case_label.text(), "Active case  ·  Test & preuve")
+            self.assertEqual(window.case_label.text(), "Locked case  ·  Test & preuve")
             window.close()
             reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             self.assertEqual(reopened.tabs.tabText(1), "Cases")
@@ -64,6 +65,7 @@ class WorkspaceTest(unittest.TestCase):
             window.add_operator("Alice")
             window.case_name.setText("Fixture")
             window.create_case()
+            window.select_case()
             source = root / "synthetic.raw"
             source.write_bytes(b"fixture")
             with patch.object(window, "choose_file", return_value=str(source)):
@@ -76,6 +78,41 @@ class WorkspaceTest(unittest.TestCase):
                 self.wait_for_task(window)
                 self.assertEqual(notify.call_args.args[1], "The fingerprint matches.")
             window.close()
+
+    def test_active_case_requires_confirmation_for_switch(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = str(root / "settings.ini")
+            database = root / "cases.sqlite"
+            window = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
+            window.add_operator("Alice")
+            for name in ("First", "Second"):
+                window.case_name.setText(name)
+                window.create_case()
+            self.assertEqual(window.active_case_id, "")
+            window.cases.setCurrentRow(0)
+            window.select_case()
+            first = window.active_case_id
+
+            window.cases.setCurrentRow(1)
+            with patch.object(window, "confirm_case_change", return_value=False) as confirm:
+                window.case_clicked(window.cases.currentItem())
+            confirm.assert_called_once_with("First", "Second")
+            self.assertEqual(window.active_case_id, first)
+            self.assertEqual(window.cases.currentRow(), 0)
+            window.cases.setCurrentRow(1)
+            with patch.object(window, "confirm_case_change", return_value=True):
+                window.case_clicked(window.cases.currentItem())
+            self.assertIn("Second", window.active_case.text())
+            self.assertNotEqual(window.active_case_id, first)
+            window.close()
+
+            reopened = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
+            self.assertIn("Second", reopened.active_case.text())
+            self.assertEqual(len(reopened.system_panel.cards), 4)
+            reopened.close()
 
     def wait_for_task(self, window):
         for _ in range(200):

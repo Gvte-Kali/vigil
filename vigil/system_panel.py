@@ -3,9 +3,9 @@ import json
 import shutil
 
 from PySide6.QtCore import QProcess, QTimer, Qt
-from PySide6.QtWidgets import QLabel, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
-from .system_info import LSBLK_COLUMNS, ZONES, read_zones
+from .system_info import LSBLK_COLUMNS, ZONES, read_zones, system_metrics
 
 
 def capacity(value):
@@ -24,11 +24,29 @@ class SystemPanel(QWidget):
         self.tr_pair = translate
         self.devices = None
         self.zones = None
+        self.metrics = (None, None, None, None)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
+        self.summary.setStyleSheet("font-size: 19px; font-weight: 700;")
         layout.addWidget(self.summary)
+        cards = QHBoxLayout()
+        layout.addLayout(cards)
+        self.cards = []
+        for accent in ("#57C7D4", "#BB9AF7", "#EBC47A", "#80D7A4"):
+            card = QLabel()
+            card.setTextFormat(Qt.TextFormat.PlainText)
+            card.setWordWrap(True)
+            card.setMinimumHeight(64)
+            card.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            card.setStyleSheet(
+                f"color: {accent}; background: #242D38; border: 1px solid #455569; "
+                f"border-left: 4px solid {accent}; border-radius: 6px; padding: 6px; "
+                "font-weight: 600;"
+            )
+            cards.addWidget(card, 1)
+            self.cards.append(card)
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
         self.tree.setToolTipDuration(10000)
@@ -45,6 +63,7 @@ class SystemPanel(QWidget):
         self.refresh()
 
     def refresh(self):
+        self.metrics = system_metrics()
         try:
             self.zones = read_zones()
         except OSError:
@@ -76,6 +95,21 @@ class SystemPanel(QWidget):
         tr = self.tr_pair
         self.refresh_button.setText(tr("Actualiser le système", "Refresh system"))
         self.summary.setText(tr("Système et stockage", "System and storage"))
+        memory, uptime, load, cpu_count = self.metrics
+        unavailable = tr("Indisponible", "Unavailable")
+        values = [
+            (tr("Mémoire utilisée", "Memory used"),
+             f"{capacity(memory[0])} / {capacity(memory[1])}" if memory else unavailable),
+            (tr("Charge système · 1 / 5 / 15 min", "System load · 1 / 5 / 15 min"),
+             " / ".join(f"{sample:.2f}" for sample in load) if load else unavailable),
+            (tr("Processeurs logiques", "Logical processors"),
+             str(cpu_count) if cpu_count else unavailable),
+            (tr("Temps de fonctionnement", "Uptime"),
+             f"{uptime // 86400}d {uptime // 3600 % 24}h {uptime // 60 % 60}m"
+             if uptime is not None else unavailable),
+        ]
+        for card, (title, value) in zip(self.cards, values):
+            card.setText(f"{title}\n{value}")
         self.tree.clear()
         mounts = self.add(self.tree, tr("Zones Vigil", "Vigil zones"))
         for zone in ZONES:

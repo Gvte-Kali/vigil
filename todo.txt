@@ -60,7 +60,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
 [ ] Dashboard, Cases, Evidence, Modules, Settings ; migration progressive.
     Affaires, preuves de type fichier, diagnostic et registre en lecture seule
     accessibles en Qt. Accueil avec inventaire bloc et état des deux zones
-    de montage, recherche locale et affaire active dans l’en-tête.
+    de montage, cartes système pleine largeur, recherche locale et affaire
+    verrouillable avec confirmation de changement et restauration au lancement.
     Parité historique et panneau terminal ouverts.
     Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.

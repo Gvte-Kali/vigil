@@ -1,4 +1,5 @@
 """Read-only inventory for the Linux mount namespace visible to Vigil."""
+import os
 import re
 from pathlib import Path
 
@@ -33,3 +34,32 @@ def zone_mounts(lines):
 def read_zones():
     with Path("/proc/self/mountinfo").open(encoding="utf-8", errors="replace") as stream:
         return zone_mounts(stream)
+
+
+def system_metrics():
+    """Report kernel measurements, using None for unavailable values."""
+
+    memory = None
+    uptime = None
+    load = None
+    try:
+        fields = {}
+        for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
+            key, _, value = line.partition(":")
+            if key in {"MemTotal", "MemAvailable"}:
+                fields[key] = int(value.split()[0]) * 1024
+        total = fields["MemTotal"]
+        available = fields["MemAvailable"]
+        if 0 <= available <= total and total > 0:
+            memory = (total - available, total)
+    except (OSError, KeyError, ValueError, IndexError):
+        pass
+    try:
+        uptime = int(float(Path("/proc/uptime").read_text(encoding="ascii").split()[0]))
+    except (OSError, ValueError, IndexError, OverflowError):
+        pass
+    try:
+        load = os.getloadavg()
+    except OSError:
+        pass
+    return memory, uptime, load, os.cpu_count()

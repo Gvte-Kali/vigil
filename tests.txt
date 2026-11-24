@@ -46,13 +46,17 @@ B. Langue et navigation Qt
 
 [ ] Dans Accueil, comparer disques, tailles, tables, types de partitions
     et systèmes de fichiers avec lsblk. Vérifier que le bandeau est
-    redimensionnable et que le bouton Actualiser relit les informations.
+    affiché sur toute la largeur et que le bouton Actualiser relit
+    les informations. Vérifier les quatre cartes système et les barres
+    de défilement cyan avec une liste assez longue.
 [ ] Comparer les zones /investigation et /stockage à /proc/self/mountinfo.
     Vérifier les états sans montage, avec montage direct et sous-montage
     à partir des fixtures ou dans une VM dédiée. Lecture seule pour ce test.
 [ ] Rechercher une affaire par fragment et avec une casse différente.
     Vérifier que le filtre ne change pas l’affaire active. Sélectionner
-    un résultat et vérifier le nom près de Vigil 2.0 et sur l’accueil.
+    un résultat puis cliquer sur Sélectionner l’affaire. Vérifier le nom
+    près de Vigil 2.0. Cliquer sur une autre affaire, refuser puis accepter
+    le changement. Vérifier les preuves et la restauration après relance.
 
 C. Affaires et fichiers de preuve
 [ ] Cliquer sur Opérateurs…, créer Alice et un second opérateur. Vérifier
