@@ -365,3 +365,7 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 [ ] Créer une image RAW, choisir Dossier local puis un chemin avec des
     espaces dans le sélecteur système. Vérifier que le terminal utilise
     le dossier choisi et qu’annuler le sélecteur ne lance rien.
+
+
+[ ] Ouvrir Actions rapides à deux tailles de fenêtre. Vérifier les panneaux
+    en colonnes puis empilés, les libellés FR/EN et les sept boutons.

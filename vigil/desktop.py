@@ -10,8 +10,8 @@ from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSe
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
-    QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QStackedWidget, QTabWidget,
+    QAbstractItemView, QApplication, QBoxLayout, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QStackedWidget, QTabWidget,
     QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
@@ -72,9 +72,15 @@ QListWidget#navigation::item:selected { background: #203741; color: #80DEE8; }
 QListWidget#caseNavigation { background: #1A2029; }
 QListWidget#caseNavigation::item:selected { background: #203741; color: #80DEE8; }
 QListWidget#navigation::item:disabled { background: transparent; color: #91A1B3; }
-QFrame#quickActionSection { background: #1A2029; border: 1px solid #35404E; border-radius: 8px; }
-QFrame#quickActionCard { background: #202A36; border: 1px solid #455569; border-radius: 7px; }
-QFrame#quickActionCard QLabel { background: transparent; color: #C4D1E0; }
+QScrollArea#quickActionArea { background: transparent; border: 0; }
+QFrame#quickActionSection { background: #171E27; border: 1px solid #35404E; border-radius: 12px; }
+QFrame#quickActionCard { background: #202A36; border: 1px solid #354658; border-radius: 8px; }
+QFrame#quickActionCard QLabel { background: transparent; color: #BDCADA; }
+QFrame#quickActionCard QPushButton { text-align: left; padding: 9px 11px; }
+QFrame#quickActionCard QPushButton:focus { border: 1px solid #A5EAF2; }
+QFrame#quickActionCard QPushButton[destructive="true"] { color: #FFE0AA; border-color: #806640; }
+QFrame#quickActionCard QPushButton[destructive="true"]:hover { background: #493A2D; }
+QLabel#quickCategoryTitle { background: transparent; font-size: 17px; font-weight: 700; }
 QLabel#quickActionTitle { color: #57C7D4; background: transparent; font-weight: 700; }
 QLabel#pageTitle { font-size: 20px; font-weight: 700; }
 QWidget[workspacePage="true"] { background: #101318; }
@@ -138,6 +144,29 @@ class Worker(QObject):
             self.finished.emit(None, error)
         else:
             self.finished.emit(result, None)
+
+
+class QuickActionArea(QScrollArea):
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("quickActionArea")
+        self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 2, 5, 4)
+        self.sections = QBoxLayout(QBoxLayout.Direction.TopToBottom)
+        self.sections.setSpacing(14)
+        layout.addLayout(self.sections)
+        layout.addStretch()
+        self.setWidget(content)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        direction = (QBoxLayout.Direction.LeftToRight if self.width() >= 1000
+                     else QBoxLayout.Direction.TopToBottom)
+        if self.sections.direction() != direction:
+            self.sections.setDirection(direction)
 
 
 class ReportDateItem(QTableWidgetItem):
@@ -445,7 +474,10 @@ class Workspace(QMainWindow):
         export.addStretch()
 
         quick_actions = self.page("Actions rapides", "Quick actions", grouped=False)
-        antivirus = self.quick_action_section(quick_actions, "Antivirus", "Antivirus")
+        action_area = QuickActionArea()
+        quick_actions.addWidget(action_area, 1)
+        sections = action_area.sections
+        antivirus = self.quick_action_section(sections, "Antivirus", "Antivirus", "shield", "#57C7D4")
         self.quick_action_card(
             antivirus, "Scan antivirus", "Antivirus scan",
             "Monte le support, lance ClamAV et enregistre le rapport PDF.",
@@ -465,9 +497,9 @@ class Workspace(QMainWindow):
             "folder", self.show_antivirus_reports,
         )
         antivirus.addStretch()
-        storage_actions = self.quick_action_section(quick_actions, "Stockage", "Storage")
+        storage_actions = self.quick_action_section(sections, "Stockage", "Storage", "folder", "#80D7A4")
         self.quick_action_card(
-            storage_actions, "Ajouter un périphérique de stockage", "Add a storage device",
+            storage_actions, "Monter un stockage", "Mount storage",
             "Sélectionne un support de travail et le monte en lecture-écriture sous /stockage.",
             "Select a work drive and mount it read-write under /stockage.",
             "hard-drive", self.quick_storage, primary=True,
@@ -479,12 +511,13 @@ class Workspace(QMainWindow):
             "hard-drive", lambda: self.quick_storage("unmount"),
         )
         storage_actions.addStretch()
-        acquisition = self.quick_action_section(quick_actions, "Acquisition", "Acquisition")
+        acquisition = self.quick_action_section(sections, "Acquisition", "Acquisition", "hard-drive", "#BB9AF7")
         self.quick_action_card(
             acquisition, "Cloner un disque", "Clone a disk",
             "Copie bit à bit sur un disque USB cible et vérifie son SHA-256.",
             "Copy bit for bit to a USB disk and verify its SHA-256.",
             "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("clone")),
+            destructive=True,
         )
         self.quick_action_card(
             acquisition, "Créer une image RAW", "Create a RAW image",
@@ -493,7 +526,6 @@ class Workspace(QMainWindow):
             "hard-drive", self.quick_raw_image,
         )
         acquisition.addStretch()
-        quick_actions.addStretch()
 
         self.terminal = TerminalPanel()
         self.terminal.completed.connect(self.quick_finished)
@@ -617,39 +649,48 @@ class Workspace(QMainWindow):
             if self.case_pages.currentWidget() is self.pdf_reports_page:
                 self.refresh_pdf_reports()
 
-    def quick_action_section(self, page, french, english):
+    def quick_action_section(self, sections, french, english, icon_name, accent):
         section = QFrame()
         section.setObjectName("quickActionSection")
         layout = QVBoxLayout(section)
-        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setSpacing(12)
+        heading = QHBoxLayout()
+        heading.setSpacing(9)
+        icon = QLabel()
+        icon.setStyleSheet("background: transparent;")
+        icon.setPixmap(self.action_icon(icon_name, accent).pixmap(20, 20))
+        heading.addWidget(icon)
         title = QLabel()
-        title.setObjectName("quickActionTitle")
+        title.setObjectName("quickCategoryTitle")
+        title.setStyleSheet(f"color: {accent};")
         self.bind(title.setText, french, english)
-        layout.addWidget(title)
-        actions = QHBoxLayout()
-        layout.addLayout(actions)
-        page.addWidget(section)
+        heading.addWidget(title, 1)
+        layout.addLayout(heading)
+        actions = QVBoxLayout()
+        actions.setSpacing(9)
+        layout.addLayout(actions, 1)
+        sections.addWidget(section, 1)
         return actions
 
-    def quick_action_card(self, row, french, english, description_fr, description_en,
-                          icon_name, action, *, primary=False):
+    def quick_action_card(self, column, french, english, description_fr, description_en,
+                          icon_name, action, *, primary=False, destructive=False):
         card = QFrame()
         card.setObjectName("quickActionCard")
-        card.setMaximumWidth(310)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setContentsMargins(10, 9, 10, 10)
+        layout.setSpacing(6)
+        self.button(layout, french, english, action, primary=primary)
+        button = self.buttons[-1]
+        button.setProperty("destructive", destructive)
+        color = "#101318" if primary else "#EBC47A" if destructive else "#57C7D4"
+        button.setIcon(self.action_icon(icon_name, color))
         description = QLabel()
         description.setWordWrap(True)
+        description.setContentsMargins(2, 0, 2, 0)
         self.bind(description.setText, description_fr, description_en)
         layout.addWidget(description)
-        layout.addStretch()
-        buttons = QHBoxLayout()
-        layout.addLayout(buttons)
-        self.button(buttons, french, english, action, primary=primary)
-        button = self.buttons[-1]
-        button.setIcon(self.action_icon(icon_name, "#101318" if primary else "#57C7D4"))
-        buttons.addStretch()
-        row.addWidget(card)
+        column.addWidget(card)
 
     @staticmethod
     def action_icon(name, color):

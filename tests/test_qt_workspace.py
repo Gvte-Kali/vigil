@@ -396,15 +396,26 @@ class WorkspaceTest(unittest.TestCase):
             sidebar.setCurrentItem(quick)
             page = window.pages.currentWidget()
             self.assertEqual(
-                [label.text() for label in page.findChildren(QLabel, "quickActionTitle")],
+                [label.text() for label in page.findChildren(QLabel, "quickCategoryTitle")],
                 ["Antivirus", "Stockage", "Acquisition"],
             )
+            from vigil.desktop import QuickActionArea
+            from PySide6.QtWidgets import QBoxLayout
+
+            area = page.findChild(QuickActionArea)
+            window.show()
+            window.resize(1440, 850)
+            self.app.processEvents()
+            self.assertEqual(area.sections.direction(), QBoxLayout.Direction.LeftToRight)
+            window.resize(940, 740)
+            self.app.processEvents()
+            self.assertEqual(area.sections.direction(), QBoxLayout.Direction.TopToBottom)
             action_buttons = page.findChildren(QPushButton)
             self.assertEqual(len(action_buttons), 7)
             self.assertTrue(all(not button.icon().isNull() for button in action_buttons))
             window.language_buttons["en"].click()
             self.assertEqual(quick.text(), "Quick actions")
-            self.assertEqual(page.findChildren(QLabel, "quickActionTitle")[1].text(), "Storage")
+            self.assertEqual(page.findChildren(QLabel, "quickCategoryTitle")[1].text(), "Storage")
             self.close_workspace(window)
 
     def test_terminal_toggle_is_accessible_across_pages(self):
