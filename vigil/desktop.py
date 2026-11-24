@@ -312,7 +312,6 @@ class Workspace(QMainWindow):
             "QPushButton:hover { background: #203741; color: #80DEE8; } "
             "QPushButton:focus { border-color: #57C7D4; }"
         )
-        item.setSizeHint(button.sizeHint())
         self.navigation.setItemWidget(item, button)
         key = french
         self.current_group = key
@@ -324,6 +323,10 @@ class Workspace(QMainWindow):
             arrow = "▾" if self.group_open[key] else "▸"
             button.setText(f"{arrow}  {value}")
             button.setAccessibleName(value)
+            button.ensurePolished()
+            height = max(button.sizeHint().height(), button.fontMetrics().height() + 16)
+            button.setMinimumHeight(height)
+            item.setSizeHint(QSize(0, height + 8))
 
         def toggle():
             self.group_open[key] = not self.group_open[key]

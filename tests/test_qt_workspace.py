@@ -209,6 +209,14 @@ class WorkspaceTest(unittest.TestCase):
                 QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
                 root / "cases.sqlite",
             )
+            window.show()
+            self.app.processEvents()
+            for index in range(window.navigation.count()):
+                group = window.navigation.item(index)
+                header = window.navigation.itemWidget(group)
+                if header is not None:
+                    self.assertTrue(header.isVisible())
+                    self.assertGreaterEqual(header.height(), header.fontMetrics().height() + 12)
             header = window.navigation.itemWidget(window.navigation.item(0))
             header.click()
             self.assertTrue(window.navigation.item(1).isHidden())
