@@ -44,6 +44,9 @@ B. Langue et navigation Qt
 [ ] Si disponibles, comparer un lancement X11 et un lancement Wayland.
     Indiquer la session utilisée et noter les erreurs de plugin Qt.
 
+[ ] Dans Accueil, vérifier les lignes cyan des disques et les lignes
+    violettes des partitions. Déplier chaque partition pour afficher ses
+    détails. Au lancement, seules les synthèses doivent être visibles.
 [ ] Dans Accueil, comparer disques, tailles, tables, types de partitions
     et systèmes de fichiers avec lsblk. Vérifier que le bandeau est
     affiché sur toute la largeur et que le bouton Actualiser relit

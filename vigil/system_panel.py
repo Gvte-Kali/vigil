@@ -3,6 +3,7 @@ import json
 import shutil
 
 from PySide6.QtCore import QProcess, QTimer, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget
 
 from .system_info import LSBLK_COLUMNS, ZONES, read_zones, system_metrics
@@ -86,9 +87,10 @@ class SystemPanel(QWidget):
                 pass
         self.render()
 
-    def add(self, parent, text):
+    def add(self, parent, text, color="#B9CAD9"):
         item = QTreeWidgetItem(parent, [text])
         item.setToolTip(0, text)
+        item.setForeground(0, QColor(color))
         return item
 
     def render(self, *_):
@@ -111,7 +113,7 @@ class SystemPanel(QWidget):
         for card, (title, value) in zip(self.cards, values):
             card.setText(f"{title}\n{value}")
         self.tree.clear()
-        mounts = self.add(self.tree, tr("Zones Vigil", "Vigil zones"))
+        mounts = self.add(self.tree, tr("Zones Vigil", "Vigil zones"), "#57C7D4")
         for zone in ZONES:
             entries = None if self.zones is None else self.zones[zone]
             if entries is None:
@@ -122,12 +124,13 @@ class SystemPanel(QWidget):
                 state = tr("Monté", "Mounted")
             else:
                 state = tr("Sous-montages", "Submounts")
-            group = self.add(mounts, f"{zone}  ·  {state}")
+            color = "#80D7A4" if entries else "#EBC47A"
+            group = self.add(mounts, f"{zone}  ·  {state}", color)
             for target, source, filesystem, mode in entries or ():
                 self.add(group, "  ·  ".join(filter(None, (source, filesystem, mode, target))))
             group.setExpanded(True)
         mounts.setExpanded(True)
-        root = self.add(self.tree, tr("Disques et partitions", "Disks and partitions"))
+        root = self.add(self.tree, tr("Disques et partitions", "Disks and partitions"), "#57C7D4")
         if self.devices is None:
             message = (tr("Lecture en cours…", "Loading…")
                        if self.process.state() != QProcess.ProcessState.NotRunning
@@ -148,7 +151,9 @@ class SystemPanel(QWidget):
         title = "  ·  ".join(filter(None, (
             device.get("path") or device.get("name"), kind, capacity(device.get("size")),
         )))
-        item = self.add(parent, title)
+        device_type = device.get("type")
+        color = {"disk": "#57C7D4", "part": "#BB9AF7"}.get(device_type, "#DCE3EC")
+        item = self.add(parent, title, color)
         fields = (
             (tr("Modèle", "Model"), device.get("model")),
             (tr("Table", "Table"), device.get("pttype")),
@@ -157,12 +162,16 @@ class SystemPanel(QWidget):
             (tr("Disponible", "Available"), capacity(device.get("fsavail"))),
             (tr("Utilisé", "Used"), device.get("fsuse%")),
         )
-        for label, value in fields:
-            if value:
-                self.add(item, f"{label}  ·  {value}")
+        details = [(label, value) for label, value in fields if value]
+        if details:
+            group = item if device_type == "part" else self.add(
+                item, tr("Détails du périphérique", "Device details")
+            )
+            for label, value in details:
+                self.add(group, f"{label}  ·  {value}")
         for child in device.get("children") or ():
             self.add_device(item, child)
-        item.setExpanded(True)
+        item.setExpanded(device_type == "disk")
 
     def stop(self):
         self.timeout.stop()

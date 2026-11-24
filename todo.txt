@@ -62,6 +62,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
     accessibles en Qt. Accueil avec inventaire bloc et état des deux zones
     de montage, cartes système pleine largeur, recherche locale et affaire
     verrouillable avec confirmation de changement et restauration au lancement.
+    Les détails de partition sont repliés par défaut et l’inventaire
+    distingue disques, partitions et états de montage par couleur.
     Parité historique et panneau terminal ouverts.
     Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.

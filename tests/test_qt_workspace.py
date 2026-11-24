@@ -114,6 +114,27 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(len(reopened.system_panel.cards), 4)
             reopened.close()
 
+    def test_inventory_keeps_partition_details_collapsed(self):
+        from vigil.system_panel import SystemPanel
+
+        with patch.object(SystemPanel, "refresh"):
+            panel = SystemPanel(lambda french, english: english)
+        panel.devices = [{
+            "path": "/dev/example", "type": "disk", "size": 2048, "pttype": "gpt",
+            "children": [{"path": "/dev/example1", "type": "part", "size": 1024,
+                          "fstype": "ext4", "parttype": "fixture"}],
+        }]
+        panel.render()
+        disk = panel.tree.topLevelItem(1).child(0)
+        details, partition = disk.child(0), disk.child(1)
+        self.assertTrue(disk.isExpanded())
+        self.assertFalse(details.isExpanded())
+        self.assertFalse(partition.isExpanded())
+        self.assertNotEqual(disk.foreground(0).color(), partition.foreground(0).color())
+        partition.setExpanded(True)
+        self.assertIn("ext4", partition.child(1).text(0))
+        panel.close()
+
     def wait_for_task(self, window):
         for _ in range(200):
             self.app.processEvents()
