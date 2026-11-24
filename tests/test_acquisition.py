@@ -72,3 +72,25 @@ class AcquisitionTest(unittest.TestCase):
         self.assertEqual(acquisition_command("image", external=True)[-1], "--external")
         with self.assertRaises(ValueError):
             acquisition_command("image", local_directory=directory, external=True)
+
+    def test_selection_identifies_disks_and_groups_external_partitions(self):
+        from contextlib import redirect_stdout
+
+        part = {
+            "name": "/dev/sdz1", "type": "part", "size": 4096, "fstype": "ext4",
+            "label": "Fixture", "parttypename": "Linux filesystem", "ro": False,
+        }
+        disk = {
+            "name": "/dev/sdz", "type": "disk", "size": 8192, "model": "USB Fixture",
+            "serial": "1234", "tran": "usb", "pttype": "gpt", "ro": True, "children": [part],
+        }
+        choose = acquisition["choose"]
+        with patch("builtins.input", return_value="1"), redirect_stdout(io.StringIO()) as output:
+            self.assertIs(choose([disk], "Source"), disk)
+            self.assertIs(choose([part], "Destination", parents={part["name"]: disk}), part)
+        menu = output.getvalue()
+        for expected in ("Modèle : USB Fixture", "Série : 1234", "Table : gpt",
+                         "Type : Linux filesystem", "Volume : Fixture", "FS : ext4",
+                         "Bloc : RO", "Bloc : RW", "Disque parent : /dev/sdz"):
+            self.assertIn(expected, menu)
+        self.assertIn("[1] /dev/sdz1", menu)

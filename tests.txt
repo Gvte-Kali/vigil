@@ -351,7 +351,9 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 
 [ ] En VM dédiée avec disques USB de test, vérifier Cloner un disque :
     refus d’une cible occupée/trop petite, confirmation nominative,
-    relecture SHA-256 et état RO de la source après sortie.
+    relecture SHA-256 et état RO de la source après sortie. Vérifier la
+    bannière Vigil, le modèle, la série, la capacité, la table de partitions,
+    le mode bloc et les détails des volumes dans les menus d’acquisition.
 [ ] En VM, créer une image RAW en local puis en USB externe. Vérifier
     l’absence d’écrasement, le fichier .sha256 et le démontage temporaire.
     Simuler une lecture courte et un espace insuffisant.

@@ -41,6 +41,7 @@ PHASE 01 — SECURITE
     avant montage RW et refus d’un disque déjà utilisé.
     Actions rapides : clonage bloc vérifié et image RAW locale ou sur
     partition USB montée temporairement dans un espace de montage privé.
+    Bannière Vigil et inventaire détaillé des disques et partitions au choix.
     Accueil regroupe ressources, périphériques, zones de montage, activité
     de l’affaire et diagnostic des outils. Ressources à 5 s, inventaire à 2 s.
     Les actions rapides sont regroupées en panneaux adaptatifs.

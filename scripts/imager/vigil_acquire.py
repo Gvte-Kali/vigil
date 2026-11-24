@@ -20,6 +20,12 @@ BLOCK_RO_SET = 0x125D
 BLOCK_RO_GET = 0x125E
 CHUNK_SIZE = 4 * 1024 * 1024
 FILESYSTEMS = {"ext4", "exfat", "vfat", "ntfs"}
+DEVICE_COLUMNS = "NAME,TYPE,SIZE,TRAN,MODEL,SERIAL,FSTYPE,MAJ:MIN,MOUNTPOINTS,RO,LABEL,PTTYPE,PARTTYPE"
+VIGIL_BANNER = """█   █ ███  ███  ███ █
+█   █  █  █      █  █
+█   █  █  █  ██  █  █
+ █ █   █  █   █  █  █
+  █   ███  ███  ███ █████"""
 
 
 def command(program, *args):
@@ -27,9 +33,15 @@ def command(program, *args):
 
 
 def devices(*args):
-    return json.loads(command("/usr/bin/lsblk", "--json", "--bytes", "--paths",
-                              "--output", "NAME,TYPE,SIZE,TRAN,MODEL,SERIAL,FSTYPE,MAJ:MIN,MOUNTPOINTS",
-                              *args))["blockdevices"]
+    options = ("/usr/bin/lsblk", "--json", "--bytes", "--paths", "--output")
+    try:
+        output = command(*options, DEVICE_COLUMNS + ",PARTTYPENAME", *args)
+    except subprocess.CalledProcessError as error:
+        # Older util-linux releases can expose the raw partition type only.
+        if "PARTTYPENAME" not in (error.stderr or ""):
+            raise
+        output = command(*options, DEVICE_COLUMNS, *args)
+    return json.loads(output)["blockdevices"]
 
 
 def disk_sequence(row):
@@ -51,14 +63,58 @@ def check_disk(row, sequence):
         raise ValueError(f"Disque ou partition en cours d’utilisation : {row['name']}")
 
 
-def choose(rows, title):
+def menu_text(value):
+    return "".join(character if character.isprintable() else " " for character in str(value or "")).strip()
+
+
+def menu_size(size):
+    size = int(size)
+    scale = float(size)
+    for unit in ("o", "Kio", "Mio", "Gio", "Tio", "Pio"):
+        if scale < 1024 or unit == "Pio":
+            return f"{scale:.1f} {unit} ({size} octets)"
+        scale /= 1024
+
+
+def describe_device(row):
+    is_disk = row["type"] == "disk"
+    fields = [f"Taille : {menu_size(row['size'])}"]
+    if is_disk:
+        fields.extend((f"Modèle : {menu_text(row.get('model')) or 'inconnu'}",
+                       f"Série : {menu_text(row.get('serial')) or 'inconnue'}",
+                       f"Connexion : {menu_text(row.get('tran')) or 'inconnue'}",
+                       f"Table : {menu_text(row.get('pttype')) or 'inconnue'}"))
+    else:
+        part_type = row.get("parttypename") or row.get("parttype")
+        fields.append(f"Type : {menu_text(part_type) or 'inconnu'}")
+    if not is_disk or not row.get("children"):
+        fields.append(f"FS : {menu_text(row.get('fstype')) or 'inconnu'}")
+    if label := menu_text(row.get("label")):
+        fields.append(f"Volume : {label}")
+    ro = row.get("ro")
+    mode = "RO" if ro in (1, "1") else "RW" if ro in (0, "0") else "inconnu"
+    fields.append(f"Bloc : {mode}")
+    mounts = ", ".join(menu_text(mount) for mount in (row.get("mountpoints") or ()) if mount)
+    fields.append(f"Montage : {mounts or 'aucun'}")
+    return f"{menu_text(row['name'])} · " + " · ".join(fields)
+
+
+def choose(rows, title, *, parents=None):
     if not rows:
         raise ValueError(f"Aucun périphérique admissible : {title}")
-    print(title)
+    print(f"\n=== {title} ===")
+    previous_parent = None
     for index, row in enumerate(rows, 1):
-        model = " ".join((row.get("model") or "").split())
-        serial = " ".join((row.get("serial") or "").split())
-        print(f"  {index}. {row['name']} · {row['size']} octets · {model} · {serial}")
+        parent = parents.get(row["name"]) if parents else None
+        if parent and parent is not previous_parent:
+            print(f"  Disque parent : {describe_device(parent)}")
+            previous_parent = parent
+        indent = "    " if parent else "  "
+        print(f"{indent}[{index}] {describe_device(row)}")
+        if row["type"] == "disk":
+            for part in row.get("children", ()):
+                if part["type"] == "part":
+                    print(f"      └─ {describe_device(part)}")
     while True:
         choice = input("Numéro ou q pour annuler : ").strip()
         if choice.lower() == "q":
@@ -259,8 +315,9 @@ def run(operation, local_default, *, local_directory=None, external=False):
     else:
         partitions = [(disk, part) for disk in targets for part in disk.get("children", ())
                       if part["type"] == "part" and part["fstype"] in FILESYSTEMS]
-        selected = choose([part for _, part in partitions], "Partition USB de destination")
-        target = next(disk for disk, part in partitions if part is selected)
+        parents = {part["name"]: disk for disk, part in partitions}
+        selected = choose([part for _, part in partitions], "Partition USB de destination", parents=parents)
+        target = parents[selected["name"]]
         target_sequence = disk_sequence(target)
         if selected["fstype"] == "vfat" and size >= 2**32:
             raise ValueError("Cette image dépasse la taille maximale d’un fichier FAT32.")
@@ -298,6 +355,8 @@ def main():
 
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGHUP, interrupt)
+    print(VIGIL_BANNER)
+    print("Vigil - Clonage bit à bit" if args.operation == "clone" else "Vigil - Acquisition d’une image RAW")
     try:
         run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external)
         return 0
