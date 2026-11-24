@@ -79,8 +79,9 @@ Au lancement, Vigil conserve un instantané JSON dans `system-snapshots`
 à côté de la base SQLite. Il contient les états RO/RW visibles dans sysfs,
 les identités bloc et les montages des deux zones. À la fermeture, les
 zones /investigation et /stockage doivent être démontées, sous-montages
-compris, y compris en présence d’un montage qui précédait Vigil. Une différence de mode ou d’identité bloc est détaillée et doit être
-confirmée pour fermer. Une erreur de lecture empêche la fermeture.
+compris, y compris en présence d’un montage qui précédait Vigil. Un écart RO/RW sous un même nom de périphérique est détaillé et doit
+être confirmé pour fermer. Une différence d’identité seule ne déclenche
+plus d’invite. Une erreur de lecture empêche la fermeture.
 La vérification est répétée après la sauvegarde.
 
 Cette vérification observe l’espace de montage de la GUI et les modes

@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+ANTIVIRUS_CASE_NAME = "Scan antivirus"
 SCHEMA_VERSION = 1
 APPLICATION_ID = 0x5649474C
 SCHEMA = (
@@ -111,12 +112,17 @@ def create_case(connection, name, operator, legacy_path=None, legacy_info=None):
     return case_id
 
 
-def antivirus_case(connection, operator):
-    name = "Scan antivirus"
-    existing = connection.execute("SELECT id FROM cases WHERE name = ? LIMIT 2", (name,)).fetchall()
+def find_antivirus_case(connection):
+    existing = connection.execute(
+        "SELECT id FROM cases WHERE name = ? LIMIT 2", (ANTIVIRUS_CASE_NAME,),
+    ).fetchall()
     if len(existing) > 1:
         raise ValueError("more than one case named Scan antivirus")
-    return existing[0]["id"] if existing else create_case(connection, name, operator)
+    return existing[0]["id"] if existing else None
+
+
+def antivirus_case(connection, operator):
+    return find_antivirus_case(connection) or create_case(connection, ANTIVIRUS_CASE_NAME, operator)
 
 
 def read_legacy_project(path):

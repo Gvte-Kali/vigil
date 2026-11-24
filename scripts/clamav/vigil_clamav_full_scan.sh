@@ -190,12 +190,13 @@ if [ ! -f "$MOUNT_SCRIPT" ]; then
     exit 1
 fi
 
+source "$SCRIPT_DIR/clamav/vigil_scan_mounts.sh" || exit 1
 if [ -n "${VIGIL_LEGACY_CASE_DIR:-}" ]; then
-    if ! _targets=$(findmnt -rn -o TARGET); then
+    if ! read_investigation_mounts /investigation; then
         echo "Impossible de vérifier les montages sous /investigation." >&2
         exit 1
     fi
-    if awk '$0 == "/investigation" || index($0, "/investigation/") == 1 { present=1 } END { exit !present }' <<< "$_targets"; then
+    if [ "${#INVESTIGATION_MOUNTS[@]}" -ne 0 ]; then
         echo "Scan annulé : /investigation contient déjà un montage." >&2
         exit 1
     fi
@@ -213,16 +214,8 @@ if [ "$_mount_rc" -ne 0 ]; then
     exit 1
 fi
 
-# Verifier qu'au moins un peripherique est monte dans /investigation
-_mounted=0
-while IFS= read -r -d '' dir; do
-    if mountpoint -q "$dir" 2>/dev/null; then
-        _mounted=1
-        break
-    fi
-done < <(find /investigation -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
-
-if [ "$_mounted" -eq 0 ]; then
+# Un disque peut être monté directement ou via une arborescence disque/partition.
+if ! read_investigation_mounts /investigation || [ "${#INVESTIGATION_MOUNTS[@]}" -eq 0 ]; then
     echo -e "${YELLOW}⚠️  Aucun périphérique monté dans /investigation. Scan antivirus ignoré.${NC}"
     ERRORS=$((ERRORS + 1))
     echo ""

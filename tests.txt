@@ -208,7 +208,7 @@ D. Registre, CLI et compatibilité
     Valider un opérateur, vérifier qu’il est fixé pour la session et
     qu’aucune affaire n’est active. Vérifier son attribution dans les logs.
 [ ] En VM synthétique, lancer deux scans rapides. Vérifier le parcours
-    montage/scan/démontage, une seule affaire Scan antivirus, deux dossiers
+    montage/scan/démontage, affaire Scan antivirus masquée, deux dossiers
     de résultats distincts et aucune modification de l’affaire affichée.
     Vérifier le refus si /investigation contient déjà un montage.
 
@@ -233,9 +233,14 @@ D. Registre, CLI et compatibilité
 [ ] Vérifier les cartes compactes, icônes et descriptions des actions
     rapides. Provoquer un échec de scan en VM et vérifier que le terminal
     affiche l’erreur et le code puis attend Entrée.
-[ ] Après un scan de recette, ouvrir l’affaire Scan antivirus, puis
-    Rapports PDF. Vérifier que le PDF produit par le générateur historique
+[ ] Après un scan de recette, ouvrir Actions rapides → Rapports antivirus. Vérifier que le PDF produit par le générateur historique
     est listé et que son dossier s’ouvre. Vérifier aussi un projet 1.0 importé.
+
+[ ] En VM, tester le scan rapide avec /investigation monté directement,
+    puis avec des partitions imbriquées. Vérifier la production d’un
+    rapport ClamAV consolidé distinct du PDF de triage.
+[ ] Simuler un changement de numéro de séquence bloc avec un mode
+    identique. La fermeture doit fonctionner si les zones sont démontées.
 
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,

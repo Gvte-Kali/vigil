@@ -266,7 +266,7 @@ class WorkspaceTest(unittest.TestCase):
                 ["Antivirus", "Stockage"],
             )
             action_buttons = page.findChildren(QPushButton)
-            self.assertEqual(len(action_buttons), 3)
+            self.assertEqual(len(action_buttons), 4)
             self.assertTrue(all(not button.icon().isNull() for button in action_buttons))
             window.language_buttons["en"].click()
             self.assertEqual(quick.text(), "Quick actions")
@@ -435,6 +435,21 @@ class WorkspaceTest(unittest.TestCase):
                 with patch.object(window, "confirm_block_changes", return_value={"sdb1": "rw"}) as confirm:
                     self.assertTrue(window.close())
                     confirm.assert_called_once_with(changes)
+
+    def test_antivirus_case_is_hidden_from_case_picker(self):
+        from vigil import storage
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            database = root / "cases.sqlite"
+            with storage.database(database) as connection:
+                storage.antivirus_case(connection, "Alice")
+                storage.create_case(connection, "Fixture", "Alice")
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat), database)
+            self.assertEqual([window.cases.item(i).text() for i in range(window.cases.count())],
+                             ["Fixture"])
+            self.close_workspace(window)
 
     def wait_for_task(self, window):
         for _ in range(200):

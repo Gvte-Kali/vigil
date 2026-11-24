@@ -59,7 +59,8 @@ def check_shutdown_state(baseline):
         ))
     current = read_block_modes()
     return [
-        (name, baseline.get(name), current.get(name))
-        for name in sorted(baseline.keys() | current.keys())
-        if baseline.get(name) != current.get(name)
+        (name, {"mode": baseline[name]["mode"]},
+         {"mode": current[name]["mode"], "parent": current[name].get("parent")})
+        for name in sorted(baseline.keys() & current.keys())
+        if baseline[name]["mode"] != current[name]["mode"]
     ]

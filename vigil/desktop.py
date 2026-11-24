@@ -419,6 +419,12 @@ class Workspace(QMainWindow):
             "Download ClamAV signatures into the Vigil profile.",
             "upload", self.quick_update,
         )
+        self.quick_action_card(
+            antivirus, "Rapports antivirus", "Antivirus reports",
+            "Retrouve les PDF consolidés des scans rapides.",
+            "Find consolidated PDFs from quick scans.",
+            "folder", self.show_antivirus_reports,
+        )
         antivirus.addStretch()
         storage_actions = self.quick_action_section(quick_actions, "Stockage", "Storage")
         self.quick_action_card(
@@ -675,7 +681,10 @@ class Workspace(QMainWindow):
     def refresh_cases(self, selected=None):
         try:
             with storage.database(self.database_path) as connection:
-                rows = list(connection.execute("SELECT id, name FROM cases ORDER BY created_at, id"))
+                rows = list(connection.execute(
+                    "SELECT id, name FROM cases WHERE name <> ? ORDER BY created_at, id",
+                    (storage.ANTIVIRUS_CASE_NAME,),
+                ))
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
             return
@@ -1277,6 +1286,30 @@ class Workspace(QMainWindow):
             launch_action(command())
         except (OSError, ValueError) as error:
             self.fail(error)
+
+    def show_antivirus_reports(self):
+        try:
+            with storage.database(self.database_path) as connection:
+                case_id = storage.find_antivirus_case(connection)
+            reports = case_pdf_reports(self.database_path, case_id) if case_id else []
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
+            return
+        reports = [report for report in reports if report.name.startswith("rapport_clamav_")]
+        if not reports:
+            self.notify("Aucun rapport antivirus consolidé.", "No consolidated antivirus report.")
+            return
+        names = [f"{report.parent.name} · {report.name}" for report in reports]
+        selected, accepted = QInputDialog.getItem(
+            self, self.tr_pair("Rapports antivirus", "Antivirus reports"),
+            self.tr_pair("Choisir le rapport dont tu veux ouvrir le dossier.",
+                         "Choose a report to open its folder."),
+            names, len(names) - 1, False,
+        )
+        if accepted:
+            directory = reports[names.index(selected)].parent
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
+                self.notify("Impossible d’ouvrir le dossier.", "Could not open the folder.", str(directory))
 
     def quick_scan(self):
         operator = self.require_operator()

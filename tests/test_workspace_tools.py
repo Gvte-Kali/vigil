@@ -53,6 +53,22 @@ class WorkspaceToolsTest(unittest.TestCase):
         self.assertIn("fixture-error", result.stderr)
         self.assertIn("Exit code: 2", result.stdout)
 
+    def test_quick_scan_mount_targets_include_nested_paths_and_decode_spaces(self):
+        import subprocess
+
+        helper = Path(__file__).resolve().parents[1] / "scripts/clamav/vigil_scan_mounts.sh"
+        code = r"""
+source "$1"
+findmnt() {
+    printf '%s\n' /investigation '/investigation/disk/part\x20one' /investigation-old /stockage
+}
+read_investigation_mounts /investigation
+printf '%s\n' "${INVESTIGATION_MOUNTS[@]}"
+"""
+        result = subprocess.run(["bash", "-c", code, "fixture", str(helper)],
+                                text=True, capture_output=True, check=True, timeout=5)
+        self.assertEqual(result.stdout.splitlines(), ["/investigation", "/investigation/disk/part one"])
+
     def test_site_launcher_state_is_separate_from_development(self):
         with patch.dict("os.environ", {
             "VIGIL_STATE_DIR": "/opt/vigil/data/state", "XDG_STATE_HOME": "/tmp/development",

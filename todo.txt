@@ -24,7 +24,9 @@ PHASE 01 — SECURITE
     distinguées. Le helper reste expérimental ; Qt lance provisoirement
     les scripts de montage/démontage 1.0 dans le terminal par défaut,
     avec contexte affaire/opérateur. Le scan rapide 1.0 utilise une
-    affaire Scan antivirus et un dossier de résultats par exécution.
+    affaire technique Scan antivirus masquée et un dossier de résultats
+    par exécution. Détection des montages directs et imbriqués, accès aux
+    rapports consolidés depuis Actions rapides.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
     Le post-install prépare /investigation vide et démonté en root:root 0755.
@@ -77,7 +79,7 @@ PHASE 04 — WORKSPACE QT ET MODULES
     distingue disques, partitions et états de montage par couleur.
     Fermeture confirmée et sauvegarde contrôlée. Instantané des modes bloc
     au lancement, blocage si une zone est montée et confirmation explicite
-    si un mode ou une identité bloc diffère de l’instantané. Le dialogue
+    si le mode bloc diffère de l’instantané. Le dialogue
     précise disque/partition et vérifie le mode RO/RW choisi. Les futurs modules
     doivent enregistrer leurs modifications dans leur affaire avant fermeture.
     Menus dépliants cyan avec hauteur des titres vérifiée en Qt, Affaire en cours et page Actions rapides

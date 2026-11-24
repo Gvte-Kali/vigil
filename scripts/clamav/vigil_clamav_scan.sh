@@ -330,23 +330,30 @@ if [ ! -d "$INVESTIGATION_DIR" ]; then
     exit 1
 fi
 
-# Collecter les sous-dossiers (et /investigation lui-même)
 SCAN_DIRS=()
-i=0
-while IFS= read -r -d '' dir; do
-    SCAN_DIRS+=("$dir")
-    i=$((i + 1))
-done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
-
-# Proposer aussi /investigation lui-même s'il contient des fichiers directement
-if [ -n "$(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type f -print -quit 2>/dev/null)" ]; then
-    SCAN_DIRS+=("$INVESTIGATION_DIR")
+if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+    source "$(dirname "$0")/vigil_scan_mounts.sh" || exit 1
+    if ! read_investigation_mounts "$INVESTIGATION_DIR"; then
+        echo "Impossible de lire les montages à scanner." >&2
+        exit 1
+    fi
+    SCAN_DIRS=("${INVESTIGATION_MOUNTS[@]}")
+else
+    while IFS= read -r -d '' dir; do
+        SCAN_DIRS+=("$dir")
+    done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+    if [ -n "$(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type f -print -quit 2>/dev/null)" ]; then
+        SCAN_DIRS+=("$INVESTIGATION_DIR")
+    fi
 fi
 
 if [ "${#SCAN_DIRS[@]}" -eq 0 ]; then
     echo -e "${YELLOW}ℹ️  Aucun dossier à scanner dans $INVESTIGATION_DIR.${NC}"
     echo -e "${YELLOW}     (le dossier est vide ou ne contient pas de sous-dossier)${NC}"
-    # Aucun dossier à scanner (information seulement, pas de custody).
+    # Le scan rapide ne peut pas produire de rapport sans montage.
+    if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+        ERRORS=$((ERRORS + 1))
+    fi
     final_pause
     exit 0
 fi
@@ -546,8 +553,11 @@ for target in "${TARGETS[@]}"; do
     CLAM_RC=${PIPESTATUS[0]:-0}
 
     if [ "$GEN_LOG" -eq 1 ]; then
-        cp "$RAPPORT.tmp" "$RAPPORT" 2>/dev/null || true
-        rm -f "$RAPPORT.tmp" 2>/dev/null || true
+        if mv -- "$RAPPORT.tmp" "$RAPPORT"; then
+            LOG_FILE="$RAPPORT"
+        else
+            ERRORS=$((ERRORS + 1))
+        fi
     fi
     # Extraire le nombre de fichiers infectés depuis le résumé
     INFECTED=$(grep -i "Infected files:" "$LOG_FILE" 2>/dev/null | awk -F: '{print $2}' | xargs || echo "0")
@@ -598,6 +608,7 @@ echo -e "Rapports : $RAPPORTS_DIR/clamav_*_${STAMP}.log"
 # scan (le scan lui-même a réussi ; le PDF est un rendu de présentation).
 echo ""
 echo -e "${BLUE}=== Génération du rapport PDF ===${NC}"
+PDF_GENERATED=0
 if [ "$GEN_PDF" -eq 0 ]; then
     echo -e "${YELLOW}⏏️  Génération du rapport PDF désactivée (--no-pdf).${NC}"
 else
@@ -622,6 +633,7 @@ else
                 --comment "$SCAN_COMMENT" \
                 --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
+                PDF_GENERATED=1
                 echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
                 # Copie du rapport PDF dans le dossier du projet actif (pour l'export).
                 _AP=""
@@ -640,5 +652,9 @@ else
     else
         echo -e "${YELLOW}⚠️  Script de génération PDF introuvable ($PDF_SCRIPT).${NC}"
     fi
+fi
+if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ] && [ "$GEN_PDF" -eq 1 ] && [ "$PDF_GENERATED" -eq 0 ]; then
+    echo "Aucun PDF ClamAV consolidé n’a été produit. Journaux : $RAPPORTS_DIR" >&2
+    ERRORS=$((ERRORS + 1))
 fi
 final_pause

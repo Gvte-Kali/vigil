@@ -44,6 +44,13 @@ class ShutdownStateTest(unittest.TestCase):
         after = {"sda1": {**before["sda1"], "mode": "ro"}}
         with patch("vigil.shutdown_state.read_zones", return_value=EMPTY_ZONES):
             with patch("vigil.shutdown_state.read_block_modes", return_value=after):
-                self.assertEqual(check_shutdown_state(before), [("sda1", before["sda1"], after["sda1"])])
+                self.assertEqual(check_shutdown_state(before), [("sda1", {"mode": "rw"}, {"mode": "ro", "parent": None})])
             with patch("vigil.shutdown_state.read_block_modes", return_value=before):
                 self.assertEqual(check_shutdown_state(before), [])
+
+    def test_shutdown_ignores_identity_changes_when_mode_matches(self):
+        before = {"sdb": {"mode": "rw", "disk_sequence": "2"}}
+        after = {"sdb": {"mode": "rw", "disk_sequence": "7"}}
+        with patch("vigil.shutdown_state.read_zones", return_value=EMPTY_ZONES), \
+                patch("vigil.shutdown_state.read_block_modes", return_value=after):
+            self.assertEqual(check_shutdown_state(before), [])
