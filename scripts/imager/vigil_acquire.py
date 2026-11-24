@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+from threading import Event, Thread
 import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
@@ -230,17 +231,41 @@ def checksum(stream, size, *, output=None, label):
     return digest.hexdigest()
 
 
+@contextmanager
+def io_stage(label):
+    """Keep the terminal informed while a disk operation waits on the kernel."""
+    print(terminal_style(f"\n{label}…", "96"), flush=True)
+    done = Event()
+    started = time.monotonic()
+
+    def report_wait():
+        while not done.wait(15):
+            elapsed = int(time.monotonic() - started)
+            print(terminal_style(f"{label} · en cours depuis {elapsed} s", "93"), flush=True)
+
+    reporter = Thread(target=report_wait, daemon=True)
+    reporter.start()
+    try:
+        yield
+    finally:
+        done.set()
+        reporter.join()
+
+
 def transfer(source, target, size):
     reference = checksum(source, size, output=target, label="Copie")
-    target.flush()
-    os.fsync(target.fileno())
+    with io_stage("Synchronisation des écritures sur la destination"):
+        target.flush()
+        os.fsync(target.fileno())
     if hasattr(os, "posix_fadvise"):
-        try:
-            os.posix_fadvise(target.fileno(), 0, size, os.POSIX_FADV_DONTNEED)
-        except OSError:
-            pass
+        with io_stage("Préparation de la relecture (cache de la destination)"):
+            try:
+                os.posix_fadvise(target.fileno(), 0, size, os.POSIX_FADV_DONTNEED)
+            except OSError:
+                pass
     target.seek(0)
-    actual = checksum(target, size, label="Vérification SHA-256")
+    with io_stage("Relecture de la destination et calcul du SHA-256"):
+        actual = checksum(target, size, label="Vérification SHA-256")
     if actual != reference:
         raise ValueError(f"Écart SHA-256 : source {reference}, relecture {actual}")
     return reference
@@ -275,7 +300,8 @@ def external_directory(disk, sequence, partition, owner):
         yield Path(directory)
     finally:
         if mounted:
-            command("/usr/bin/umount", "--", directory)
+            with io_stage("Démontage de la destination USB"):
+                command("/usr/bin/umount", "--", directory)
         # Never recursively remove a mountpoint, even when unmounting fails.
         os.rmdir(directory)
 
@@ -311,8 +337,9 @@ def create_image(source, size, directory, filename, owner=None):
             manifest.flush()
             if owner is not None:
                 os.fchown(manifest.fileno(), *owner)
-            os.fsync(manifest.fileno())
-        os.fsync(folder)
+            with io_stage("Synchronisation du manifeste SHA-256"):
+                os.fsync(manifest.fileno())
+                os.fsync(folder)
         return digest
     except BaseException:
         for name, original in reversed(created):

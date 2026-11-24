@@ -50,6 +50,8 @@ PHASE 01 — SECURITE
     Acquisition : invite de branchement après sélection de la source,
     inventaire renouvelé et RW temporaire sur la destination confirmée.
     Progression en pourcentage et en octets pour la copie et la relecture.
+    Étapes de synchronisation, de relecture et de démontage affichées
+    avec rappel périodique si la destination tarde à répondre.
     Protection à chaud des disques physiques via udev pendant une session
     autorisée au démarrage. Recette Parrot du verrouillage avant UDisks ouverte.
     Recette en VM ouverte.

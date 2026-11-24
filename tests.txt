@@ -390,3 +390,8 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
 
 [ ] Vérifier que la copie et la vérification SHA-256 affichent le
     pourcentage et les octets, avec 100 % seulement en fin de chaque étape.
+
+
+[ ] Après les derniers octets de l’acquisition, vérifier les annonces de
+    synchronisation, de relecture et, sur USB, de démontage. En cas
+    d’attente prolongée, vérifier le rappel d’étape.
