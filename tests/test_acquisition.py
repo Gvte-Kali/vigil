@@ -103,7 +103,7 @@ class AcquisitionTest(unittest.TestCase):
         terminal = Mock()
         terminal.isatty.return_value = True
         with patch.dict("os.environ", {"TERM": "xterm-256color"}, clear=True):
-            self.assertEqual(style("Vigil", "96", stream=terminal), "[96mVigil[0m")
+            self.assertEqual(style("Vigil", "96", stream=terminal), "\033[96mVigil\033[0m")
             self.assertEqual(style("Vigil", "96", stream=io.StringIO()), "Vigil")
         with patch.dict("os.environ", {"TERM": "xterm-256color", "NO_COLOR": ""}, clear=True):
             self.assertEqual(style("Vigil", "96", stream=terminal), "Vigil")
