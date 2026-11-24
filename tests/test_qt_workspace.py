@@ -345,6 +345,24 @@ class WorkspaceTest(unittest.TestCase):
                 self.assertNotIn("/dev/loop7p1", window.investigation_mount.text())
             self.close_workspace(window)
 
+    def test_startup_requires_an_operator_and_locks_the_choice(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(
+                QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                root / "cases.sqlite",
+            )
+            with patch("vigil.desktop.QInputDialog.getItem", return_value=("", False)):
+                self.assertFalse(window.choose_session_operator())
+            with patch("vigil.desktop.QInputDialog.getItem", return_value=("Alice", True)):
+                self.assertTrue(window.choose_session_operator())
+            self.assertEqual(window.require_operator(), "Alice")
+            self.assertFalse(window.operator.isEnabled())
+            self.assertEqual(window.active_case_id, "")
+            self.close_workspace(window)
+
     def wait_for_task(self, window):
         for _ in range(200):
             self.app.processEvents()

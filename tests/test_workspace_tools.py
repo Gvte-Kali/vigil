@@ -22,6 +22,23 @@ class WorkspaceToolsTest(unittest.TestCase):
                 self.assertEqual(Path(argv[-1]).name, script)
             self.assertFalse((root / "active_project").exists())
 
+    def test_antivirus_reuses_dedicated_case_and_isolates_run_outputs(self):
+        from vigil.storage import antivirus_case, create_case, database
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            state = root / "cases.sqlite"
+            with database(state) as connection:
+                other = create_case(connection, "Investigation", "Alice")
+                case = antivirus_case(connection, "Alice")
+                self.assertNotEqual(other, case)
+                self.assertEqual(antivirus_case(connection, "Bob"), case)
+            run = "c" * 32
+            argv = legacy_mount_command("scan", state, case, "Scan antivirus", "Bob", run_id=run)
+            self.assertIn("VIGIL_LEGACY_PROJECT=Scan antivirus", argv)
+            self.assertIn(f"VIGIL_LEGACY_SCAN_DIR={root / 'legacy-custody' / case / ('scan-' + run)}", argv)
+            self.assertEqual(argv[-4:], ["--user", "Bob", "--log", "--pdf"])
+
     def test_site_launcher_state_is_separate_from_development(self):
         with patch.dict("os.environ", {
             "VIGIL_STATE_DIR": "/opt/vigil/data/state", "XDG_STATE_HOME": "/tmp/development",

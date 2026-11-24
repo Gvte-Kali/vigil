@@ -190,6 +190,17 @@ if [ ! -f "$MOUNT_SCRIPT" ]; then
     exit 1
 fi
 
+if [ -n "${VIGIL_LEGACY_CASE_DIR:-}" ]; then
+    if ! _targets=$(findmnt -rn -o TARGET); then
+        echo "Impossible de vérifier les montages sous /investigation." >&2
+        exit 1
+    fi
+    if awk '$0 == "/investigation" || index($0, "/investigation/") == 1 { present=1 } END { exit !present }' <<< "$_targets"; then
+        echo "Scan annulé : /investigation contient déjà un montage." >&2
+        exit 1
+    fi
+fi
+
 bash "$MOUNT_SCRIPT"
 _mount_rc=$?
 if [ "$_mount_rc" -ne 0 ]; then

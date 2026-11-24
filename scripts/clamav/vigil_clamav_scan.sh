@@ -149,7 +149,7 @@ done
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 CONFIG_FILE="$VIGIL_DATA_DIR/config/system.json"
 INVESTIGATION_DIR="/investigation"
-RAPPORTS_DIR="$VIGIL_BASE/rapports"
+RAPPORTS_DIR="${VIGIL_LEGACY_SCAN_DIR:-$VIGIL_BASE/rapports}"
 
 # Le scan antivirus ClamAV ne necessite pas de projet actif et ne logge pas
 # dans la chaine de custody (exception prevue : l'AV n'est pas une analyse
@@ -616,7 +616,7 @@ else
                 --kind clamav \
                 "${LOG_ARGS[@]}" \
                 --user "$ACTIVE_USER" \
-                --project "" \
+                --project "${VIGIL_LEGACY_PROJECT:-}" \
                 --action "$ACTION_LABEL" \
                 --options="--recursive --bell $CLAM_OPTS" \
                 --comment "$SCAN_COMMENT" \
@@ -625,7 +625,7 @@ else
                 echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
                 # Copie du rapport PDF dans le dossier du projet actif (pour l'export).
                 _AP=""
-                [ -f "$VIGIL_BASE/data/active_project" ] && _AP=$(cat "$VIGIL_BASE/data/active_project" 2>/dev/null)
+                [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ] && [ -f "$VIGIL_BASE/data/active_project" ] && _AP=$(cat "$VIGIL_BASE/data/active_project" 2>/dev/null)
                 if [ -n "$_AP" ] && [ "$_AP" != "(no-project)" ] && [ -d "$VIGIL_BASE/data/projects/$_AP" ] && [ -w "$VIGIL_BASE/data/projects/$_AP" ]; then
                     cp -f "$PDF_OUT" "$VIGIL_BASE/data/projects/$_AP/" 2>/dev/null && \
                         echo -e "${GREEN}   Rapport copié dans le dossier du projet : $VIGIL_BASE/data/projects/$_AP/$(basename "$PDF_OUT")${NC}"

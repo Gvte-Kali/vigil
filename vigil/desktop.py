@@ -26,7 +26,7 @@ from .reporting import case_report
 from .system_panel import SystemPanel
 from .system_info import read_zones
 from .terminal_panel import TerminalPanel
-from .quick_actions import legacy_mount_command, scan_command, tool, update_command
+from .quick_actions import legacy_mount_command, tool, update_command
 from .external_terminal import launch_action, launch_terminal
 
 ANALYSIS_LABELS = {
@@ -180,6 +180,7 @@ class Workspace(QMainWindow):
         self.operator.currentIndexChanged.connect(self.save_operator)
         header.addWidget(self.operator)
         self.button(header, "Opérateurs…", "Operators…", self.manage_operators)
+        self.manage_operator_button = self.buttons[-1]
         self.languages = QButtonGroup(self)
         self.language_buttons = {}
         for language, name in (("fr", "Français"), ("en", "English")):
@@ -846,6 +847,29 @@ class Workspace(QMainWindow):
     def save_operator(self, *_):
         self.settings.setValue("operator_id", self.operator.currentData() or "")
 
+    def choose_session_operator(self):
+        names = [self.operator.itemText(index) for index in range(1, self.operator.count())]
+        name, accepted = QInputDialog.getItem(
+            self,
+            self.tr_pair("Opérateur de la session", "Session operator"),
+            self.tr_pair("Choisissez un opérateur ou saisissez un nouveau nom.",
+                         "Choose an operator or enter a new name."),
+            names, max(0, self.operator.currentIndex() - 1), True,
+        )
+        if not accepted:
+            return False
+        name = name.strip()
+        if not name or len(name) > 120 or not name.isprintable():
+            self.notify("Saisissez un nom lisible de 1 à 120 caractères.",
+                        "Enter a printable name of 1 to 120 characters.")
+            return self.choose_session_operator()
+        self.add_operator(name)
+        if self.operator.currentText() != name or self.operator.currentData() is None:
+            return False
+        self.operator.setEnabled(False)
+        self.manage_operator_button.hide()
+        return True
+
     def manage_operators(self):
         dialog = QInputDialog(self)
         dialog.setWindowTitle(self.tr_pair("Opérateurs", "Operators"))
@@ -1119,9 +1143,29 @@ class Workspace(QMainWindow):
             self.fail(error)
 
     def quick_scan(self):
-        file = self.choose_file()
-        if file:
-            self.start_quick_action(lambda: scan_command(Path(file), self.database_path))
+        operator = self.require_operator()
+        if not operator:
+            return
+        response = QMessageBox.question(
+            self, "Vigil",
+            self.tr_pair("Lancer le parcours montage, scan et démontage dans l’affaire Scan antivirus ?",
+                         "Run the mount, scan and unmount workflow in the Scan antivirus case?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if response != QMessageBox.StandardButton.Yes:
+            return
+        run_id = uuid4().hex
+        try:
+            with storage.database(self.database_path) as connection:
+                case_id = storage.antivirus_case(connection, operator)
+                storage.audit(connection, operator, case_id, "antivirus.request", {"run_id": run_id})
+            self.refresh_cases()
+            launch_terminal(legacy_mount_command(
+                "scan", self.database_path, case_id, "Scan antivirus", operator, run_id=run_id,
+            ))
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
 
     def quick_update(self):
         response = QMessageBox.question(
@@ -1228,6 +1272,9 @@ def main():
         return 1
     app = QApplication(sys.argv)
     window = Workspace(QSettings("Vigil", "Vigil2"), storage.default_database())
+    if not window.choose_session_operator():
+        window.system_panel.stop()
+        return 0
     window.showMaximized()
     return app.exec()
 

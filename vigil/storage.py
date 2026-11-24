@@ -111,6 +111,14 @@ def create_case(connection, name, operator, legacy_path=None, legacy_info=None):
     return case_id
 
 
+def antivirus_case(connection, operator):
+    name = "Scan antivirus"
+    existing = connection.execute("SELECT id FROM cases WHERE name = ? LIMIT 2", (name,)).fetchall()
+    if len(existing) > 1:
+        raise ValueError("more than one case named Scan antivirus")
+    return existing[0]["id"] if existing else create_case(connection, name, operator)
+
+
 def read_legacy_project(path):
     with (path / "info.json").open("rb") as stream:
         data = stream.read(1024 * 1024 + 1)

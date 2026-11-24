@@ -22,7 +22,9 @@ PHASE 01 — SECURITE
     documentée. Helper candidat ext4 avec sélection USB et verrouillage RO
     dans le terminal Qt sous sudo interactif. Erreurs bloc et montage
     distinguées. Le helper reste expérimental ; Qt lance provisoirement
-    les scripts de montage/démontage 1.0 dans le terminal par défaut.
+    les scripts de montage/démontage 1.0 dans le terminal par défaut,
+    avec contexte affaire/opérateur. Le scan rapide 1.0 utilise une
+    affaire Scan antivirus et un dossier de résultats par exécution.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.
     Le post-install prépare /investigation vide et démonté en root:root 0755.
@@ -50,8 +52,8 @@ PHASE 02 — CORE
 PHASE 03 — AFFAIRES ET PREUVES
 [ ] SQLite migrations, affaires, opérateurs, preuves, runs et audit.
     Base v1 initialisée transactionnellement, affaires, opérateurs, preuves
-    et audit disponibles (381b98f). Création, sélection et mémorisation des
-    opérateurs en Qt. Persistance des runs ouverte.
+    et audit disponibles (381b98f). Choix explicite de l’opérateur au
+    lancement de Qt, fixé pour la session. Persistance des runs ouverte.
 [ ] Import anciens projets sans perte, SHA-256 et contrôle intégrité.
 [ ] RAW/E01 existants RO, partitions et nettoyage ; AFF selon capacité.
     Inspection RAW MBR primaire et SHA-256 testés sur image synthétique,

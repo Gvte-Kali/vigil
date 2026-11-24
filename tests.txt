@@ -76,7 +76,7 @@ B. Langue et navigation Qt
     d’attendre, puis affiche la confirmation après la fin du calcul.
 
 C. Affaires et fichiers de preuve
-[ ] Cliquer sur Opérateurs…, créer Alice et un second opérateur. Vérifier
+[ ] Dans la pop-up de lancement, créer Alice puis, à la relance, un second opérateur. Vérifier
     que les deux apparaissent dans le sélecteur et que recréer Alice
     sélectionne la fiche existante. Changer d’opérateur puis relancer Qt.
 [ ] Créer une affaire avec l’opérateur sélectionné et un nom contenant des accents.
@@ -203,6 +203,14 @@ D. Registre, CLI et compatibilité
     Les observations du terminal restent la source du résultat.
 [ ] Vérifier que les actions rapides ouvrent le terminal externe et que
     le centre des tâches reste masqué au démarrage.
+
+[ ] À la relance, vérifier l’invite opérateur et annuler une fois.
+    Valider un opérateur, vérifier qu’il est fixé pour la session et
+    qu’aucune affaire n’est active. Vérifier son attribution dans les logs.
+[ ] En VM synthétique, lancer deux scans rapides. Vérifier le parcours
+    montage/scan/démontage, une seule affaire Scan antivirus, deux dossiers
+    de résultats distincts et aucune modification de l’affaire affichée.
+    Vérifier le refus si /investigation contient déjà un montage.
 
 E. Recette à reprendre quand les parcours correspondants seront livrés
 [ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,

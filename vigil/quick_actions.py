@@ -69,14 +69,18 @@ def mount_command(operation):
     return ["/usr/bin/sudo", "-k", "--", str(helper), operation]
 
 
-def legacy_mount_command(operation, state, case_id, name, operator):
-    names = {"mount": "vigil_usb_mount.sh", "unmount": "vigil_usb_umount.sh"}
+def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=None):
+    names = {
+        "mount": "analyse/vigil_usb_mount.sh",
+        "unmount": "analyse/vigil_usb_umount.sh",
+        "scan": "clamav/vigil_clamav_full_scan.sh",
+    }
     if operation not in names or not re.fullmatch(r"[0-9a-f]{32}", case_id):
         raise ValueError("invalid historical mount context")
     base = Path(__file__).resolve().parents[1]
-    if not (base / "scripts/analyse" / names[operation]).is_file():
+    if not (base / "scripts" / names[operation]).is_file():
         base = Path("/opt/vigil")
-    script = base / "scripts/analyse" / names[operation]
+    script = base / "scripts" / names[operation]
     if not script.is_file():
         raise ValueError(f"legacy script unavailable: {script}")
     directory = state.parent / "legacy-custody" / case_id
@@ -87,9 +91,19 @@ def legacy_mount_command(operation, state, case_id, name, operator):
     def label(value):
         return "".join(character if character.isprintable() else " " for character in value)
 
+    context = [f"VIGIL_BASE={base}", f"VIGIL_LEGACY_PROJECT={label(name)}",
+               f"VIGIL_ACTIVE_USER={label(operator)}", f"VIGIL_LEGACY_CASE_DIR={directory}"]
+    arguments = []
+    if operation == "scan":
+        if not run_id or not re.fullmatch(r"[0-9a-f]{32}", run_id):
+            raise ValueError("invalid scan execution ID")
+        run = directory / f"scan-{run_id}"
+        run.mkdir(mode=0o700)
+        context.append(f"VIGIL_LEGACY_SCAN_DIR={run}")
+        arguments = ["--user", label(operator), "--log", "--pdf"]
+
     return [
-        "/usr/bin/env", f"VIGIL_BASE={base}", f"VIGIL_LEGACY_PROJECT={label(name)}",
-        f"VIGIL_ACTIVE_USER={label(operator)}", f"VIGIL_LEGACY_CASE_DIR={directory}",
+        "/usr/bin/env", *context,
         "/usr/bin/bash", "-c", '/usr/bin/sudo -v && exec /usr/bin/bash "$@"',
-        "vigil", str(script),
+        "vigil", str(script), *arguments,
     ]
