@@ -12,7 +12,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QStackedWidget, QTabWidget,
-    QVBoxLayout, QWidget,
+    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import storage
@@ -316,14 +316,21 @@ class Workspace(QMainWindow):
         explorer.addWidget(self.explorer)
 
         evidence = self.case_view("Preuves", "Evidence")
-        self.evidence = QListWidget()
+        self.evidence = QTreeWidget()
+        self.evidence.setColumnCount(2)
+        self.evidence.setUniformRowHeights(True)
+        self.evidence_case_id = None
+        self.bind(lambda name: self.evidence.setHeaderLabels([name, "SHA-256"]), "Fichier", "File")
+        self.evidence.setColumnWidth(0, 390)
         evidence.addWidget(self.evidence)
+        self.evidence_empty = QLabel()
+        self.bind(self.evidence_empty.setText, "Aucune preuve enregistrée.", "No registered evidence.")
+        evidence.addWidget(self.evidence_empty)
         evidence_actions = QHBoxLayout()
         evidence.addLayout(evidence_actions)
         self.button(evidence_actions, "Ajouter un fichier à l’affaire", "Add a file to the case",
                     self.add_file, primary=True)
         self.button(evidence_actions, "Supprimer la preuve", "Delete evidence", self.delete_selected_evidence)
-        self.button(evidence_actions, "Vérifier SHA-256", "Verify SHA-256", self.verify_file)
         self.button(evidence_actions, "Inspecter une image RAW", "Inspect a RAW image", self.inspect_image)
         evidence_actions.addStretch()
 
@@ -391,14 +398,6 @@ class Workspace(QMainWindow):
         entity_page = self.page("Configuration de l’entité", "Organization settings")
         self.entity_panel = EntityPanel(data_directory(), self.tr_pair)
         entity_page.addWidget(self.entity_panel)
-        integrity = self.case_view("Intégrité", "Integrity")
-        self.integrity_files = QListWidget()
-        integrity.addWidget(self.integrity_files)
-        self.button(integrity, "Comparer avec l’empreinte enregistrée",
-                    "Compare against the recorded hash", self.verify_integrity, primary=True)
-        self.button(integrity, "Exporter l’audit de l’affaire", "Export case audit",
-                    self.export_case_report)
-
         reports = self.case_view("Rapports PDF", "PDF reports")
         self.pdf_reports_page = reports.parentWidget()
         self.pdf_reports = QListWidget()
@@ -670,13 +669,18 @@ class Workspace(QMainWindow):
         self.update_case_label()
         self.refresh_dashboard()
 
-    def notify(self, french, english, details=""):
+    def notify(self, french, english, details="", *, copy_text=""):
         message = QMessageBox(self)
         message.setWindowTitle("Vigil")
         message.setTextFormat(Qt.TextFormat.PlainText)
         message.setText(self.tr_pair(french, english))
         if details:
             message.setDetailedText(details)
+        if copy_text:
+            copy = message.addButton(self.tr_pair("Copier le SHA-256", "Copy SHA-256"),
+                                     QMessageBox.ButtonRole.ActionRole)
+            copy.clicked.connect(lambda: QApplication.clipboard().setText(copy_text))
+            message.addButton(QMessageBox.StandardButton.Ok)
         message.exec()
 
     def fail(self, error):
@@ -889,14 +893,13 @@ class Workspace(QMainWindow):
 
     def refresh_evidence(self, *_):
         self.update_case_label()
-        self.evidence.clear()
-        self.integrity_files.clear()
         self.refresh_pdf_reports()
         keep_explorer = self.explorer_case_id == self.active_case_id
         self.explorer_case_id = self.active_case_id
         self.refresh_dashboard()
         case = self.active_case_item()
         if case is None:
+            self.update_evidence_tree([])
             self.explorer.set_files([], keep_state=False)
             self.refresh_explorer_mounts()
             return
@@ -911,10 +914,28 @@ class Workspace(QMainWindow):
             return
         self.explorer.set_files(rows, keep_state=keep_explorer)
         self.refresh_explorer_mounts()
-        for evidence_id, path, digest in rows:
-            label = f"{path}  ·  {digest}"
-            self.add_row(self.evidence, label, evidence_id)
-            self.add_row(self.integrity_files, label, evidence_id)
+        self.update_evidence_tree(rows)
+
+    def update_evidence_tree(self, rows):
+        expanded = set()
+        if self.evidence_case_id == self.active_case_id:
+            expanded = {item.text(0) for item in (
+                self.evidence.topLevelItem(i) for i in range(self.evidence.topLevelItemCount())
+            ) if item.isExpanded()}
+        self.evidence_case_id = self.active_case_id
+        self.evidence.clear()
+        self.evidence_empty.setVisible(not rows)
+        groups = {}
+        for evidence_id, name, digest in rows:
+            path = Path(name)
+            group = str(path.parent)
+            if group not in groups:
+                groups[group] = QTreeWidgetItem(self.evidence, [group])
+                groups[group].setExpanded(group in expanded)
+            item = QTreeWidgetItem(groups[group], [path.name, digest])
+            item.setToolTip(0, name)
+            item.setToolTip(1, digest)
+            item.setData(0, Qt.ItemDataRole.UserRole, evidence_id)
 
     def filter_catalogue(self, value):
         query = value.strip().casefold()
@@ -1008,9 +1029,6 @@ class Workspace(QMainWindow):
                 self.explorer.show_preview(name, digest, snapshot)
 
         self.run_task(inspect, display)
-
-    def verify_integrity(self):
-        self.verify_selected_file(self.integrity_files.currentItem())
 
     def reset_history(self, *_):
         self.history_rows.clear()
@@ -1267,7 +1285,8 @@ class Workspace(QMainWindow):
     def delete_selected_evidence(self):
         item = self.evidence.currentItem()
         case_id = self.active_case_id
-        if not case_id or item is None:
+        evidence_id = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
+        if not case_id or not evidence_id:
             self.notify("Sélectionnez une preuve.", "Select evidence first.")
             return
         operator = self.require_operator()
@@ -1279,11 +1298,10 @@ class Workspace(QMainWindow):
             "Supprimer cette preuve et sa copie locale ? Le fichier original sera conservé.",
             "Delete this evidence and its local copy? The original file will be retained.",
         ))
-        dialog.setInformativeText(item.text())
+        dialog.setInformativeText(item.toolTip(0))
         dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         dialog.setDefaultButton(QMessageBox.StandardButton.No)
         if dialog.exec() == QMessageBox.StandardButton.Yes:
-            evidence_id = item.data(Qt.ItemDataRole.UserRole)
             self.run_task(
                 lambda: storage.delete_evidence(self.database_path, case_id, evidence_id, operator),
                 lambda _: self.refresh_evidence(),
@@ -1332,36 +1350,14 @@ class Workspace(QMainWindow):
             details.extend(f"{tr('Erreur', 'Error')} · {path}\n{error}" for path, error in errors)
             self.notify(f"{len(rows)} fichier(s) traité(s), {len(errors)} erreur(s).",
                         f"{len(rows)} file(s) processed, {len(errors)} error(s).",
-                        "\n\n".join(details))
+                        "\n\n".join(details),
+                        copy_text="\n".join(digest for _, digest, _, _ in rows) if not register else "")
 
         self.run_task(
             lambda: storage.process_explorer_selection(
-                self.database_path, case_id, operator, sources, register=register),
+                self.database_path, case_id, operator, sources, register=register, use_saved_copy=True),
             show,
         )
-
-    def verify_file(self):
-        self.verify_selected_file(self.evidence.currentItem())
-
-    def verify_selected_file(self, item):
-        if item is None:
-            self.notify("Sélectionnez un fichier enregistré.", "Select a registered file.")
-            return
-        operator = self.require_operator()
-        if not operator:
-            return
-        evidence_id = item.data(Qt.ItemDataRole.UserRole)
-        self.run_task(
-            lambda: storage.verify_file(self.database_path, evidence_id, operator, use_copy=True),
-            self.show_verification,
-        )
-
-    def show_verification(self, result):
-        details = f"SHA-256\n{result['expected_sha256']}\n{result['sha256']}"
-        if result["matches"]:
-            self.notify("L’empreinte correspond.", "The fingerprint matches.", details)
-        else:
-            self.notify("L’empreinte a changé.", "The fingerprint changed.", details)
 
     def inspect_image(self):
         if path := self.choose_file():

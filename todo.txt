@@ -151,6 +151,8 @@ PHASE 06 — INVESTIGATION
     Export partiel signalé pour les preuves anciennes sans copie locale.
     L’index census reste consultable séparément dans Analyses.
     Suppression ciblée des copies de preuve avec confirmation et audit.
+    Preuves en arborescence avec colonne SHA-256 et état vide explicite.
+    Vérification et copie du résultat depuis le menu de l’explorateur.
     Les analyses intégrées, dont le scan ClamAV, lancent les scripts
     historiques en lecture seule et écrivent dans un dossier par exécution.
     Les PDF sont copiés sous rapports/ et listés par date et analyse.

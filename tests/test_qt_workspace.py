@@ -99,7 +99,7 @@ class WorkspaceTest(unittest.TestCase):
             with patch.object(window, "choose_file", return_value=str(source)):
                 window.add_file()
             self.wait_for_task(window)
-            self.assertEqual(window.evidence.count(), 1)
+            self.assertEqual(window.evidence.topLevelItemCount(), 1)
             source.unlink()
             window.change_language("en")
             group = window.explorer.tree.topLevelItem(0)
@@ -107,11 +107,27 @@ class WorkspaceTest(unittest.TestCase):
             self.wait_for_task(window)
             self.assertIn("local case copy", window.explorer.views[0].toPlainText())
             self.assertEqual(window.explorer.views[2].toPlainText(), "fixture")
-            window.evidence.setCurrentRow(0)
+            evidence_item = window.evidence.topLevelItem(0).child(0)
+            digest = evidence_item.text(1)
+            self.assertEqual(len(digest), 64)
+            window.explorer.tree.setCurrentItem(group.child(0))
             with patch.object(window, "notify") as notify:
-                window.verify_file()
+                window.process_explorer_selection(window.explorer.selected_sources(), False)
                 self.wait_for_task(window)
-                self.assertEqual(notify.call_args.args[1], "The fingerprint matches.")
+                self.assertIn("Matches", notify.call_args.args[2])
+                self.assertEqual(notify.call_args.kwargs["copy_text"], digest)
+            window.show()
+            self.app.processEvents()
+            window.evidence.setCurrentItem(evidence_item)
+            from PySide6.QtWidgets import QMessageBox
+
+            with patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Yes):
+                window.delete_selected_evidence()
+            self.wait_for_task(window)
+            self.assertEqual(window.evidence.topLevelItemCount(), 0)
+            self.assertEqual(window.explorer.tree.topLevelItemCount(), 0)
+            self.assertTrue(window.active_case_id)
+            self.assertTrue(window.isVisible())
             self.close_workspace(window)
 
     def test_active_case_requires_confirmation_for_switch(self):
@@ -374,7 +390,7 @@ class WorkspaceTest(unittest.TestCase):
                 window.case_navigation.item(i).text() for i in range(window.case_navigation.count())
             ]
             self.assertEqual(sections, [
-                "Explorateur", "Preuves", "Analyses", "Actions et journal", "Intégrité", "Rapports PDF", "Exporter l’affaire",
+                "Explorateur", "Preuves", "Analyses", "Actions et journal", "Rapports PDF", "Exporter l’affaire",
             ])
             window.case_navigation.setCurrentRow(2)
             self.assertTrue(window.case_pages.currentWidget().isAncestorOf(window.modules))

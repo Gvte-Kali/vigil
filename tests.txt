@@ -334,3 +334,9 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
     débrancher le support. Rouvrir l’affaire et ouvrir la preuve depuis
     Explorateur. Vérifier l’aperçu et la mention « copie locale ». Pour une
     preuve ancienne sans copie, vérifier le message de remontage.
+
+
+[ ] Ajouter des preuves de plusieurs dossiers. Vérifier l’arborescence
+    et la colonne SHA-256. Dans Explorateur, clic droit → Vérifier
+    l’intégrité, copier le SHA-256 et le comparer. Retirer la dernière
+    preuve et vérifier que Vigil reste ouvert et affiche la liste vide.

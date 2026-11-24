@@ -6,7 +6,7 @@ from .inspection import list_evidence_directory
 
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QLabel, QMenu, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator,
+    QAbstractItemView, QLabel, QMenu, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -79,6 +79,13 @@ class EvidencePanel(QWidget):
             return ("mounted", data[0], tuple(data[2]))
         return ("registered", data[0]) if data else ("group", item.text(0))
 
+    def items(self):
+        stack = [self.tree.topLevelItem(i) for i in reversed(range(self.tree.topLevelItemCount()))]
+        while stack:
+            item = stack.pop()
+            yield item
+            stack.extend(item.child(i) for i in reversed(range(item.childCount())))
+
     def rebuild_tree(self, *, keep_state=False):
         expanded, collapsed, selected, populated = set(), set(), set(), set()
         scroll = self.tree.verticalScrollBar()
@@ -86,15 +93,13 @@ class EvidencePanel(QWidget):
         current = self.tree.currentItem()
         current_key = self.item_key(current) if current and keep_state else None
         if keep_state:
-            iterator = QTreeWidgetItemIterator(self.tree)
-            while item := iterator.value():
+            for item in self.items():
                 key = self.item_key(item)
                 (expanded if item.isExpanded() else collapsed).add(key)
                 if item.childCount():
                     populated.add(key)
                 if item.isSelected():
                     selected.add(key)
-                iterator += 1
         self.tree.clear()
         if not keep_state:
             for view in self.views:
@@ -115,8 +120,7 @@ class EvidencePanel(QWidget):
         for root, mount_id in sorted(self.mounts.items()):
             self.add_live_item(self.tree, root, Path(root), (root, mount_id), True)
         if keep_state:
-            iterator = QTreeWidgetItemIterator(self.tree)
-            while item := iterator.value():
+            for item in self.items():
                 key = self.item_key(item)
                 if key in expanded:
                     item.setExpanded(True)
@@ -125,7 +129,6 @@ class EvidencePanel(QWidget):
                 if key == current_key:
                     self.tree.setCurrentItem(item, 0, QItemSelectionModel.SelectionFlag.NoUpdate)
                 item.setSelected(key in selected)
-                iterator += 1
             scroll.setValue(position)
         self.retranslate()
         self.apply_filter(self.filter.text())
@@ -203,7 +206,7 @@ class EvidencePanel(QWidget):
         tr = self.tr_pair
         menu = QMenu(self)
         add = menu.addAction(tr("Ajouter aux preuves", "Add to evidence"))
-        verify = menu.addAction(tr("Calculer l’intégrité des fichiers", "Calculate file integrity"))
+        verify = menu.addAction(tr("Vérifier l’intégrité", "Verify integrity"))
         selected = menu.exec(self.tree.viewport().mapToGlobal(position))
         if selected in (add, verify):
             self.selection_action(sources, selected == add)
