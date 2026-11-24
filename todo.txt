@@ -152,10 +152,12 @@ PHASE 06 — INVESTIGATION
     L’index census reste consultable séparément dans Analyses.
     Suppression ciblée des copies de preuve avec confirmation et audit.
     Preuves en arborescence avec colonne SHA-256 et état vide explicite.
+    Ouverture du dossier local dans le gestionnaire de fichiers et accès
+    direct à l’aperçu. Copie publiée après fermeture du descripteur d’écriture.
     Vérification et copie du résultat depuis le menu de l’explorateur.
     Les analyses intégrées, dont le scan ClamAV, lancent les scripts
     historiques en lecture seule et écrivent dans un dossier par exécution.
-    Les PDF sont copiés sous rapports/ et listés par date et analyse.
+    Les PDF sont copiés sous rapports/ et triables par date, analyse ou nom.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.
 [ ] Validation humaine.

@@ -253,7 +253,7 @@ def register_file(state, case_id, path, operator, *, mount=None):
     path = path.absolute()
     if state.exists() and state.samefile(path):
         raise ValueError("database and evidence must be separate files")
-    if mount is None and path.resolve().is_relative_to("/investigation"):
+    if mount is None and (path.is_relative_to("/investigation") or path.resolve().is_relative_to("/investigation")):
         roots = investigation_mounts()
         root = max((root for root in roots if path.is_relative_to(root)), key=len, default=None)
         if root is None:
@@ -275,11 +275,16 @@ def register_file(state, case_id, path, operator, *, mount=None):
     stage_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     published = []
     try:
-        with tempfile.NamedTemporaryFile(dir=stage_dir) as stream:
-            size, digest = fingerprint(path, mount=mount, copy_to=stream)
-            stream.flush()
-            os.fchmod(stream.fileno(), 0o400)
-            os.fsync(stream.fileno())
+        with tempfile.TemporaryDirectory(dir=stage_dir) as staging:
+            with tempfile.NamedTemporaryFile(dir=staging, delete=False) as stream:
+                staged = Path(stream.name)
+                size, digest = fingerprint(path, mount=mount, copy_to=stream)
+                stream.flush()
+                os.fchmod(stream.fileno(), 0o400)
+                if stat.S_IMODE(os.fstat(stream.fileno()).st_mode) != 0o400:
+                    raise ValueError("evidence storage does not enforce mode 0400")
+                os.fsync(stream.fileno())
+            # Close the writable handle before publishing the protected copy.
             with database(state) as connection:
                 require_active_case(connection, case_id)
                 # Another registration may have completed while this file was copied.
@@ -295,7 +300,7 @@ def register_file(state, case_id, path, operator, *, mount=None):
                         target = evidence_copy_path(state, case_id, row["id"])
                         if not target.exists():
                             target.parent.mkdir(mode=0o700, exist_ok=True)
-                            os.link(stream.name, target, follow_symlinks=False)
+                            os.link(staged, target, follow_symlinks=False)
                             published.append(target)
                             audit(connection, operator, case_id, "evidence.copy",
                                   {"evidence_id": row["id"], "sha256": digest})
@@ -304,7 +309,7 @@ def register_file(state, case_id, path, operator, *, mount=None):
                     evidence_id = new_id
                     target = evidence_copy_path(state, case_id, evidence_id)
                     target.parent.mkdir(mode=0o700)
-                    os.link(stream.name, target, follow_symlinks=False)
+                    os.link(staged, target, follow_symlinks=False)
                     published.append(target)
                     add_evidence(connection, case_id, path, size, digest, operator, evidence_id)
     except BaseException:

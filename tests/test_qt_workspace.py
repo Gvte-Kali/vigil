@@ -119,6 +119,16 @@ class WorkspaceTest(unittest.TestCase):
             window.show()
             self.app.processEvents()
             window.evidence.setCurrentItem(evidence_item)
+            from vigil.desktop import QDesktopServices
+
+            with patch.object(QDesktopServices, "openUrl", return_value=True) as open_url:
+                window.open_evidence_folder()
+            self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()).parent.name, "preuves")
+            window.open_evidence_preview()
+            self.wait_for_task(window)
+            self.assertIs(window.case_pages.currentWidget(), window.explorer_page)
+            self.assertIn("local case copy", window.explorer.views[0].toPlainText())
+
             from PySide6.QtWidgets import QMessageBox
 
             with patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Yes):
@@ -128,6 +138,42 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(window.explorer.tree.topLevelItemCount(), 0)
             self.assertTrue(window.active_case_id)
             self.assertTrue(window.isVisible())
+            self.close_workspace(window)
+
+    def test_pdf_table_sorts_dates_and_selects_the_correct_report_folder(self):
+        from PySide6.QtCore import Qt
+        from vigil.desktop import QDesktopServices, Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "settings"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.add_operator("Alice")
+            window.case_name.setText("Fixture")
+            window.create_case()
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
+            custody = root / "legacy-custody" / window.active_case_id / "analyses"
+            for module, name, timestamp in (
+                ("archives", "a.pdf", 1767139200),  # 31 December 2025 UTC
+                ("clamav", "b.pdf", 1767312000),    # 2 January 2026 UTC
+            ):
+                directory = custody / f"vigil.{module}-fixture"
+                directory.mkdir(parents=True)
+                report = directory / name
+                report.touch()
+                os.utime(report, (timestamp, timestamp))
+            window.refresh_pdf_reports()
+            table = window.pdf_reports
+            self.assertEqual(table.item(0, 2).text(), "b.pdf")
+            table.sortItems(1, Qt.SortOrder.AscendingOrder)
+            self.assertEqual(table.item(0, 2).text(), "a.pdf")
+            table.sortItems(2, Qt.SortOrder.DescendingOrder)
+            self.assertEqual(table.item(0, 2).text(), "b.pdf")
+            table.setCurrentCell(0, 0)
+            with patch.object(QDesktopServices, "openUrl", return_value=True) as open_url:
+                window.open_pdf_folder()
+            self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()).name, "vigil.clamav-fixture")
             self.close_workspace(window)
 
     def test_active_case_requires_confirmation_for_switch(self):

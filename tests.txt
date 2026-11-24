@@ -340,3 +340,10 @@ l’état d’avancement et todo_tests.txt pour les scénarios historiques.
     et la colonne SHA-256. Dans Explorateur, clic droit → Vérifier
     l’intégrité, copier le SHA-256 et le comparer. Retirer la dernière
     preuve et vérifier que Vigil reste ouvert et affiche la liste vide.
+
+
+[ ] Dans Preuves, tester Ouvrir le dossier avec la clé débranchée, puis
+    Ouvrir le fichier et le double-clic. Vérifier que l’aperçu est inerte
+    et que la copie est en mode 0400 sans droit d’exécution.
+[ ] Dans Rapports PDF, cliquer sur les en-têtes Date, Analyse et Nom du
+    rapport. Vérifier les deux sens de tri et l’ouverture du bon dossier.

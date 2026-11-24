@@ -10,9 +10,9 @@ from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSe
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+    QAbstractItemView, QApplication, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QDockWidget, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget,
     QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QStackedWidget, QTabWidget,
-    QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
+    QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
 
 from . import storage
@@ -138,6 +138,11 @@ class Worker(QObject):
             self.finished.emit(None, error)
         else:
             self.finished.emit(result, None)
+
+
+class ReportDateItem(QTableWidgetItem):
+    def __lt__(self, other):
+        return self.data(Qt.ItemDataRole.UserRole) < other.data(Qt.ItemDataRole.UserRole)
 
 
 class Workspace(QMainWindow):
@@ -314,6 +319,7 @@ class Workspace(QMainWindow):
         self.explorer_case_id = None
         self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence, self.process_explorer_selection)
         explorer.addWidget(self.explorer)
+        self.explorer_page = explorer.parentWidget()
 
         evidence = self.case_view("Preuves", "Evidence")
         self.evidence = QTreeWidget()
@@ -322,6 +328,7 @@ class Workspace(QMainWindow):
         self.evidence_case_id = None
         self.bind(lambda name: self.evidence.setHeaderLabels([name, "SHA-256"]), "Fichier", "File")
         self.evidence.setColumnWidth(0, 390)
+        self.evidence.itemActivated.connect(lambda *_: self.open_evidence_preview())
         evidence.addWidget(self.evidence)
         self.evidence_empty = QLabel()
         self.bind(self.evidence_empty.setText, "Aucune preuve enregistrée.", "No registered evidence.")
@@ -330,6 +337,8 @@ class Workspace(QMainWindow):
         evidence.addLayout(evidence_actions)
         self.button(evidence_actions, "Ajouter un fichier à l’affaire", "Add a file to the case",
                     self.add_file, primary=True)
+        self.button(evidence_actions, "Ouvrir le fichier", "Open file", self.open_evidence_preview)
+        self.button(evidence_actions, "Ouvrir le dossier", "Open folder", self.open_evidence_folder)
         self.button(evidence_actions, "Supprimer la preuve", "Delete evidence", self.delete_selected_evidence)
         self.button(evidence_actions, "Inspecter une image RAW", "Inspect a RAW image", self.inspect_image)
         evidence_actions.addStretch()
@@ -400,7 +409,20 @@ class Workspace(QMainWindow):
         entity_page.addWidget(self.entity_panel)
         reports = self.case_view("Rapports PDF", "PDF reports")
         self.pdf_reports_page = reports.parentWidget()
-        self.pdf_reports = QListWidget()
+        self.pdf_reports = QTableWidget(0, 3)
+        self.pdf_reports.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.pdf_reports.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.pdf_reports.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.pdf_reports.verticalHeader().hide()
+        self.pdf_reports.horizontalHeader().setStretchLastSection(True)
+        self.pdf_reports.setColumnWidth(0, 175)
+        self.pdf_reports.setColumnWidth(1, 180)
+        self.bind(lambda _: self.pdf_reports.setHorizontalHeaderLabels([
+            self.tr_pair("Date", "Date"), self.tr_pair("Analyse", "Analysis"),
+            self.tr_pair("Nom du rapport", "Report name"),
+        ]), "", "")
+        self.pdf_reports.horizontalHeader().setSortIndicator(0, Qt.SortOrder.DescendingOrder)
+        self.pdf_reports.setSortingEnabled(True)
         reports.addWidget(self.pdf_reports)
         self.button(reports, "Actualiser la liste", "Refresh list", self.refresh_pdf_reports)
         self.button(reports, "Ouvrir le dossier du rapport", "Open report folder",
@@ -1056,26 +1078,38 @@ class Workspace(QMainWindow):
         self.more_history.setEnabled(len(rows) > PAGE_SIZE)
 
     def refresh_pdf_reports(self):
-        self.pdf_reports.clear()
+        self.pdf_reports.setRowCount(0)
         case_id = self.active_case_id
         if not case_id:
             return
         try:
             with storage.database(self.database_path) as connection:
                 row = connection.execute("SELECT legacy_path FROM cases WHERE id = ?", (case_id,)).fetchone()
-            for path in case_pdf_reports(self.database_path, case_id, row["legacy_path"] if row else None):
+            reports = case_pdf_reports(self.database_path, case_id, row["legacy_path"] if row else None)
+            self.pdf_reports.setSortingEnabled(False)
+            self.pdf_reports.setRowCount(len(reports))
+            labels = ANALYSIS_LABELS | {"usbhid": ("Triage USB", "USB triage")}
+            for index, path in enumerate(reports):
                 kind = pdf_analysis_kind(path)
-                labels = ANALYSIS_LABELS | {"usbhid": ("Triage USB", "USB triage")}
                 analysis = self.tr_pair(*labels.get(kind, ("Analyse non identifiée", "Unknown analysis")))
-                date = datetime.fromtimestamp(path.stat().st_mtime).strftime(
+                timestamp = path.stat().st_mtime_ns
+                date = datetime.fromtimestamp(timestamp / 1_000_000_000).strftime(
                     self.tr_pair("%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S")
                 )
-                self.add_row(self.pdf_reports, f"{date}  ·  {analysis}  ·  {path.name}", str(path))
+                date_item = ReportDateItem(date)
+                date_item.setData(Qt.ItemDataRole.UserRole, timestamp)
+                name_item = QTableWidgetItem(path.name)
+                name_item.setData(Qt.ItemDataRole.UserRole, str(path))
+                name_item.setToolTip(str(path))
+                for column, item in enumerate((date_item, QTableWidgetItem(analysis), name_item)):
+                    self.pdf_reports.setItem(index, column, item)
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
+        finally:
+            self.pdf_reports.setSortingEnabled(True)
 
     def open_pdf_folder(self):
-        item = self.pdf_reports.currentItem()
+        item = self.pdf_reports.item(self.pdf_reports.currentRow(), 2)
         if item is None:
             self.notify("Sélectionnez un rapport.", "Select a report.")
             return
@@ -1281,6 +1315,38 @@ class Workspace(QMainWindow):
             options=QFileDialog.Option.DontUseNativeDialog,
         )
         return path
+
+    def selected_evidence_item(self):
+        item = self.evidence.currentItem()
+        if item is None or not item.data(0, Qt.ItemDataRole.UserRole):
+            self.notify("Sélectionnez un fichier dans les preuves.", "Select a file in Evidence.")
+            return None
+        return item
+
+    def open_evidence_preview(self):
+        item = self.selected_evidence_item()
+        if item is None or self.busy is not None:
+            return
+        self.case_navigation.setCurrentRow(self.case_pages.indexOf(self.explorer_page))
+        self.preview_evidence(item.toolTip(0), item.text(1))
+
+    def open_evidence_folder(self):
+        item = self.selected_evidence_item()
+        if item is None:
+            return
+        try:
+            copy = storage.evidence_copy_path(
+                self.database_path, self.active_case_id, item.data(0, Qt.ItemDataRole.UserRole),
+            )
+            if not copy.is_file() or copy.is_symlink():
+                self.notify("Cette preuve n’a pas de copie locale.", "This evidence has no local copy.")
+                return
+            if QDesktopServices.openUrl(QUrl.fromLocalFile(str(copy.parent))):
+                return
+        except (OSError, ValueError) as error:
+            self.fail(error)
+            return
+        self.notify("Impossible d’ouvrir le dossier de la preuve.", "Could not open the evidence folder.")
 
     def delete_selected_evidence(self):
         item = self.evidence.currentItem()
