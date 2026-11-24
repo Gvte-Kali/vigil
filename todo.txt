@@ -1,7 +1,7 @@
 ================================================================================
 VIGIL 2.0 — ROADMAP PRINCIPALE
 ================================================================================
-[x] à faire / [x] validé avec preuve. Une phase à la fois, validation humaine
+[ ] à faire / [x] validé avec preuve. Une phase à la fois, validation humaine
 avant la suivante. SPECIFICATIONS.md et AGENTS.md définissent la cible.
 Logo original obligatoire. Qt Widgets FR/EN Graphite/Cyan. Aucun daemon
 permanent : processus locaux démarrés automatiquement. Catalogue communautaire
