@@ -426,9 +426,13 @@ class WorkspaceTest(unittest.TestCase):
             changes = [("sdb1", {"mode": "ro"}, {"mode": "rw"})]
             with patch.object(window, "confirm_close", return_value=True), \
                     patch("vigil.desktop.check_shutdown_state", return_value=changes):
-                with patch.object(window, "confirm_block_changes", return_value=False):
+                with patch.object(window, "confirm_block_changes", return_value=None):
                     self.assertFalse(window.close())
-                with patch.object(window, "confirm_block_changes", return_value=True) as confirm:
+                with patch.object(window, "confirm_block_changes", return_value={"sdb1": "ro"}), \
+                        patch.object(window, "notify") as notify:
+                    self.assertFalse(window.close())
+                    self.assertIn("/dev/sdb1: RW → RO", notify.call_args.args[2])
+                with patch.object(window, "confirm_block_changes", return_value={"sdb1": "rw"}) as confirm:
                     self.assertTrue(window.close())
                     confirm.assert_called_once_with(changes)
 

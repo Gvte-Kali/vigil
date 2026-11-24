@@ -77,7 +77,8 @@ PHASE 04 — WORKSPACE QT ET MODULES
     distingue disques, partitions et états de montage par couleur.
     Fermeture confirmée et sauvegarde contrôlée. Instantané des modes bloc
     au lancement, blocage si une zone est montée et confirmation explicite
-    si un mode ou une identité bloc diffère de l’instantané. Les futurs modules
+    si un mode ou une identité bloc diffère de l’instantané. Le dialogue
+    précise disque/partition et vérifie le mode RO/RW choisi. Les futurs modules
     doivent enregistrer leurs modifications dans leur affaire avant fermeture.
     Menus dépliants cyan avec hauteur des titres vérifiée en Qt, Affaire en cours et page Actions rapides
     avec cartes compactes, icônes et descriptions Antivirus et Stockage.

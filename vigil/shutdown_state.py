@@ -18,7 +18,8 @@ def read_block_modes(directory=SYS_BLOCK):
     modes = {}
     for entry in sorted(directory.iterdir()):
         node = entry.resolve(strict=True)
-        disk = node.parent if (node / "partition").is_file() else node
+        is_partition = (node / "partition").is_file()
+        disk = node.parent if is_partition else node
         try:
             sequence = (disk / "diskseq").read_text(encoding="ascii").strip()
         except FileNotFoundError:
@@ -29,6 +30,7 @@ def read_block_modes(directory=SYS_BLOCK):
             raise ValueError(f"/dev/{entry.name}: unknown read-only flag {mode!r}")
         modes[entry.name] = {
             "sysfs": str(node),
+            "parent": disk.name if is_partition else None,
             "major_minor": number,
             "disk_sequence": sequence,
             "mode": "ro" if mode == "1" else "rw",

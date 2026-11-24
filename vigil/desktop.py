@@ -1393,42 +1393,63 @@ class Workspace(QMainWindow):
 
     def confirm_block_changes(self, changes):
         tr = self.tr_pair
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr("Modes d’accès aux périphériques", "Device access modes"))
+        layout = QVBoxLayout(dialog)
+
+        def text(value):
+            label = QLabel(value)
+            label.setWordWrap(True)
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            layout.addWidget(label)
 
         def mode(record):
             if record is None:
                 return tr("absent", "absent")
-            return tr("lecture seule (ro)", "read-only (ro)") if record["mode"] == "ro" else (
-                tr("lecture-écriture (rw)", "read-write (rw)")
+            return tr("lecture seule (RO)", "read-only (RO)") if record["mode"] == "ro" else (
+                tr("lecture-écriture (RW)", "read-write (RW)")
             )
 
-        lines = []
+        text(tr(
+            "Les zones Vigil sont démontées. Les écarts ci-dessous concernent le verrou "
+            "logiciel au niveau bloc dans Linux. Ils ne décrivent ni le mode d’un montage "
+            "ni un verrou matériel de l’appareil.",
+            "The Vigil zones are unmounted. The differences below concern Linux block-level "
+            "software protection. They do not describe filesystem mount options or hardware locks.",
+        ))
+        text(tr(
+            "Choisis le mode bloc souhaité pour chaque entrée. Si le mode actuel est différent, "
+            "Vigil restera ouvert pour qu’un administrateur vérifie et applique le changement.",
+            "Choose the desired block mode for each entry. If it differs from the current mode, "
+            "Vigil stays open so an administrator can verify and apply the change.",
+        ))
+        choices = {}
         for name, before, after in changes:
-            different_device = before is not None and after is not None and any(
-                before[key] != after[key] for key in ("sysfs", "major_minor", "disk_sequence")
-            )
-            suffix = tr(" · identité différente", " · different identity") if different_device else ""
-            lines.append(f"/dev/{name}: {mode(before)} → {mode(after)}{suffix}")
-
-        dialog = QMessageBox(self)
-        dialog.setIcon(QMessageBox.Icon.Warning)
-        dialog.setWindowTitle(tr("État des périphériques modifié", "Device state changed"))
-        dialog.setTextFormat(Qt.TextFormat.PlainText)
-        dialog.setText(tr("/investigation et /stockage sont démontés. "
-                          "L’état des périphériques diffère de celui au démarrage.",
-                          "/investigation and /stockage are unmounted. "
-                          "Device state differs from startup."))
-        dialog.setInformativeText(
-            tr("Au démarrage → maintenant", "At startup → now") + "\n" + "\n".join(lines[:4])
-            + "\n\n" + tr("Fermer avec l’état actuel ?", "Close with the current state?")
-        )
-        if len(lines) > 4:
-            dialog.setDetailedText("\n".join(lines))
-        accept = dialog.addButton(tr("Fermer quand même", "Close anyway"), QMessageBox.ButtonRole.AcceptRole)
-        cancel = dialog.addButton(tr("Rester dans Vigil", "Stay in Vigil"), QMessageBox.ButtonRole.RejectRole)
-        dialog.setDefaultButton(cancel)
-        dialog.setEscapeButton(cancel)
-        dialog.exec()
-        return dialog.clickedButton() == accept
+            record = after if after is not None else before
+            parent = record.get("parent")
+            level = (tr(f"partition du disque /dev/{parent}", f"partition of disk /dev/{parent}")
+                     if parent else tr("périphérique bloc entier", "whole block device"))
+            text(f"/dev/{name} · {level}\n"
+                 f"{tr('Au démarrage', 'At startup')} : {mode(before)}"
+                 f" → {tr('Maintenant', 'Now')} : {mode(after)}")
+            if after is not None:
+                choice = QComboBox()
+                choice.addItem(tr("Lecture seule (RO)", "Read-only (RO)"), "ro")
+                choice.addItem(tr("Lecture-écriture (RW)", "Read-write (RW)"), "rw")
+                choice.setCurrentIndex(choice.findData(after["mode"]))
+                choice.setAccessibleName(f"/dev/{name}")
+                layout.addWidget(choice)
+                choices[name] = choice
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Vérifier et fermer", "Check and close"))
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr("Rester dans Vigil", "Stay in Vigil"))
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setDefault(True)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return {name: choice.currentData() for name, choice in choices.items()}
 
     def closeEvent(self, event):
         if self.closing_checks:
@@ -1463,8 +1484,23 @@ class Workspace(QMainWindow):
             changes = check_shutdown_state(self.startup_block_modes)
             if changes:
                 progress.hide()
-                if not self.confirm_block_changes(changes):
+                desired = self.confirm_block_changes(changes)
+                if desired is None:
                     event.ignore()
+                    return
+                pending = [
+                    f"/dev/{name}: {after['mode'].upper()} → {desired[name].upper()}"
+                    for name, _, after in changes if after is not None and after["mode"] != desired[name]
+                ]
+                if pending:
+                    event.ignore()
+                    self.notify(
+                        "Le mode choisi n’est pas encore appliqué. Fais vérifier ces périphériques "
+                        "par un administrateur, puis réessaie. Vigil n’a changé aucun verrou.",
+                        "The selected mode is not yet active. Have an administrator check these "
+                        "devices, then retry. Vigil has not changed any lock.",
+                        "\n".join(pending),
+                    )
                     return
                 progress.show()
             stage = "save"
