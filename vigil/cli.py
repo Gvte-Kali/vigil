@@ -63,7 +63,7 @@ def create(name: str, operator: str = typer.Option(...), db: DatabaseOption = No
 def list_cases(db: DatabaseOption = None):
     with command():
         with storage.database(db or storage.default_database()) as connection:
-            rows = connection.execute("SELECT * FROM cases ORDER BY created_at, id")
+            rows = connection.execute("SELECT * FROM cases WHERE id NOT IN (SELECT case_id FROM deleted_cases) ORDER BY created_at, id")
             result = [dict(row) for row in rows]
         emit(result)
 
@@ -82,8 +82,10 @@ def import_case(path: Path, operator: str = typer.Option(...), db: DatabaseOptio
 def export(case_id: str, destination: Path, operator: str = typer.Option(...),
            db: DatabaseOption = None):
     with command():
-        path = export_case(db or storage.default_database(), case_id, operator, destination)
-        emit({"directory": str(path), "archive": str(path / "affaire.tar.gz")})
+        result = export_case(db or storage.default_database(), case_id, operator, destination)
+        emit({"directory": str(result.path), "archive": str(result.path / "affaire.tar.gz"),
+              "coverage": "partial" if result.missing else "complete",
+              "missing_evidence": result.missing})
 
 
 @evidence.command("add")

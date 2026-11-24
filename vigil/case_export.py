@@ -7,11 +7,18 @@ import shutil
 import stat
 import tarfile
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
 from .history import case_events
-from .storage import audit, database, evidence_copy_path, file_identity, utc_now
+from .storage import audit, database, evidence_copy_path, file_identity, require_active_case, utc_now
+
+
+@dataclass(frozen=True)
+class CaseExport:
+    path: Path
+    missing: tuple[str, ...]
 
 
 class HashingReader:
@@ -73,10 +80,7 @@ def export_case(state, case_id, operator, destination):
         raise ValueError("export destination must be outside /investigation")
     custody = evidence_copy_path(state, case_id, "0" * 32).parents[2]
     with database(state) as connection:
-        row = connection.execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
-        if row is None:
-            raise ValueError("unknown case ID")
-        case = dict(row)
+        case = dict(require_active_case(connection, case_id))
         evidence = [dict(row) for row in connection.execute(
             "SELECT * FROM evidence WHERE case_id = ? ORDER BY id", (case_id,))]
         legacy = Path(case["legacy_path"]) if case["legacy_path"] else None
@@ -88,9 +92,11 @@ def export_case(state, case_id, operator, destination):
 
     stage = Path(tempfile.mkdtemp(prefix=".vigil-export-", dir=destination))
     final = destination / f"affaire-{case_id[:8]}-{uuid4().hex}"
+    published = False
     try:
         archive_path = stage / "affaire.tar.gz"
         hashes = {}
+        missing = []
         with tarfile.open(archive_path, "w:gz") as archive:
             folder = tarfile.TarInfo("preuves/")
             folder.type = tarfile.DIRTYPE
@@ -98,14 +104,18 @@ def export_case(state, case_id, operator, destination):
             archive.addfile(folder)
             for record in evidence:
                 source = evidence_copy_path(state, case_id, record["id"])
-                if not source.is_file():
-                    raise ValueError(f"evidence copy missing, re-add the original: {record['path']}")
+                try:
+                    source.lstat()
+                except FileNotFoundError:
+                    missing.append(record["path"])
+                    record.update(archive_path=None, copy_status="missing")
+                    continue
                 name = f"preuves/{record['id']}/contenu"
                 digest = archive_file(archive, source, name)
                 if digest != record["sha256"]:
                     raise ValueError(f"evidence copy failed integrity check: {record['path']}")
                 hashes[name] = digest
-                record["archive_path"] = name
+                record.update(archive_path=name, copy_status="included")
             for root, prefix, exclude in ((custody, "resultats", ("preuves",)), (legacy, "projet-v1", ())):
                 if root is None:
                     continue
@@ -115,7 +125,8 @@ def export_case(state, case_id, operator, destination):
                     name = f"{prefix}/{source.relative_to(root).as_posix()}"
                     hashes[name] = archive_file(archive, source, name)
             metadata = json.dumps({
-                "schema_version": 1, "exported_at": utc_now(), "operator": operator,
+                "schema_version": 2, "coverage": "partial" if missing else "complete",
+                "missing_evidence_count": len(missing), "exported_at": utc_now(), "operator": operator,
                 "case": case, "evidence": evidence, "audit": events,
             }, ensure_ascii=True, indent=2).encode() + b"\n"
             archive.addfile(archive_info("affaire.json", len(metadata)), io.BytesIO(metadata))
@@ -131,12 +142,18 @@ def export_case(state, case_id, operator, destination):
         with archive_path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
         (stage / "affaire.tar.gz.sha256").write_text(f"{digest}  {archive_path.name}\n", encoding="ascii")
-        stage.rename(final)
-    except BaseException:
-        shutil.rmtree(stage)
         with database(state) as connection:
-            audit(connection, operator, case_id, "case.export.error", {})
+            audit(connection, operator, case_id, "case.export.success", {
+                "sha256": digest, "archive": str(final), "missing_evidence_count": len(missing),
+            })
+            stage.rename(final)
+            published = True
+    except BaseException:
+        shutil.rmtree(final if published else stage)
+        with database(state) as connection:
+            if not connection.execute(
+                "SELECT 1 FROM deleted_cases WHERE case_id = ?", (case_id,)
+            ).fetchone():
+                audit(connection, operator, case_id, "case.export.error", {})
         raise
-    with database(state) as connection:
-        audit(connection, operator, case_id, "case.export.success", {"sha256": digest, "archive": str(final)})
-    return final
+    return CaseExport(final, tuple(missing))

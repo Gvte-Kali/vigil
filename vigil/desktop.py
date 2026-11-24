@@ -275,6 +275,7 @@ class Workspace(QMainWindow):
         case_actions.addWidget(self.case_name, 1)
         self.button(case_actions, "Créer une affaire", "Create case", self.create_case, primary=True)
         self.button(case_actions, "Importer un ancien projet", "Import legacy project", self.import_case)
+        self.button(cases, "Supprimer l’affaire active", "Delete active case", self.delete_active_case)
 
         self.navigation_group("INVESTIGATION", "INVESTIGATION")
         case_workspace = self.page("Affaire en cours", "Current case", heading=False)
@@ -696,7 +697,8 @@ class Workspace(QMainWindow):
         try:
             with storage.database(self.database_path) as connection:
                 rows = list(connection.execute(
-                    "SELECT id, name FROM cases WHERE name <> ? ORDER BY created_at, id",
+                    "SELECT id, name FROM cases WHERE name <> ? "
+                    "AND id NOT IN (SELECT case_id FROM deleted_cases) ORDER BY created_at, id",
                     (storage.ANTIVIRUS_CASE_NAME,),
                 ))
         except (OSError, ValueError, sqlite3.Error) as error:
@@ -748,6 +750,39 @@ class Workspace(QMainWindow):
             self.case_controls.setParent(self)
             self.case_controls.hide()
             dialog.deleteLater()
+
+    def delete_active_case(self):
+        case = self.active_case_item()
+        if case is None:
+            self.notify("Choisissez d’abord une affaire.", "Choose a case first.")
+            return
+        operator = self.require_operator()
+        if not operator:
+            return
+        dialog = QMessageBox(self.case_picker or self)
+        dialog.setWindowTitle("Vigil")
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(self.tr_pair(
+            f"Supprimer l’affaire « {case.text()} » de la liste ? Ses preuves et son journal seront conservés.",
+            f"Remove “{case.text()}” from the case list? Its evidence and audit history will be retained.",
+        ))
+        dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        dialog.setDefaultButton(QMessageBox.StandardButton.No)
+        if dialog.exec() != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            if read_zones()["/investigation"]:
+                self.notify("Démontez le support d’investigation avant de supprimer l’affaire.",
+                            "Unmount the investigation volume before deleting the case.")
+                return
+            with storage.database(self.database_path) as connection:
+                storage.delete_case(connection, self.active_case_id, operator)
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
+            return
+        self.refresh_cases()
+        self.reset_history()
 
     def case_clicked(self, item):
         if item is None or item.isHidden():
@@ -969,9 +1004,18 @@ class Workspace(QMainWindow):
             return
         self.run_task(
             lambda: export_case(self.database_path, case_id, operator, Path(destination)),
-            lambda path: self.notify("Archive et empreinte SHA-256 enregistrées.",
-                                     "Archive and SHA-256 checksum saved.", str(path)),
+            self.show_case_export,
         )
+
+    def show_case_export(self, result):
+        if result.missing:
+            count = len(result.missing)
+            self.notify(f"Archive créée avec {count} preuve(s) sans copie.",
+                        f"Archive created with {count} missing evidence copy/copies.",
+                        "\n".join((str(result.path), *result.missing)))
+        else:
+            self.notify("Archive et empreinte SHA-256 enregistrées.",
+                        "Archive and SHA-256 checksum saved.", str(result.path))
 
     def export_case_report(self):
         case_id = self.active_case_id

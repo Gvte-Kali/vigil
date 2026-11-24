@@ -13,14 +13,18 @@ from uuid import uuid4
 from .inspection import investigation_mounts, list_evidence_directory, open_evidence_path
 
 ANTIVIRUS_CASE_NAME = "Scan antivirus"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 APPLICATION_ID = 0x5649474C
+DELETED_CASES_DDL = """CREATE TABLE deleted_cases (
+    case_id TEXT PRIMARY KEY REFERENCES cases(id), deleted_at TEXT NOT NULL
+)"""
 SCHEMA = (
     "CREATE TABLE operators (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE)",
     """CREATE TABLE cases (
         id TEXT PRIMARY KEY, name TEXT NOT NULL, legacy_path TEXT UNIQUE,
         legacy_info TEXT, created_at TEXT NOT NULL
     )""",
+    DELETED_CASES_DDL,
     """CREATE TABLE evidence (
         id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES cases(id),
         path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL
@@ -69,6 +73,9 @@ def database(path):
                     connection.execute(statement)
                 connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            elif app_id == APPLICATION_ID and version == 1:
+                connection.execute(DELETED_CASES_DDL)
+                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif app_id != APPLICATION_ID or version != SCHEMA_VERSION:
                 raise ValueError("unsupported Vigil database or schema version")
             yield connection
@@ -90,7 +97,26 @@ def list_operators(connection):
     return list(connection.execute("SELECT id, name FROM operators ORDER BY name COLLATE NOCASE, id"))
 
 
+def require_active_case(connection, case_id):
+    row = connection.execute(
+        "SELECT * FROM cases WHERE id = ? AND id NOT IN (SELECT case_id FROM deleted_cases)",
+        (case_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError("unknown or deleted case")
+    return row
+
+
+def delete_case(connection, case_id, operator):
+    case = require_active_case(connection, case_id)
+    if case["name"] == ANTIVIRUS_CASE_NAME:
+        raise ValueError("the antivirus case cannot be deleted")
+    audit(connection, operator, case_id, "case.delete", {"name": case["name"]})
+    connection.execute("INSERT INTO deleted_cases VALUES (?, ?)", (case_id, utc_now()))
+
+
 def audit(connection, operator, case_id, action, details):
+    require_active_case(connection, case_id)
     operator_id = register_operator(connection, operator)
     connection.execute(
         """INSERT INTO audit(timestamp, operator_id, case_id, action, details)
@@ -109,9 +135,11 @@ def create_case(connection, name, operator, legacy_path=None, legacy_info=None):
         (case_id, name, legacy_path, legacy_info, utc_now()),
     )
     if result.rowcount == 0:
-        return connection.execute(
+        existing = connection.execute(
             "SELECT id FROM cases WHERE legacy_path = ?", (legacy_path,)
         ).fetchone()[0]
+        require_active_case(connection, existing)
+        return existing
     audit(connection, operator, case_id, "case.import" if legacy_path else "case.create",
           {"legacy_path": legacy_path})
     return case_id
@@ -211,6 +239,7 @@ def register_file(state, case_id, path, operator, *, mount=None):
         mount = root, roots[root]
 
     with database(state) as connection:
+        require_active_case(connection, case_id)
         existing = connection.execute(
             "SELECT id, size, sha256 FROM evidence WHERE case_id = ? AND path = ? ORDER BY rowid",
             (case_id, str(path)),
@@ -230,6 +259,7 @@ def register_file(state, case_id, path, operator, *, mount=None):
             os.fchmod(stream.fileno(), 0o400)
             os.fsync(stream.fileno())
             with database(state) as connection:
+                require_active_case(connection, case_id)
                 # Another registration may have completed while this file was copied.
                 records = connection.execute(
                     "SELECT id, size, sha256 FROM evidence WHERE case_id = ? AND path = ? ORDER BY rowid",

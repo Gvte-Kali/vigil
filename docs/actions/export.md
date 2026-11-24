@@ -28,8 +28,9 @@ tel même avec ses permissions de lecture seule.
 
 Si une preuve ancienne a été enregistrée sans copie, réajouter le fichier
 d’origine depuis l’explorateur ou l’onglet Preuves. Vigil compare son empreinte
-à celle enregistrée avant de créer la copie. L’export complet exige une copie
-vérifiable pour chaque preuve.
+à celle enregistrée avant de créer la copie. Si la copie manque, l’export reste possible. Le manifeste indique un export
+partiel et conserve le chemin d’origine ainsi que l’empreinte enregistrée.
+Une copie présente dont le SHA-256 diffère bloque l’export.
 
 ## Vigil 1.0
 

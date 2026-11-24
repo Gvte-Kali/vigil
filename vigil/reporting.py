@@ -8,11 +8,12 @@ from pathlib import Path
 from uuid import uuid4
 
 from .history import case_events
-from .storage import database, utc_now
+from .storage import database, require_active_case, utc_now
 
 
 def case_report(state, case_id):
     with database(state) as connection:
+        require_active_case(connection, case_id)
         case = connection.execute(
             "SELECT id, name, created_at FROM cases WHERE id = ?", (case_id,)
         ).fetchone()
