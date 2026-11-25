@@ -1,4 +1,5 @@
 """Bilingual Qt workspace for the local Vigil core."""
+import logging
 import os
 import shutil
 import sqlite3
@@ -353,7 +354,7 @@ class Workspace(QMainWindow):
         self.evidence_case_id = None
         self.bind(lambda name: self.evidence.setHeaderLabels([name, "SHA-256"]), "Fichier", "File")
         self.evidence.setColumnWidth(0, 390)
-        self.evidence.itemActivated.connect(lambda *_: self.open_evidence_preview())
+        self.evidence.itemActivated.connect(self.queue_evidence_preview)
         evidence.addWidget(self.evidence)
         self.evidence_empty = QLabel()
         self.bind(self.evidence_empty.setText, "Aucune preuve enregistrée.", "No registered evidence.")
@@ -1138,7 +1139,7 @@ class Workspace(QMainWindow):
             self.dashboard_events.addItem(QListWidgetItem(self.action_icon("list", ACCENT),
                 f"{event['timestamp']}  ·  {event['action']}  ·  {event['operator']}"))
 
-    def preview_evidence(self, name, digest, mount=None):
+    def preview_evidence(self, name, digest, mount=None, *, evidence_id=None):
         if self.busy is not None:
             return
         case_id = self.active_case_id
@@ -1147,12 +1148,16 @@ class Workspace(QMainWindow):
 
         def inspect():
             if mount is None and digest and case_id:
-                local = storage.find_evidence_copy(self.database_path, case_id, original, digest)
+                if evidence_id is None:
+                    local = storage.find_evidence_copy(self.database_path, case_id, original, digest)
+                else:
+                    copy = storage.evidence_copy_path(self.database_path, case_id, evidence_id)
+                    local = copy if copy.exists() else None
                 if local is not None:
                     snapshot = inspect_file(local, display_name=original.name)
                     snapshot["local_copy"] = True
                     return snapshot
-                if original.is_relative_to("/investigation") or not original.is_file():
+                if evidence_id is not None or original.is_relative_to("/investigation") or not original.is_file():
                     raise ValueError(self.tr_pair(
                         "Cette preuve n’a pas de copie locale. Remontez le support d’origine en lecture seule "
                         "et ajoutez de nouveau le fichier aux preuves.",
@@ -1163,7 +1168,14 @@ class Workspace(QMainWindow):
         def display(snapshot):
             if (self.active_case_id == case_id
                     and (mount is None or self.explorer.mounts.get(mount[0]) == mount[1])):
-                self.explorer.show_preview(name, digest, snapshot)
+                try:
+                    self.explorer.show_preview(name, digest, snapshot)
+                except (OSError, ValueError, OverflowError) as error:
+                    logging.getLogger(__name__).exception("Could not display evidence preview")
+                    self.fail(error)
+                    return
+                if evidence_id is not None:
+                    self.case_navigation.setCurrentIndex(self.case_pages.indexOf(self.explorer_page))
 
         self.run_task(inspect, display)
 
@@ -1438,12 +1450,22 @@ class Workspace(QMainWindow):
             return None
         return item
 
+    def queue_evidence_preview(self, item, _column):
+        evidence_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if evidence_id:
+            # Let the item view finish handling activation before changing views.
+            case_id, name, digest = self.active_case_id, item.toolTip(0), item.text(1)
+            QTimer.singleShot(0, self, lambda: self.open_saved_preview(case_id, evidence_id, name, digest))
+
     def open_evidence_preview(self):
         item = self.selected_evidence_item()
-        if item is None or self.busy is not None:
-            return
-        self.case_navigation.setCurrentIndex(self.case_pages.indexOf(self.explorer_page))
-        self.preview_evidence(item.toolTip(0), item.text(1))
+        if item is not None:
+            self.open_saved_preview(self.active_case_id, item.data(0, Qt.ItemDataRole.UserRole),
+                                    item.toolTip(0), item.text(1))
+
+    def open_saved_preview(self, case_id, evidence_id, name, digest):
+        if case_id and case_id == self.active_case_id:
+            self.preview_evidence(name, digest, evidence_id=evidence_id)
 
     def open_evidence_folder(self):
         item = self.selected_evidence_item()
@@ -1645,7 +1667,8 @@ class Workspace(QMainWindow):
             button.setEnabled(True)
         result, error = self.task_result
         self.refresh_dashboard()
-        if error:
+        if error is not None:
+            logging.getLogger(__name__).warning("Background operation failed: %s", error)
             self.fail(error)
         else:
             self.on_success(result)

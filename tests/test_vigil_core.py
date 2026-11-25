@@ -69,7 +69,7 @@ class CoreTest(unittest.TestCase):
         )):
             self.assertEqual(
                 module.terminal_command(["bash", "path with spaces.sh"]),
-                ["/usr/bin/gnome-terminal", "--", "bash", "path with spaces.sh"],
+                ["/usr/bin/gnome-terminal", "--geometry=80x34", "--", "bash", "path with spaces.sh"],
             )
         with patch.object(module.shutil, "which", return_value=None):
             with self.assertRaises(FileNotFoundError):

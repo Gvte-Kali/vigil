@@ -124,10 +124,20 @@ class WorkspaceTest(unittest.TestCase):
             with patch.object(QDesktopServices, "openUrl", return_value=True) as open_url:
                 window.open_evidence_folder()
             self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()).parent.name, "preuves")
-            window.open_evidence_preview()
+            window.case_navigation.setCurrentIndex(window.case_pages.indexOf(window.evidence.parentWidget()))
+            window.evidence.itemActivated.emit(evidence_item, 0)
             self.wait_for_task(window)
             self.assertIs(window.case_pages.currentWidget(), window.explorer_page)
             self.assertIn("local case copy", window.explorer.views[0].toPlainText())
+
+            Path(open_url.call_args.args[0].toLocalFile(), "contenu").unlink()
+            window.case_navigation.setCurrentIndex(window.case_pages.indexOf(window.evidence.parentWidget()))
+            with patch.object(window, "fail") as failure:
+                window.evidence.itemActivated.emit(evidence_item, 0)
+                self.wait_for_task(window)
+                self.assertIn("has no local copy", str(failure.call_args.args[0]))
+            self.assertIs(window.case_pages.currentWidget(), window.evidence.parentWidget())
+            self.assertTrue(window.isVisible())
 
             from PySide6.QtWidgets import QMessageBox
 

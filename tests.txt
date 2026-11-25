@@ -444,3 +444,11 @@ Recette interface et terminaux
     le relevé initial. Vérifier le mode bloc RO de la source et le SHA-256.
 [ ] En VM, vérifier le triage HID existant du montage de stockage rapide
     et le refus d’un support composite avant le passage en RW. Tester le démontage depuis les actions rapides.
+
+[ ] Dans le montage d’affaire, vérifier que projet, entité et opérateur
+    figurent une seule fois sur la même ligne avant le triage.
+[ ] Sur Parrot avec Konsole, vérifier que le terminal s’ouvre plus haut et
+    garde la largeur du profil. Tester aussi le terminal choisi en Wayland.
+[ ] Dans Preuves, double-cliquer sur un fichier après retrait du support.
+    Vérifier l’aperçu de la copie locale. Pour une ancienne preuve sans
+    copie locale, vérifier le message et que Vigil reste ouvert.

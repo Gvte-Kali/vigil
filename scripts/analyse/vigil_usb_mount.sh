@@ -206,14 +206,9 @@ fi
 # --- Nettoyer l'écran ---
 clear
 print_banner
-echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
-# Chasse : VIGIL_ACTIVE_USER (operateur choisi par la chasse) prioritaire
-# sur le fichier actif, affiche et utilise pour la custody.
-if [ -n "${VIGIL_ACTIVE_USER:-}" ]; then
-    ACTIVE_USER="$VIGIL_ACTIVE_USER"
-    echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
-fi
+# L’opérateur transmis par la GUI ou la chasse est prioritaire.
+ACTIVE_USER="${VIGIL_ACTIVE_USER:-$ACTIVE_USER}"
+printf '%b%s%b\n' "$BLUE" "Projet : $ACTIVE_PROJECT | Entité : $ACTIVE_ENTITY | Utilisateur : $ACTIVE_USER" "$NC"
 echo ""
 
 # --- 0. Démontage automatique des périphériques existants dans /investigation ---

@@ -20,6 +20,8 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] Acquisition RAW et clonage : triage USB HID avant sélection et contrôle de l’identité USB avant accès bloc.
 [x] Stockage rapide : contrôle HID et blacklist du support sélectionné avant le passage RW.
 [ ] Recette VM du triage d’acquisition et de stockage, y compris support composite et rendu Chafa après sudo.
+[x] En-tête du montage sur une ligne, terminaux plus hauts et aperçu des preuves locales par identifiant.
+[ ] Recette Parrot de la hauteur du terminal et du double-clic hors support.
 [x] Accueil, explorateur, catalogue, entité et actions rapides remaniés.
 [ ] Recette manuelle des terminaux sous Parrot, Hyprland, Wayland et X11.
 [ ] Recette opérateur non destructive des montages et de l’acquisition.

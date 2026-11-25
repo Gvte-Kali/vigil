@@ -126,7 +126,7 @@ class WorkspaceToolsTest(unittest.TestCase):
                 patch("vigil.external_terminal.shutil.which",
                       side_effect=lambda name: f"/fixture/{name}" if name in {"foot", "xterm"} else None):
             self.assertEqual(terminal_command(["/bin/echo", "path with spaces"], "xterm"),
-                             ["/fixture/foot", "/bin/echo", "path with spaces"])
+                             ["/fixture/foot", "--window-size-chars=80x34", "/bin/echo", "path with spaces"])
 
     def test_external_action_keeps_exit_error_visible(self):
         import subprocess

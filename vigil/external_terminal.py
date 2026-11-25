@@ -10,8 +10,14 @@ from pathlib import Path
 from uuid import uuid4
 
 TERMINALS = {
-    "xdg-terminal-exec": (), "kitty": (), "alacritty": ("-e",), "foot": (),
-    "konsole": ("-e",), "gnome-terminal": ("--",), "xfce4-terminal": ("--execute",), "xterm": ("-e",),
+    "xdg-terminal-exec": (),
+    "kitty": ("-o", "initial_window_height=34c"),
+    "alacritty": ("-o", "window.dimensions={ columns = 80, lines = 34 }", "-e"),
+    "foot": ("--window-size-chars=80x34",),
+    "konsole": ("-p", "TerminalRows=34", "-e"),
+    "gnome-terminal": ("--geometry=80x34", "--"),
+    "xfce4-terminal": ("--geometry=80x34", "--execute"),
+    "xterm": ("-geometry", "80x34", "-e"),
 }
 MISSING_TERMINAL = "Aucun terminal compatible trouvé / No compatible external terminal found."
 
