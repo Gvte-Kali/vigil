@@ -234,6 +234,14 @@ def case_manager_rows(state):
             """, (ANTIVIRUS_CASE_NAME,))]
 
 
+def case_evidence_rows(state, case_id):
+    with database(state) as connection:
+        require_active_case(connection, case_id)
+        return [dict(row) for row in connection.execute(
+            "SELECT id, path, size, sha256 FROM evidence WHERE case_id = ? ORDER BY path, id", (case_id,)
+        )]
+
+
 def case_manager_artifacts(state, case_id, name):
     """Read published case metadata without scanning a device or modifying the case."""
     if not re.fullmatch(r"[0-9a-f]{32}", case_id) or not re.fullmatch(r"[A-Za-z0-9_]+", name):

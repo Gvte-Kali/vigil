@@ -64,6 +64,33 @@ Un conflit de commande est signalé avec son chemin. Le détail des
 emplacements gérés, du retour arrière et des raccourcis personnalisés
 figure dans [la transition CLI](../development/cli-command-transition.md).
 
+## Essayer l’interface Textual sur le poste de développement
+
+Sur Parrot avec une installation éditable existante dans `/opt/vigil`, fermer
+les sessions Vigil et actualiser le paquet depuis le compte opérateur.
+
+```bash
+cd /opt/vigil
+git status --short
+git switch vigil-2.0
+git pull --ff-only
+.venv/bin/python -m pip install -e '.[desktop]'
+vigil tui
+```
+
+La réinstallation du paquet ajoute Textual au venv. Elle utilise la même base
+d’affaires sous `/opt/vigil/data/state`. Si la commande du PATH pointe ailleurs,
+lancer `.venv/bin/vigil tui` ou suivre la procédure de mise à jour des lanceurs
+ci-dessus. Utiliser `vigil tui --lang en` pour l’anglais. `vigil gui` ouvre
+l’espace de travail Qt. La CLI existante reste accessible via `vigil --help`.
+
+Le premier lot couvre la consultation système, la sélection de l’opérateur,
+la création et l’activation d’une affaire, l’enregistrement de preuves et la
+vérification SHA-256 de leur copie, la vérification des montages et le
+catalogue. Les autres parcours restent disponibles dans Qt ou la CLI selon
+la fonctionnalité. Pour travailler sur une base de test distincte, utiliser
+`vigil tui --db /chemin/vers/vigil-dev.sqlite`.
+
 ## Modifications du poste
 
 - Installation des paquets de `scripts/post-install/requirements.txt`.

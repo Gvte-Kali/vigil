@@ -135,6 +135,41 @@ def verify_devices(target: Optional[str] = None):
             raise typer.Exit(1)
 
 
+@app.command("tui")
+def launch_tui(
+    db: DatabaseOption = None,
+    lang: Annotated[str, typer.Option("--lang", help="fr or en")] = "fr",
+    operator: Annotated[Optional[str], typer.Option("--operator")] = None,
+):
+    """Open the terminal workspace / Ouvrir l’espace de travail terminal."""
+    if lang not in {"fr", "en"}:
+        raise typer.BadParameter("fr or en", param_hint="--lang")
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        typer.echo("Un terminal interactif est requis / An interactive terminal is required.", err=True)
+        raise typer.Exit(1)
+    try:
+        from .tui import Workspace
+    except ModuleNotFoundError as error:
+        if error.name != "textual":
+            raise
+        typer.echo("Textual manquant : réinstallez Vigil / Textual missing: reinstall Vigil.", err=True)
+        raise typer.Exit(1) from error
+    if operator is not None:
+        operator = operator.strip()
+        with command():
+            with storage.database(db or storage.default_database()) as connection:
+                storage.register_operator(connection, operator)
+    Workspace(db or storage.default_database(), language=lang, operator=operator).run()
+
+
+@app.command("gui")
+def launch_gui():
+    """Open the Qt workspace / Ouvrir l’espace de travail Qt."""
+    from .session import supervise
+
+    raise typer.Exit(supervise([]))
+
+
 @app.command("doctor")
 def doctor_command():
     emit(doctor())

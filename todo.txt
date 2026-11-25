@@ -42,6 +42,10 @@ PHASE 05 — AFFAIRES, PREUVES ET ARCHIVES
     l’intégrité, la chaîne de custody et les restaurations entre postes.
 
 PHASE 06 — TUI TEXTUAL ET MIGRATION FONCTIONNELLE
+[x] Premier lot Textual : tableau de bord, sélection de l’opérateur, création
+    et activation d’une affaire, enregistrement et vérification de preuves,
+    état des montages et catalogue. Lanceurs vigil tui et vigil gui.
+    Test Textual hors écran avec création et audit SHA-256.
 [ ] Migrer Dashboard, Investigation (Affaire en cours, Actions rapides) et
     Système (Entité, Catalogue). Intégrer Sources, Explorateur, Preuves,
     Analyses, Rapports, Historique et Export à l’affaire active.
