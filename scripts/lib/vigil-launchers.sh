@@ -32,6 +32,7 @@ vigil_owned_launcher() {
         return 1
     fi
     vigil_wrapper "$file" vigil.cli:app "$site" ||
+        vigil_wrapper "$file" vigil.session:main "$site" ||
         vigil_wrapper "$file" vigil.desktop:main "$site" ||
         { [ -f "$file" ] && { cmp -s -- "$file" "$site/scripts/Vigil-CLI/vigil" ||
                              cmp -s -- "$file" "$site/scripts/post-install/vigil-qt"; }; }
@@ -80,7 +81,7 @@ vigil_publish_launchers() {
     vigil_launchers_preflight "$@" || return 1
     vigil_wrapper "$site/.venv/bin/vigil" vigil.cli:app "$site" ||
         { launcher_conflict "$site/.venv/bin/vigil"; return 1; }
-    vigil_wrapper "$site/.venv/bin/vigil-gui" vigil.desktop:main "$site" ||
+    vigil_wrapper "$site/.venv/bin/vigil-gui" vigil.session:main "$site" ||
         { launcher_conflict "$site/.venv/bin/vigil-gui"; return 1; }
     "$site/.venv/bin/vigil" --version || return 1
     vigil_publish_link "$site/.venv/bin/vigil" "$local_bin/vigil" || return 1

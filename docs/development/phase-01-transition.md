@@ -125,3 +125,40 @@ restent dans `legacy-custody/<id-affaire>` à côté de la base SQLite.
 Le journal Qt enregistre la demande, et le terminal externe affiche le
 résultat du script. Le helper expérimental reste disponible pour sa
 recette séparée. Les limites du parcours historique s’appliquent.
+
+## Bilan de fermeture de la session Qt
+
+`vigil-gui` supervise le processus Qt le temps de la session. À la sortie
+ordinaire, sur erreur de démarrage ou sur signal du processus Qt, il
+présente le code de sortie, l’état des montages et le reçu hotplug dans
+le terminal système. Appuyer sur Entrée pour fermer ce terminal. Le
+rapport JSON est enregistré dans `data/state/shutdown-reports` pour
+une installation dans `/opt/vigil`. Si l’émulateur ne peut pas être
+lancé, le rapport est également imprimé dans le terminal appelant
+lorsqu’il y en a un.
+
+Le reçu indique quels modes bloc ont été vérifiés, quels supports ne
+sont plus présents et quelles exclusions udev de Vigil ont été levées.
+Il signale une autre session encore active. Le journal protégé de Vigil
+conserve les changements dont la restitution n’a pas pu être confirmée.
+La touche R propose de réessayer cette restitution ciblée, avec sudo
+interactif, lorsque le bilan indique un échec ou un reçu indisponible
+après un arrêt anormal. Elle ne démonte aucun volume et le broker refuse
+la restitution si une autre session Vigil est active. Les réglages
+administrateur d’UDisks et les modes des autres périphériques restent
+sous la responsabilité de l’OS.
+
+Après mise à jour, fermer toutes les sessions Vigil puis réinstaller
+le lanceur Python et actualiser le broker et la règle udev existants.
+
+```sh
+cd /opt/vigil
+bash scripts/post-install/update-cli.sh
+sh scripts/post-install/install-hotplug.sh
+```
+
+Un arrêt brutal de l’ensemble de la machine ou du superviseur peut
+empêcher l’affichage du terminal. Le watcher privilégié agit sur la
+sortie du processus Qt tant qu’il reste en vie. Avant de revenir à une
+révision antérieure, terminer la session et vérifier le bilan, puis
+réinstaller le lanceur et le broker de cette révision.

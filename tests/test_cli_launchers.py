@@ -40,7 +40,7 @@ class CliLaunchersTest(unittest.TestCase):
         python.write_text("#!/bin/sh\nexit 0\n")
         python.chmod(0o755)
         self.wrapper("vigil", "cli", "app")
-        self.wrapper("vigil-gui", "desktop", "main")
+        self.wrapper("vigil-gui", "session", "main")
         # The tests run the generated wrapper against an interpreter fixture.
         # Real installed entry points are exercised separately in the packaging smoke test.
 

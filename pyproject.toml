@@ -13,7 +13,7 @@ desktop = ["PySide6-Essentials>=6.7,<7"]
 
 [project.scripts]
 vigil = "vigil.cli:app"
-vigil-gui = "vigil.desktop:main"
+vigil-gui = "vigil.session:main"
 
 [tool.setuptools.packages.find]
 include = ["vigil"]

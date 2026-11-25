@@ -43,11 +43,38 @@ class HotplugTest(unittest.TestCase):
             (root / "part").write_text(json.dumps(part))
             (root / "disk").write_text(json.dumps(disk))
             restored = []
-            with patch.dict(restore.__globals__, {"ledger": lambda: root, "restore_device": restored.append}):
+            def absent(record):
+                restored.append(record)
+                return "absent"
+
+            with patch.dict(restore.__globals__, {"ledger": lambda: root, "restore_device": absent}):
                 restore()
             self.assertEqual(restored, [disk, part])
             self.assertEqual(list(root.iterdir()), [])
 
+
+    def test_cleanup_keeps_receipt_for_unverified_udev_and_retries(self):
+        cleanup = hotplug["cleanup"]
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            record = directory / "disk"
+            record.write_text(json.dumps({"device": "/dev/test", "partition": False,
+                                          "mode": 0, "node": "/sys/devices/test"}))
+            with patch.dict(cleanup.__globals__, {
+                "state_lock": nullcontext, "active": lambda: False, "ledger": lambda: directory,
+                "restore_device": lambda _: "restored",
+            }), patch("subprocess.run") as run:
+                run.return_value.stdout = "VIGIL_HOTPLUG_OWNS_IGNORE=1\n"
+                self.assertEqual(cleanup()["devices"][0]["state"], "unverified")
+                self.assertTrue(record.exists())
+                run.return_value.stdout = ""
+                self.assertEqual(cleanup()["devices"][0]["state"], "restored")
+                self.assertFalse(record.exists())
+
+    def test_cleanup_does_not_restore_during_another_session(self):
+        cleanup = hotplug["cleanup"]
+        with patch.dict(cleanup.__globals__, {"state_lock": nullcontext, "active": lambda: True}):
+            self.assertEqual(cleanup(), {"status": "other_session", "devices": []})
 
     def test_startup_explains_protection_before_sudo_prompt(self):
         scripts = SCRIPT.parents[1]

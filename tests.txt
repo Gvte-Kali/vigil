@@ -499,3 +499,10 @@ Recette interface et terminaux
 [ ] Dans le Gestionnaire d’affaires FR et EN, réduire la fenêtre au minimum.
     Vérifier que les actions restent visibles, que les deux imports sont
     accessibles sous « Importer » et que la suppression reste dans l’inspecteur.
+
+[ ] En VM, fermer normalement Vigil et vérifier le logo, les montages, le
+    reçu hotplug et la pause sur Entrée. Refaire sans activation sudo.
+[ ] En VM, arrêter le processus Qt par signal. Vérifier que le superviseur
+    affiche le bilan, puis simuler une restauration non confirmée et
+    vérifier la tentative ciblée avec R. Vérifier qu’un volume restant
+    monté est signalé et qu’une autre session conserve sa protection.

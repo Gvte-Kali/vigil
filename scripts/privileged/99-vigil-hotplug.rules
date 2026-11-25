@@ -1,7 +1,7 @@
 # Preserve the automount exclusion we own until the last Vigil session ends.
 ACTION=="change", SUBSYSTEM=="block", IMPORT{db}="VIGIL_HOTPLUG_OWNS_IGNORE", ENV{VIGIL_HOTPLUG_OWNS_IGNORE}=="1", IMPORT{program}="/usr/local/sbin/vigil-hotplug status"
 ACTION=="change", SUBSYSTEM=="block", ENV{VIGIL_HOTPLUG_ACTIVE}=="1", ENV{UDISKS_IGNORE}="1"
-ACTION=="change", SUBSYSTEM=="block", ENV{VIGIL_HOTPLUG_ACTIVE}=="0", ENV{VIGIL_HOTPLUG_OWNS_IGNORE}=""
+ACTION=="change", SUBSYSTEM=="block", ENV{VIGIL_HOTPLUG_ACTIVE}=="0", ENV{VIGIL_HOTPLUG_OWNS_IGNORE}=="1", ENV{UDISKS_IGNORE}="", ENV{VIGIL_HOTPLUG_OWNS_IGNORE}=""
 # Only physical block disks/partitions added while an authenticated session is active.
 ACTION=="add", SUBSYSTEM=="block", DEVPATH!="/devices/virtual/*", ENV{DEVTYPE}=="disk|partition", IMPORT{program}="/usr/local/sbin/vigil-hotplug protect $env{DEVNAME} $major $minor"
 ACTION=="add", SUBSYSTEM=="block", ENV{VIGIL_HOTPLUG}=="1", ENV{UDISKS_IGNORE}!="1", ENV{VIGIL_HOTPLUG_OWNS_IGNORE}="1", ENV{UDISKS_IGNORE}="1"
