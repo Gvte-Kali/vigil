@@ -54,12 +54,17 @@ class ActionCard(Button):
 
 
 class SectionPanel(Vertical):
-    def __init__(self, title, *widgets, id=None, classes=""):
-        super().__init__(*widgets, id=id, classes=f"section-panel {classes}")
-        self.section_title = title
+    def __init__(self, title, *widgets, id=None, classes="", glyph=None, description=""):
+        super().__init__(id=id, classes=f"section-panel {classes}")
+        self.section_title = f"{icon(glyph)}  {title}" if glyph else title
+        self.section_description = description
+        self.section_widgets = widgets
 
     def compose(self) -> ComposeResult:
         yield Static(Text(self.section_title), classes="heading")
+        if self.section_description:
+            yield Static(Text(self.section_description), classes="section-description")
+        yield from self.section_widgets
 
 
 class CardGrid(Grid):

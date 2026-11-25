@@ -25,6 +25,7 @@ from vigil.block_inventory import (
     fields, filesystem, idle, inspect_usb, usb_identity,
 )
 from vigil.device_manager import device_lease
+from vigil.destination import writable_destination
 from vigil_progress import Progress, sync_notice, duration, human_size, indeterminate, tr
 
 BLOCK_RO_SET = 0x125D
@@ -239,8 +240,8 @@ def create_image(source, size, directory, filename, owner=None, timings=None):
     folder = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     created = []
     try:
-        filesystem = os.fstatvfs(folder)
-        if filesystem.f_bavail * filesystem.f_frsize < size:
+        destination = writable_destination(directory, fd=folder)
+        if destination.available < size:
             raise ValueError(tr("Espace disponible insuffisant pour l’image.", "Insufficient free space for the image."))
         sums = filename + ".sha256"
         for name in (filename, sums):
@@ -380,7 +381,7 @@ def writable_target(disk, sequence, partition=None):
                 raise ValueError(f"Restauration de {disk['name']} : " + "; ".join(errors))
 
 
-def run(operation, local_default, *, local_directory=None, external=False, data_directory=None):
+def run(operation, local_default, *, local_directory=None, external=False, data_directory=None, filename=None):
     data_directory = data_directory or SCRIPT_DIR.parents[1] / "data"
     with tempfile.TemporaryDirectory(prefix="vigil-source-") as directory:
         approved = triage_usb(tr("Source", "Source"), directory, data_directory, allow_internal=True)
@@ -421,7 +422,7 @@ def run(operation, local_default, *, local_directory=None, external=False, data_
     if mode == "1":
         local = Path(local_directory if local_directory is not None else
                      input(tr(f"Dossier local existant [{local_default}] : ", f"Existing local folder [{local_default}]: ")).strip() or local_default)
-        local = local.resolve(strict=True)
+        local = writable_destination(local).path
         if not local.is_dir() or local.stat().st_uid != owner[0] or local.is_relative_to("/investigation"):
             raise ValueError(tr("Choisissez un dossier local existant qui vous appartient, hors de /investigation.", "Choose an existing local folder you own, outside /investigation."))
     else:
@@ -431,7 +432,7 @@ def run(operation, local_default, *, local_directory=None, external=False, data_
     print(f"\n  Source : {menu_text(source['name'])} · {menu_size(size)}")
     destination = local if mode == "1" else selected["name"]
     print(f"  Destination : {menu_text(destination)}\n")
-    filename = input(terminal_style(tr("Nom de l’image [acquisition.raw] : ", "Image filename [acquisition.raw] : "), "1;93")).strip() or "acquisition.raw"
+    filename = filename or input(terminal_style(tr("Nom de l’image [acquisition.raw] : ", "Image filename [acquisition.raw] : "), "1;93")).strip() or "acquisition.raw"
     if input(terminal_style(tr("Saisissez COPIER pour lancer l’acquisition : ", "Type COPIER to start acquisition : "), "1;93")).strip() != "COPIER":
         raise InterruptedError(tr("Imagerie annulée.", "Imaging cancelled."))
     timings, started = {}, time.monotonic()
@@ -458,10 +459,13 @@ def main():
     destination = parser.add_mutually_exclusive_group()
     destination.add_argument("--local-directory")
     destination.add_argument("--external", action="store_true")
+    parser.add_argument("--filename", help=argparse.SUPPRESS)
     parser.add_argument("--embedded-terminal", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.language:
         os.environ["VIGIL_LANG"] = args.language
+    if args.filename and args.local_directory is None:
+        parser.error("--filename requires --local-directory")
     if args.operation == "clone" and (args.local_directory is not None or args.external):
         parser.error(tr("Options de destination réservées à l’imagerie RAW.", "Destination options are only available for RAW imaging."))
     if os.geteuid() != 0 or "SUDO_UID" not in os.environ:
@@ -486,7 +490,7 @@ def main():
     try:
         with device_lease():
             run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external,
-                data_directory=args.data_directory)
+                data_directory=args.data_directory, filename=args.filename)
         return 0
     except (OSError, ValueError, KeyError, subprocess.SubprocessError, KeyboardInterrupt, EOFError) as error:
         diagnostic = getattr(error, "stderr", None) or str(error)

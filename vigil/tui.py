@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from datetime import datetime
 from importlib.metadata import PackageNotFoundError, version
 from uuid import uuid4
 
@@ -30,6 +31,7 @@ from .quick_actions import acquisition_command, legacy_mount_command, storage_co
 from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .shutdown_state import check_shutdown_state
 from .tui_screens import Form, Operation
+from .tui_picker import FileSystemPicker, PickerOptions
 from .tui_widgets import ActionCard, CardGrid, MetricCard, NavigationItem, SectionPanel, StatusIndicator, icon, supports_unicode
 from .entity import FIELDS, data_directory, legacy_base, load_entity, save_entity
 from .system_info import cpu_ticks, system_metrics
@@ -54,7 +56,7 @@ def logo():
     source = legacy_base() / "data/icons/vigil.svg"
     if not source.is_file():
         source = Path(sys.prefix) / "share/vigil/vigil.svg"
-    return render_logo(source, "18x4") or Text("Vigil", style="bold")
+    return render_logo(source, "32x8") or Text("Vigil", style="bold")
 
 
 def organization_logo(data, relative_path):
@@ -87,6 +89,8 @@ class Workspace(App):
         self.manager_open = True
         self.sidebar_manual = False
         self.cpu_sample = None
+        self.disk_rows = None
+        self.dashboard_refreshing = False
         try:
             self.release = version("vigil-dfir")
         except PackageNotFoundError:
@@ -118,6 +122,7 @@ class Workspace(App):
             yield Static(self.brand, id="brand")
             yield Static(id="session")
             yield b("sidebar-toggle", icon("menu"), icon("menu"))
+            yield b("quit", "Quitter", "Quit")
             if supports_unicode():
                 yield b("language", "🇫🇷 FR / EN 🇬🇧", "🇫🇷 FR / EN 🇬🇧")
             else:
@@ -145,6 +150,7 @@ class Workspace(App):
                     yield b("protect", "Activer la protection USB", "Enable USB protection")
                     yield b("review-session", "Bilan des sessions", "Session reports")
                 with Vertical(id="cases"):
+                    yield Static(t("Gestionnaire d’affaires", "Case manager"), classes="heading", id="manager-title")
                     with Horizontal(id="case-tools"):
                         yield Input(placeholder=t("Rechercher une affaire", "Search cases"), id="case-search")
                         yield Select([("A–Z", "name"), ("Z–A", "name-desc"),
@@ -153,14 +159,15 @@ class Workspace(App):
                                      value="name", allow_blank=False, id="case-sort")
                     with Horizontal(classes="master-detail", id="case-manager"):
                         yield DataTable(id="case-table", cursor_type="row")
-                        with VerticalScroll(classes="panel"):
+                        with VerticalScroll(classes="panel", id="manager-actions"):
                             yield Static(id="case-detail")
-                    with Horizontal(classes="actions", id="manager-actions"):
-                        yield b("create-case", "Créer une affaire", "Create case", variant="primary")
-                        yield b("import-case", "Importer…", "Import…")
-                        yield b("delete-case", "Supprimer", "Delete", classes="destructive")
-                        yield b("close-manager", "Revenir à l’affaire", "Back to case")
-                        yield b("activate-case", "Valider la sélection", "Confirm selection", variant="primary")
+                            yield SectionPanel(t("Actions de l’affaire", "Case actions"),
+                                b("activate-case", "Ouvrir l’affaire", "Open case", variant="primary"),
+                                b("delete-case", "Supprimer l’affaire", "Delete case", classes="destructive"))
+                            yield SectionPanel(t("Gestion des affaires", "Manage cases"),
+                                b("create-case", "Créer une affaire", "Create case", classes="success-action"),
+                                b("import-case", "Importer…", "Import…", classes="violet-action"),
+                                b("close-manager", "Revenir à l’affaire active", "Back to active case"))
                     with Vertical(id="case-workspace"):
                         yield Static(id="case-heading", classes="heading")
                         with Horizontal(classes="actions"):
@@ -184,7 +191,9 @@ class Workspace(App):
                                     yield b("reload-explorer", "Actualiser les sources", "Refresh sources")
                             with TabPane(t("Preuves", "Evidence"), id="evidence"):
                                 yield DataTable(id="evidence-table", cursor_type="row")
-                                yield Input(placeholder=t("Chemin du fichier", "File path"), id="evidence-path")
+                                with Horizontal(id="evidence-picker-line"):
+                                    yield Input(placeholder=t("Chemin du fichier", "File path"), id="evidence-path")
+                                    yield b("browse-evidence", "Parcourir…", "Browse…")
                                 with Horizontal(classes="actions"):
                                     yield b("add-evidence", "Ajouter", "Add", variant="primary")
                                     yield b("verify-evidence", "Vérifier la copie", "Verify copy")
@@ -226,7 +235,8 @@ class Workspace(App):
                         ActionCard(t("Rapports antivirus", "Antivirus reports"),
                                    t("Retrouver les rapports de scan.", "Find previous scan reports."),
                                    "report", id="quick-reports", classes="reports-card"),
-                    ), id="antivirus-group", classes="quick-group")
+                    ), id="antivirus-group", classes="quick-group", glyph="scan",
+                       description=t("Analyse et mise à jour des signatures.", "Scan media and update signatures."))
                     yield SectionPanel(t("Stockage", "Storage"), CardGrid(
                         ActionCard(t("Monter un stockage", "Mount storage"),
                                    t("Connecter un support de travail en RW.", "Connect a work drive read-write."),
@@ -234,15 +244,17 @@ class Workspace(App):
                         ActionCard(t("Démonter le stockage", "Unmount storage"),
                                    t("Libérer le support de travail.", "Release the work drive."),
                                    "unmount", id="storage-unmount"),
-                    ), id="storage-group", classes="quick-group")
+                    ), id="storage-group", classes="quick-group", glyph="cases",
+                       description=t("Supports de travail en lecture-écriture.", "Read-write work drives."))
                     yield SectionPanel("Acquisition", CardGrid(
                         ActionCard(t("Cloner un disque", "Clone a disk"),
                                    t("Copier bit à bit vers un disque cible.", "Copy bit for bit to a target disk."),
                                    "clone", id="clone", classes="destructive"),
                         ActionCard(t("Créer une image RAW", "Create a RAW image"),
                                    t("Enregistrer une image vérifiée.", "Save a verified disk image."),
-                                   "raw", id="raw"),
-                    ), id="acquisition-group", classes="quick-group")
+                                   "raw", id="raw", classes="sensitive"),
+                    ), id="acquisition-group", classes="quick-group", glyph="raw",
+                       description=t("Clonage et images forensiques vérifiées.", "Verified disk clones and forensic images."))
                 with VerticalScroll(id="entity"):
                     yield Static(t("Configuration de l’entité", "Organization settings"), classes="heading")
                     yield Static(id="entity-config", classes="panel")
@@ -271,7 +283,7 @@ class Workspace(App):
     async def on_mount(self):
         await self.initialize_workspace()
         self.adjust_sidebar()
-        self.set_interval(3, self.refresh_metrics)
+        self.set_interval(3, self.refresh_dashboard)
         if os.environ.get("VIGIL_SESSION_ID"):
             if not self.operator:
                 await self.choose_session_operator()
@@ -380,7 +392,16 @@ class Workspace(App):
     def refresh_evidence_buttons(self):
         disabled = self.evidence_busy or not self.active_case or not self.operator
         self.query_one("#add-evidence", Button).disabled = disabled
+        self.query_one("#browse-evidence", Button).disabled = disabled
         self.query_one("#verify-evidence", Button).disabled = disabled or not self.table("evidence-table").row_count
+
+    def date_label(self, value):
+        if not value:
+            return "—"
+        try:
+            return datetime.fromisoformat(value).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return value
 
     def refresh_case_detail(self, row=None):
         t = self.tr
@@ -391,8 +412,8 @@ class Workspace(App):
                 row["name"],
                 f"{t('Référence', 'Reference')} : {row.get('reference') or '—'}",
                 f"{t('Opérateur', 'Operator')} : {row.get('operator') or '—'}",
-                f"{t('Création', 'Created')} : {row.get('created_at') or '—'}",
-                f"{t('Dernière activité', 'Last activity')} : {row.get('latest') or '—'}",
+                f"{t('Création', 'Created')} : {self.date_label(row.get('created_at'))}",
+                f"{t('Dernière activité', 'Last activity')} : {self.date_label(row.get('latest'))}",
                 f"{t('Dossier', 'Directory')} : {row.get('directory') or '—'}",
                 f"{t('Preuves', 'Evidence')} : {row['evidence_count']}",
                 row.get("description") or "",
@@ -422,9 +443,10 @@ class Workspace(App):
         self.replace_rows("evidence-table", ((row["id"], (row["path"], row["size"], row["sha256"])) for row in rows))
         self.refresh_evidence_buttons()
 
-    async def refresh_mounts(self):
+    async def refresh_mounts(self, rows=None):
         t = self.tr
-        rows = await asyncio.to_thread(device_manager.status)
+        if rows is None:
+            rows = await asyncio.to_thread(device_manager.status)
         self.replace_rows("mount-table", (
             (str(index), (r["mountpoint"], r["path"], r.get("mount_mode", "—"),
                           t("Vérifié", "Verified") if r["verified"] else r.get("error", t("Non vérifié", "Unverified"))))
@@ -469,11 +491,7 @@ class Workspace(App):
                                                   for key, item in sorted(self.manifests.items())
                                                   if item.category == "analysis"))
             self.query_one("#module-errors", Static).update(Text("\n".join(map(str, errors))))
-            tree = self.query_one("#disk-tree", Tree)
-            tree.clear()
-            for row in await asyncio.to_thread(device_manager.inventory):
-                self.add_disk(tree.root, row)
-            tree.root.expand()
+            self.render_disk_tree(await asyncio.to_thread(device_manager.inventory), force=True)
             await self.refresh_case_views()
         except CORE_ERRORS as error:
             self.notify_error(error)
@@ -596,9 +614,51 @@ class Workspace(App):
         if isinstance(self.screen, Operation) or self.evidence_busy:
             self.notify(self.tr("Attendez la fin de la vérification ou de la copie.",
                                 "Wait for the verification or copy to finish."), severity="warning")
-        else:
-            self.ask("quit", self.tr("Fermer Vigil", "Close Vigil"),
-                     message=self.tr("Confirmer la fermeture de Vigil ?", "Confirm closing Vigil?"))
+        elif len(self.screen_stack) == 1:
+            self.push_screen(Form(self.tr("Fermer Vigil", "Close Vigil"), self.tr,
+                                  message=self.tr("Confirmer la fermeture de Vigil ?", "Confirm closing Vigil?")),
+                             lambda answer: self.call_later(self.confirm_quit) if answer is not None else None)
+
+    async def confirm_quit(self):
+        try:
+            await asyncio.to_thread(check_shutdown_state)
+        except CORE_ERRORS as error:
+            self.info(self.tr("Fermeture suspendue", "Close blocked"), error)
+            return
+        self.exit()
+
+    def render_disk_tree(self, rows, *, force=False):
+        if not force and rows == self.disk_rows:
+            return
+        self.disk_rows = rows
+        tree = self.query_one("#disk-tree", Tree)
+        tree.clear()
+        for row in rows:
+            self.add_disk(tree.root, row)
+        tree.root.expand()
+
+    async def refresh_dashboard(self):
+        if len(self.screen_stack) != 1 or self.current_page != "dashboard" or self.dashboard_refreshing:
+            return
+        self.dashboard_refreshing = True
+        try:
+            case = self.active_case
+            mounts, disks, activity = await asyncio.gather(
+                asyncio.to_thread(device_manager.status),
+                asyncio.to_thread(device_manager.inventory),
+                asyncio.to_thread(self.dashboard_activity, case),
+            )
+            if len(self.screen_stack) == 1 and self.current_page == "dashboard":
+                self.refresh_metrics()
+                await self.refresh_mounts(mounts)
+                self.render_disk_tree(disks)
+                if self.active_case == case:
+                    self.show_activity(activity)
+        except CORE_ERRORS as error:
+            if len(self.screen_stack) == 1:
+                self.query_one("#mount-summary", Static).update(Text(str(error)))
+        finally:
+            self.dashboard_refreshing = False
 
     def adjust_sidebar(self):
         sidebars = self.query("#sidebar")
@@ -644,6 +704,7 @@ class Workspace(App):
 
     def show_case_manager(self, opened):
         self.manager_open = opened or not self.active_case
+        self.query_one("#manager-title").display = self.manager_open
         self.query_one("#case-tools").display = self.manager_open
         self.query_one("#case-manager").display = self.manager_open
         self.query_one("#manager-actions").display = self.manager_open
@@ -746,8 +807,18 @@ class Workspace(App):
             (str(key), (r["timestamp"], r["operator"], r["action"])) for key, r in self.history_rows.items()
         ))
         self.query_one("#earlier-events", Button).disabled = len(rows) < PAGE_SIZE
+        if not earlier and not query:
+            self.show_activity(rows[:4])
+
+    def dashboard_activity(self, case):
+        if not case:
+            return []
+        with storage.database(self.state) as connection:
+            return case_events(connection, case, limit=4)
+
+    def show_activity(self, rows):
         activity = self.query_one("#recent-activity", Static)
-        activity.update(Text("\n".join(f"{r['timestamp']} · {r['action']}" for r in rows[:4]) or
+        activity.update(Text("\n".join(f"{self.date_label(r['timestamp'])} · {r['action']}" for r in rows) or
                              self.tr("Aucune activité d’affaire.", "No case activity.")))
 
     async def refresh_reports(self):
@@ -837,9 +908,6 @@ class Workspace(App):
         self.refresh_evidence_buttons()
         try:
             match action:
-                case "quit":
-                    await asyncio.to_thread(check_shutdown_state)
-                    await super().action_quit()
                 case "session-operator":
                     name = response["name"] or response["choice"]
                     try:
@@ -917,6 +985,43 @@ class Workspace(App):
             if self.is_running:
                 self.refresh_evidence_buttons()
 
+    def pick_path(self, title, options, callback, *, initial=None):
+        case = self.case_rows.get(self.active_case)
+        custody = self.state.parent / "legacy-custody" / case["directory"] if case else None
+        self.push_screen(FileSystemPicker(title, self.tr, options, initial=initial, case_directory=custody),
+                         lambda path: callback(path) if path is not None else None)
+
+    def pick_for(self, action, title, options, *, initial=None, fields=None):
+        self.pick_path(title, options,
+                       lambda path: self.submit_form(action, {**(fields or {}), "path": str(path)}),
+                       initial=initial)
+
+    def choose_import(self, answer):
+        if answer is not None:
+            legacy = answer["choice"] == "legacy"
+            self.pick_for("import-case", self.tr("Choisir le projet ou l’archive", "Choose project or archive"),
+                          PickerOptions("directory" if legacy else "open", () if legacy else (".tar.gz",)),
+                          fields=answer)
+
+    def choose_logo(self, answer):
+        if answer is None:
+            return
+        if answer["choice"] == "remove":
+            self.submit_form("entity-logo", answer)
+        else:
+            self.pick_for("entity-logo", self.tr("Choisir le logo", "Choose logo"),
+                          PickerOptions("open", (".png", ".jpg", ".jpeg")), fields=answer)
+
+    def choose_raw(self, answer):
+        if answer is None:
+            return
+        if answer["choice"] == "usb":
+            self.submit_form("raw", answer)
+        else:
+            self.pick_for("raw", self.tr("Enregistrer l’image RAW", "Save RAW image"),
+                          PickerOptions("save", (".raw",), writable=True, acquisition=True),
+                          initial=Path.home() / "acquisition.raw", fields=answer)
+
     def form_path(self, path):
         if not path:
             raise ValueError(self.tr("Indiquez un chemin.", "Enter a path."))
@@ -947,8 +1052,15 @@ class Workspace(App):
             self.notify(t("Choisissez un opérateur dans Entité.", "Choose an operator under Entity."), severity="warning")
             self.show_page("entity")
             return
-        path_field = (("path", t("Chemin", "Path"), ""),)
         match action:
+            case "quit":
+                await self.action_quit()
+            case "browse-evidence":
+                field = self.query_one("#evidence-path", Input)
+                def select_evidence(path):
+                    field.value = str(path)
+                self.pick_path(t("Choisir une preuve", "Choose evidence"), PickerOptions("open"),
+                               select_evidence, initial=field.value or None)
             case "sidebar-toggle":
                 self.sidebar_manual = True
                 self.query_one("#sidebar").toggle_class("compact")
@@ -964,10 +1076,10 @@ class Workspace(App):
                 self.show_case_manager(True)
                 await self.refresh_case_views()
             case "import-case":
-                self.ask(action, t("Importer une affaire", "Import case"), path_field, choices=(
-                    (t("Archive Vigil", "Vigil archive"), "archive"),
-                    (t("Ancien projet (dossier)", "Legacy project folder"), "legacy"),
-                ))
+                self.push_screen(Form(t("Importer une affaire", "Import case"), t, choices=(
+                    ("Vigil 2.0 · " + t("Archive", "Archive"), "archive"),
+                    ("Vigil 1.0 · " + t("Dossier du projet", "Project folder"), "legacy"),
+                )), self.choose_import)
             case "delete-case" | "delete-evidence":
                 table = "case-table" if action == "delete-case" else "evidence-table"
                 if key := self.selected_key(table):
@@ -981,10 +1093,10 @@ class Workspace(App):
                 self.ask(action, t("Configuration de l’entité", "Organization settings"),
                          tuple((key, label, str(config.get(key) or "")) for key, label in zip(FIELDS, labels)))
             case "entity-logo":
-                self.ask(action, t("Logo de l’entité", "Organization logo"), path_field, choices=(
+                self.push_screen(Form(t("Logo de l’entité", "Organization logo"), t, choices=(
                     (t("Charger un PNG ou JPEG", "Load a PNG or JPEG"), "import"),
                     (t("Retirer le logo", "Remove logo"), "remove"),
-                ))
+                )), self.choose_logo)
             case "review-session":
                 pending = await self.pending_protection_reports()
                 if not pending:
@@ -996,15 +1108,18 @@ class Workspace(App):
             case "create-module":
                 self.ask(action, t("Créer un module", "Create module"), (("name", t("Nom", "Name"), ""),))
             case "inspect-image":
-                self.ask(action, t("Inspecter une image RAW", "Inspect a RAW image"), path_field)
+                self.pick_for(action, t("Inspecter une image RAW", "Inspect a RAW image"),
+                              PickerOptions("open", (".raw", ".dd", ".img", ".iso")))
             case "export-case":
-                self.ask(action, t("Créer l’archive complète", "Create full archive"), path_field)
+                self.pick_for(action, t("Dossier de destination de l’archive", "Archive destination folder"),
+                              PickerOptions("directory", writable=True))
             case "query-index":
-                self.ask(action, t("Index de recensement", "Census index"), path_field)
+                self.pick_for(action, t("Index de recensement", "Census index"),
+                              PickerOptions("open", (".sqlite", ".sqlite3", ".db")))
             case "raw":
-                self.ask(action, t("Destination de l’image RAW", "RAW image destination"),
-                         (("path", t("Dossier local (si choisi)", "Local directory (if selected)"), str(Path.home())),),
-                         choices=((t("Dossier local", "Local folder"), "local"), (t("Périphérique USB", "USB device"), "usb")))
+                self.push_screen(Form(t("Destination de l’image RAW", "RAW image destination"), t,
+                                      choices=((t("Dossier local", "Local folder"), "local"),
+                                               (t("Périphérique USB", "USB device"), "usb"))), self.choose_raw)
             case "clone":
                 self.ask(action, t("Cloner un disque", "Clone a disk"),
                          message=t("Les données du disque de destination seront écrasées.",
@@ -1033,12 +1148,19 @@ class Workspace(App):
                 await self.refresh_reports()
             case "report-location":
                 if key := self.selected_key("report-table"):
-                    self.info(t("Rapport PDF", "PDF report"), self.report_paths[key.value])
+                    title = t("Rapport PDF", "PDF report")
+                    self.pick_path(title, PickerOptions("open", (".pdf",)), lambda path: self.info(title, path),
+                                   initial=self.report_paths[key.value])
             case "quick-reports":
                 with storage.database(self.state) as connection:
                     case = storage.find_antivirus_case(connection)
                 paths = await asyncio.to_thread(case_pdf_reports, self.state, case) if case else []
-                self.info(t("Rapports antivirus", "Antivirus reports"), "\n".join(map(str, paths)) or "—")
+                title = t("Rapports antivirus", "Antivirus reports")
+                if paths:
+                    self.pick_path(title, PickerOptions("open", (".pdf",)), lambda path: self.info(title, path),
+                                   initial=paths[0])
+                else:
+                    self.info(title, t("Aucun rapport.", "No reports."))
             case "analysis-results" if self.active_case:
                 directory = await asyncio.to_thread(storage.case_storage_directory, self.state, self.active_case)
                 results = directory / "analyses"
@@ -1052,9 +1174,12 @@ class Workspace(App):
         match action:
             case "raw":
                 external = fields["choice"] == "usb"
+                selected = None if external else self.form_path(fields["path"])
                 argv = acquisition_command("image", external=external,
-                                           local_directory=None if external else self.form_path(fields["path"]),
+                                           local_directory=selected.parent if selected else None,
                                            language=self.language)
+                if selected:
+                    argv.extend(("--filename", selected.name))
                 argv.append("--embedded-terminal")
             case "clone":
                 argv = [*acquisition_command("clone", language=self.language), "--embedded-terminal"]

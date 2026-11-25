@@ -21,7 +21,7 @@ et les protections sont celles du Core courant de `vigil-2.0`.
 ## Présentation du terminal intégré
 
 Les actions rapides s’affichent en cartes, sur une à trois colonnes selon la
-largeur. L’en-tête accueille le logo SVG rendu sur quatre lignes. Les icônes se replient en ASCII sur
+largeur. L’en-tête accueille le logo SVG rendu par Chafa sur huit lignes. Les icônes se replient en ASCII sur
 un terminal non UTF-8 ou avec `VIGIL_ASCII=1`.
 
 Le terminal intégré conserve les messages dans le journal et met les étapes

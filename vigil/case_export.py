@@ -13,6 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from .case_import import verify_archive
+from .destination import writable_destination
 from .history import case_events
 from .report_copies import sync_report_copies
 from .storage import audit, case_storage_directory, database, evidence_copy_path, file_identity, require_active_case, utc_now
@@ -112,9 +113,7 @@ def collect_results(state, case_id, custody, legacy):
 
 
 def export_case(state, case_id, operator, destination):
-    destination = destination.resolve(strict=True)
-    if not destination.is_dir() or destination.is_relative_to("/investigation"):
-        raise ValueError("export destination must be outside /investigation")
+    destination = writable_destination(destination).path
     custody = case_storage_directory(state, case_id)
     with database(state) as connection:
         case = dict(require_active_case(connection, case_id))
@@ -136,6 +135,7 @@ def export_case(state, case_id, operator, destination):
         audit(connection, operator, case_id, "case.export.start", {})
         events = case_events(connection, case_id, limit=None)
 
+    writable_destination(destination)
     stage = Path(tempfile.mkdtemp(prefix=".vigil-export-", dir=destination))
     final = destination / f"affaire-{case_id[:8]}-{uuid4().hex}"
     published = False

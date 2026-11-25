@@ -51,6 +51,11 @@ PHASE 06 — TUI TEXTUAL ET MIGRATION FONCTIONNELLE
     Lanceurs supervisés vigil, vigil tui et vigil-tui.
 [x] Thème TUI compact et cartes adaptatives. Progression intégrée par étape.
     Bilan de restitution accessible depuis l’activation de la protection USB.
+[x] Sélecteur natif Textual pour dossiers, fichiers et enregistrement.
+    Les destinations RAW locales sont revérifiées avant écriture.
+[x] Gestionnaire d’affaires maître-détail et catégories d’actions ordonnées.
+[x] Fermeture Textual après confirmation et actualisation automatique du
+    tableau de bord. Logo Chafa agrandi dans l’en-tête.
 [ ] Recette matérielle et fin de la parité : voir docs/development/tui-parity.md.
 [ ] Migrer Dashboard, Investigation (Affaire en cours, Actions rapides) et
     Système (Entité, Catalogue). Intégrer Sources, Explorateur, Preuves,
