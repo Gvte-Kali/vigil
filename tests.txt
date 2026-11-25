@@ -425,3 +425,10 @@ Recette interface et terminaux
     root:root 0755. Vérifier le refus si /stockage est un lien ou contient
     un montage. Vérifier que le post-install complet continue de refuser
     une règle sudoers Vigil historique encore installée.
+
+
+[ ] Au démarrage de Vigil, vérifier que le terminal affiche la bannière,
+    l’explication FR/EN et le périmètre de la protection avant le mot de
+    passe sudo. Tester l’activation et l’annulation en VM.
+[ ] Vérifier la bannière des scripts de maintenance et l’absence de
+    décoration dans les sorties techniques consommées par Vigil.

@@ -67,6 +67,7 @@ PHASE 01 — SECURITE
     Protection à chaud des disques physiques via udev pendant une session
     autorisée au démarrage. Restauration des modes bloc et de l’automontage
     après la dernière session, avec vérification d’identité.
+    Bannière et explication FR/EN avant l’autorisation sudo au démarrage.
     Recette Parrot du verrouillage avant UDisks et de sa restauration ouverte.
     Recette en VM ouverte.
     Revue des accès dans docs/development/permissions-audit.md.

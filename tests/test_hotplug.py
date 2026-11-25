@@ -1,6 +1,7 @@
 import io
 import json
 import runpy
+import subprocess
 import tempfile
 import unittest
 from contextlib import nullcontext, redirect_stdout
@@ -46,3 +47,26 @@ class HotplugTest(unittest.TestCase):
                 restore()
             self.assertEqual(restored, [disk, part])
             self.assertEqual(list(root.iterdir()), [])
+
+
+    def test_startup_explains_protection_before_sudo_prompt(self):
+        scripts = SCRIPT.parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "lib").mkdir()
+            (root / "lib/vigil-terminal.sh").write_bytes((scripts / "lib/vigil-terminal.sh").read_bytes())
+            (root / "post-install").mkdir()
+            script = root / "post-install/activate-hotplug.sh"
+            # Keep the success branch runnable with a shell function replacing sudo.
+            startup = (scripts / "post-install/activate-hotplug.sh").read_text().replace(
+                "/usr/bin/sudo --", "mock_sudo --"
+            ).replace("set -eu", "set -eu\nmock_sudo() { echo MOCK_SUDO; }")
+            script.write_text(startup)
+            result = subprocess.run(["/bin/sh", str(script), "123"], capture_output=True,
+                                    text=True, check=True, timeout=5)
+            output = result.stdout
+            self.assertIn("█   █ ███", output)
+            self.assertLess(output.index("FR — Autorisez sudo"), output.index("MOCK_SUDO"))
+            self.assertLess(output.index("EN — Authorise sudo"), output.index("MOCK_SUDO"))
+            self.assertIn("Protection enabled.", output)
+            self.assertNotIn(chr(27), output)

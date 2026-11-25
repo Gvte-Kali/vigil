@@ -199,6 +199,16 @@ def main():
               file=sys.stderr)
         return 2
     operation = sys.argv[1]
+    if sys.stdout.isatty():
+        banner = """█   █ ███  ███  ███ █
+█   █  █  █      █  █
+█   █  █  █  ██  █  █
+ █ █   █  █   █  █  █
+  █   ███  ███  ███ █████
+
+Vigil · Montage privilégié / Privileged mounting"""
+        color = os.environ.get("TERM") not in (None, "dumb") and "NO_COLOR" not in os.environ
+        print(f"\033[96m{banner}\033[0m\n" if color else f"{banner}\n")
     caller = os.environ.get("SUDO_UID", "0")
     caller = caller if caller.isascii() and caller.isdigit() else "unknown"
     receipt = RUN / "receipt"

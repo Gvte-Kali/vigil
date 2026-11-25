@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
 
+script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+. "$script_directory/../lib/vigil-terminal.sh"
+
+vigil_banner 'Vigil · Préparation de /stockage / Preparing /stockage'
+printf '%s\n' 'FR — sudo prépare le dossier /stockage démonté avec les permissions root:root 0755.' \
+    'EN — sudo prepares the unmounted /stockage directory with root:root 0755 permissions.' ''
+
 target=/stockage
 if ! mounts=$(findmnt -rn -o TARGET); then
     echo "Impossible de vérifier les montages de /stockage." >&2

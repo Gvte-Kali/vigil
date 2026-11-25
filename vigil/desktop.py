@@ -1676,13 +1676,11 @@ class Workspace(QMainWindow):
         if not Path(helper).is_file():
             return
         try:
-            launch_terminal([
-                "/usr/bin/bash", "-c",
-                'printf "%s\n" "Vigil · Protection des nouveaux disques"; '
-                'if /usr/bin/sudo -- "$@"; then exit 0; fi; '
-                'read -r -p "Protection inactive. Entrée / Enter"; exit 1',
-                "vigil", helper, "activate", str(os.getpid()),
-            ], self.settings.value("external_terminal", ""))
+            script = legacy_base() / "scripts/post-install/activate-hotplug.sh"
+            if not script.is_file():
+                raise FileNotFoundError(script)
+            launch_terminal(["/usr/bin/sh", str(script), str(os.getpid())],
+                            self.settings.value("external_terminal", ""))
         except (OSError, ValueError) as error:
             self.statusBar().showMessage(str(error), 10000)
 

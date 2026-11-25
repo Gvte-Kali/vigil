@@ -1,12 +1,17 @@
 #!/bin/bash
 
+if [ -t 1 ]; then
+    . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+    vigil_banner 'Vigil · Montage / Mount'
+fi
+
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 # --- Couleurs ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+RED='\033[91m'
+GREEN='\033[92m'
+YELLOW='\033[93m'
+BLUE='\033[96m'
 NC='\033[0m'
 
 # --- Vérifier les arguments ---

@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+. "$script_directory/../lib/vigil-terminal.sh"
+
+vigil_banner 'Vigil · Installation de Vigil / Vigil installation'
+printf '%s\n' 'FR — sudo prépare les dossiers système, installe les dépendances et configure Vigil sur ce poste.' \
+    'EN — sudo prepares system folders, installs dependencies and configures Vigil on this workstation.' ''
+
 # Les installations existantes doivent retirer la règle héritée manuellement.
 sudo -v
 if sudo test -e /etc/sudoers.d/vigil; then
