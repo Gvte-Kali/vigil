@@ -238,11 +238,13 @@ if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
     if [ ! -e "$STOCKAGE_DIR" ] && [ ! -L "$STOCKAGE_DIR" ]; then
         sudo mkdir -m 0755 -- "$STOCKAGE_DIR" || fail "Impossible de créer $STOCKAGE_DIR."
     fi
-    [ "$(realpath -e -- "$STOCKAGE_DIR")" = "$STOCKAGE_DIR" ] &&
-        [ "$(stat -c '%u:%a' -- "$STOCKAGE_DIR")" = "0:755" ] ||
-        fail "$STOCKAGE_DIR doit être un répertoire root en mode 0755."
     if mountpoint -q -- "$STOCKAGE_DIR" || [ -n "$(list_mounts_under_stockage)" ]; then
         fail "Un montage existe sous /stockage. Utilisez d’abord Démonter le stockage."
+    fi
+    if [ ! -d "$STOCKAGE_DIR" ] || [ "$(realpath -e -- "$STOCKAGE_DIR")" != "$STOCKAGE_DIR" ] ||
+       [ "$(stat -c '%u:%a' -- "$STOCKAGE_DIR")" != "0:755" ]; then
+        echo "État constaté : $(stat -c '%F, propriétaire %U:%G, mode %a' -- "$STOCKAGE_DIR" 2>/dev/null || echo 'indisponible')"
+        fail "Préparez /stockage avec sh $VIGIL_BASE/scripts/post-install/prepare-storage.sh."
     fi
 else
 echo -e "${YELLOW}Nettoyage des montages existants dans $STOCKAGE_DIR...${NC}"

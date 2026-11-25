@@ -7,6 +7,20 @@ puis valide la configuration complète avec `visudo -c`. Vérifier
 aussi les permissions effectives d'un compte opérateur. Le post-install
 s'arrête si le fichier historique est toujours présent.
 
+## Préparer uniquement la zone de stockage
+
+Fermer Vigil et démonter les volumes sous `/stockage`. Depuis la
+session de l’opérateur, lancer :
+
+```sh
+sh /opt/vigil/scripts/post-install/prepare-storage.sh
+```
+
+La commande prépare le répertoire `/stockage` en `root:root`, mode
+`0755`. Elle refuse un montage direct ou imbriqué et les liens
+symboliques. L’opération ne touche ni au contenu du répertoire ni à la règle sudoers.
+Le contrôle de la règle historique s’applique au post-install complet.
+
 Avant le post-install, l'administrateur prépare /opt/vigil et attribue
 à l'opérateur les seuls dossiers de données, journaux, rapports et
 travail nécessaires à son poste. Les zones /investigation et /stockage

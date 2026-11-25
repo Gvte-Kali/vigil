@@ -419,3 +419,9 @@ Recette interface et terminaux
     le message de synchronisation et le temps écoulé actualisé sur place.
     En sortie redirigée, vérifier le texte uni et les lignes espacées.
     Vérifier que le résumé n’annonce le SHA-256 conforme qu’après comparaison.
+
+
+[ ] En VM, tester prepare-storage.sh avec /stockage démonté et confirmer
+    root:root 0755. Vérifier le refus si /stockage est un lien ou contient
+    un montage. Vérifier que le post-install complet continue de refuser
+    une règle sudoers Vigil historique encore installée.

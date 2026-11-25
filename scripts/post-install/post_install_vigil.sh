@@ -46,7 +46,8 @@ if [ -d /investigation ]; then
 fi
 check_vigil_zones_unmounted
 sudo install -d -o root -g root -m 0755 /investigation
-sudo mkdir -p /stockage /opt/vigil/{data,scripts,logs,rapports}
+sh /opt/vigil/scripts/post-install/prepare-storage.sh
+sudo mkdir -p /opt/vigil/{data,scripts,logs,rapports}
 echo "✅ Répertoires de base présents."
 
 # Install the hotplug rule without replaying events for devices already connected.

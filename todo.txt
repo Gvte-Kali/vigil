@@ -49,7 +49,8 @@ PHASE 01 — SECURITE
     référence d’un autre montage donne un résultat non vérifiable.
     Actions rapides : montage et démontage du stockage 1.0 dans le
     terminal par défaut avec opérateur Qt et journal local. Confirmation
-    avant montage RW et refus d’un disque déjà utilisé.
+    avant montage RW et refus d’un disque déjà utilisé. Préparation ciblée
+    de /stockage en root:root 0755, réutilisée par le post-install.
     Actions rapides : clonage bloc vérifié et image RAW locale ou sur
     partition USB montée temporairement dans un espace de montage privé.
     Bannière Vigil et groupes de disques et partitions en couleurs, avec
