@@ -432,3 +432,7 @@ Recette interface et terminaux
     passe sudo. Tester l’activation et l’annulation en VM.
 [ ] Vérifier la bannière des scripts de maintenance et l’absence de
     décoration dans les sorties techniques consommées par Vigil.
+[ ] Après le post-install sur Parrot, vérifier « command -v chafa » et
+    tester « chafa --format symbols --colors 256 --size 40x20 /opt/vigil/data/icons/vigil.svg ».
+    Comparer le rendu avec les terminaux Vigil et vérifier qu’avec NO_COLOR=1
+    ou une sortie redirigée, la bannière reste en texte simple.

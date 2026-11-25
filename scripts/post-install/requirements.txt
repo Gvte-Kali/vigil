@@ -2,6 +2,8 @@
 # util-linux : mount, umount, blkid, findmnt, blockdev, lsblk, dmesg, logger
 util-linux
 coreutils
+# chafa : rendu du logo SVG dans les terminaux interactifs
+chafa
 # jq : parsing JSON des peripheriques (lsblk, descripteurs USB, chantiers GUI)
 jq
 eject

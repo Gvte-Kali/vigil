@@ -65,7 +65,7 @@ class HotplugTest(unittest.TestCase):
             result = subprocess.run(["/bin/sh", str(script), "123"], capture_output=True,
                                     text=True, check=True, timeout=5)
             output = result.stdout
-            self.assertIn("█   █ ███", output)
+            self.assertEqual(output.splitlines()[0], "Vigil")
             self.assertLess(output.index("FR — Autorisez sudo"), output.index("MOCK_SUDO"))
             self.assertLess(output.index("EN — Authorise sudo"), output.index("MOCK_SUDO"))
             self.assertIn("Protection enabled.", output)

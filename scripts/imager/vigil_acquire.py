@@ -27,11 +27,6 @@ BLOCK_RO_GET = 0x125E
 CHUNK_SIZE = 4 * 1024 * 1024
 FILESYSTEMS = {"ext4", "exfat", "vfat", "ntfs"}
 DEVICE_COLUMNS = "NAME,TYPE,SIZE,TRAN,MODEL,SERIAL,FSTYPE,MAJ:MIN,MOUNTPOINTS,RO,LABEL,PTTYPE,PARTTYPE"
-VIGIL_BANNER = """█   █ ███  ███  ███ █
-█   █  █  █      █  █
-█   █  █  █  ██  █  █
- █ █   █  █   █  █  █
-  █   ███  ███  ███ █████"""
 
 
 def command(program, *args):
@@ -508,8 +503,10 @@ def main():
 
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGHUP, interrupt)
-    print()
-    print(terminal_style(VIGIL_BANNER, "96"))
+    print(flush=True)
+    terminal_library = Path(__file__).resolve().parents[1] / "lib/vigil-terminal.sh"
+    subprocess.run(("/bin/sh", "-c", '. "$1"; vigil_logo', "vigil", str(terminal_library)),
+                   check=False)
     section("Vigil - Clonage bit à bit" if args.operation == "clone" else "Vigil - Acquisition d’une image RAW")
     try:
         run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external)

@@ -12,18 +12,10 @@ GREY='\e[90m'
 BOLD='\e[1m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+
 print_banner() {
-    # Couleur parametrable : print_banner (bleu) ou print_banner red (rouge)
-    local _bcolor="${1:-$BLUE}"
-    echo -e "$_bcolor"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 # --- Vérifier qu'un utilisateur (obligatoire) et un projet sont actifs ---
 # --- Contexte actif (utilisateur + projet) : non bloquant pour le montage ---
@@ -672,13 +664,13 @@ esac
 # bleu sinon. Le résumé du contrôle est rappelé pour les non-techniciens.
 clear
 if [ "$HID_ALERT_COUNT" -gt 0 ]; then
-    print_banner "$RED"
+    print_banner
     echo -e "${RED}${BOLD}  ⚠ ATTENTION : $HID_ALERT_COUNT périphérique(s) suspect(s) détecté(s)${NC}"
     echo -e "${RED}  Un périphérique se fait passer pour un clavier : ses frappes sont${NC}"
     echo -e "${RED}  bloquées et il ne peut PAS être monté. Voir le rapport PDF de triage.${NC}"
     echo ""
 elif [ "$HID_PROTECTED_COUNT" -gt 0 ]; then
-    print_banner "$GREEN"
+    print_banner
     echo -e "${GREEN}${BOLD}  Contrôle USB terminé : $HID_PROTECTED_COUNT périphérique(s) protégé(s) par vos soins${NC}"
     echo -e "${GREEN}  (clavier/souris de travail) — ils fonctionnent normalement.${NC}"
     echo ""

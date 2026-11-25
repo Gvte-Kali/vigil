@@ -6,6 +6,7 @@ import os
 import re
 import stat
 import struct
+import subprocess
 import sys
 import syslog
 from pathlib import Path
@@ -200,15 +201,17 @@ def main():
         return 2
     operation = sys.argv[1]
     if sys.stdout.isatty():
-        banner = """█   █ ███  ███  ███ █
-█   █  █  █      █  █
-█   █  █  █  ██  █  █
- █ █   █  █   █  █  █
-  █   ███  ███  ███ █████
-
-Vigil · Montage privilégié / Privileged mounting"""
-        color = os.environ.get("TERM") not in (None, "dumb") and "NO_COLOR" not in os.environ
-        print(f"\033[96m{banner}\033[0m\n" if color else f"{banner}\n")
+        if os.environ.get("TERM") not in (None, "dumb") and "NO_COLOR" not in os.environ:
+            try:
+                subprocess.run(
+                    ("/usr/sbin/runuser", "-u", "nobody", "--", "/usr/bin/chafa",
+                     "--format", "symbols", "--colors", "256", "--size", "40x20",
+                     "/opt/vigil/data/icons/vigil.svg"),
+                    stderr=subprocess.DEVNULL, check=False,
+                )
+            except OSError:
+                pass
+        print("Vigil · Montage privilégié / Privileged mounting\n")
     caller = os.environ.get("SUDO_UID", "0")
     caller = caller if caller.isascii() and caller.isdigit() else "unknown"
     receipt = RUN / "receipt"

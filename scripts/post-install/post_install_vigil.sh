@@ -65,7 +65,7 @@ sh /opt/vigil/scripts/post-install/install-hotplug.sh
 # La liste ci-dessous reste synchronisee avec ce fichier : elle sert de
 # secours si requirements.txt est introuvable.
 REQUIREMENTS_FILE="/opt/vigil/scripts/post-install/requirements.txt"
-FALLBACK_PKGS="util-linux coreutils jq eject cryptsetup clamav clamav-daemon clamav-freshclam xrdp xorgxrdp udisks2 ufw konsole kdialog zenity jmtpfs ntfs-3g exfat-fuse dc3dd ewf-tools afflib-tools sleuthkit autopsy yara guymager gnupg ldmtool exiftool ffmpeg p7zip-full zstd binwalk pv file gdisk cloud-guest-utils parted imagemagick feh python3 python3-venv python3-tk python3-pil python3-pip python3-reportlab python3-cairosvg libcairo2 facedetect python3-opencv"
+FALLBACK_PKGS="util-linux coreutils chafa jq eject cryptsetup clamav clamav-daemon clamav-freshclam xrdp xorgxrdp udisks2 ufw konsole kdialog zenity jmtpfs ntfs-3g exfat-fuse dc3dd ewf-tools afflib-tools sleuthkit autopsy yara guymager gnupg ldmtool exiftool ffmpeg p7zip-full zstd binwalk pv file gdisk cloud-guest-utils parted imagemagick feh python3 python3-venv python3-tk python3-pil python3-pip python3-reportlab python3-cairosvg libcairo2 facedetect python3-opencv"
 if [ -f "$REQUIREMENTS_FILE" ]; then
     echo "Installation des dépendances depuis $REQUIREMENTS_FILE..."
     sudo apt update
