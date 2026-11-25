@@ -1,4 +1,92 @@
 ================================================================================
+VIGIL 2.0 — ROADMAP ACTIVE CORE-FIRST / TUI-FIRST
+================================================================================
+Branche vigil-2.0. [ ] à faire, [x] validé avec preuve. Livrer par lots,
+avec tests de non-régression et validation humaine entre les phases.
+
+La GUI Qt existante reste maintenue comme référence de parité. Textual devient
+l’interface principale au fil de la validation des parcours et de leurs services
+Core. Les phases 01 à 10 se développent et se valident en installation Linux
+native. Garder des contrats d’exécution découplés du système de lancement,
+avec un adaptateur natif. Docker et Podman sont reportés à la phase 11.
+
+PHASE 01 — AUDIT ET MATRICE DE PARITÉ
+[ ] Inventorier la GUI, la CLI et les scripts. Relier chaque parcours à ses
+    services Core, sa traduction et une preuve de non-régression.
+[ ] Reprendre les acquis et éléments ouverts des archives ci-dessous.
+
+PHASE 02 — CONSOLIDATION DU CORE
+[ ] Mutualiser affaires, périphériques, sources, preuves, exécution, modules,
+    rapports, audit, sessions, entité et opérateurs. Typer, Textual et la GUI
+    consomment les mêmes services.
+[ ] Formaliser les contextes, événements, résultats et limites de privilèges.
+    Réutiliser le runner PTY et les adaptateurs natifs.
+[ ] Commencer chaque parcours Textual dès que ses services sont prêts.
+
+PHASE 03 — SÉCURITÉ, PORTABILITÉ ET INSTALLATION NATIVES
+[ ] Utiliser XDG, détecter les dépendances et adapter l’installation native
+    à Debian, Ubuntu, Kali, Parrot, Fedora, Arch et openSUSE.
+[ ] Valider l’usage local, SSH et headless, les privilèges limités, l’absence
+    de daemon permanent et la restauration vérifiée après interruption.
+
+PHASE 04 — PÉRIPHÉRIQUES ET SOURCES
+[ ] Mutualiser le triage selon la référence d’« Affaire en cours ». Transmettre
+    des contextes vérifiés et empêcher le démontage pendant une opération.
+[ ] Maintenir /investigation RO et /stockage RW. Gérer plusieurs sources par
+    affaire, physiques ou images RAW, DD, IMG, ISO, E01 et autres formats pris
+    en charge. Préserver l’accès bloc direct pour le RAW.
+[ ] Conserver les mécanismes de copie, de synchronisation et de SHA-256.
+
+PHASE 05 — AFFAIRES, PREUVES ET ARCHIVES
+[ ] Consolider migrations, preuves locales, imports et exports. Vérifier
+    l’intégrité, la chaîne de custody et les restaurations entre postes.
+
+PHASE 06 — TUI TEXTUAL ET MIGRATION FONCTIONNELLE
+[ ] Migrer Dashboard, Investigation (Affaire en cours, Actions rapides) et
+    Système (Entité, Catalogue). Intégrer Sources, Explorateur, Preuves,
+    Analyses, Rapports, Historique et Export à l’affaire active.
+[ ] Couvrir la matrice complète, dont RAW/clonage, images forensiques,
+    métadonnées/HEX/ASCII, presets et multi-scans, antivirus, signatures,
+    listes USB, catalogue et diagnostic.
+[ ] Conserver logo, Graphite/Cyan, couleurs sémantiques et FR/EN. Rendre
+    menus, formulaires, tableaux, arborescences et fenêtres modales utilisables
+    au clavier et à la souris dans un terminal redimensionnable.
+[ ] Intégrer sorties, progression, confirmations, erreurs et résultats dans
+    Textual, sans émulateur externe obligatoire.
+[ ] Après validation, vigil et vigil tui lancent Textual, vigil gui ouvre
+    la GUI. Préserver --help, --version et les sorties JSON de Typer.
+
+PHASE 07 — PARITÉ ET STABILISATION NATIVES
+[ ] Valider chaque parcours de la matrice avec et sans affaire active selon
+    le parcours. Rejouer conflits, débranchements, interruptions et restitution
+    sur les distributions cibles.
+[ ] Faire valider la parité avant tout retrait d’un composant historique.
+
+PHASE 08 — MODULES ET FONCTIONS FORENSIQUES SUPPLÉMENTAIRES
+[ ] Reprendre les modules et formats du backlog via le catalogue et le Core.
+
+PHASE 09 — ADAPTATION DE LA GUI AU CORE
+[ ] Raccorder la GUI au même Core après validation de la TUI. Limiter les
+    évolutions Qt aux corrections et à la compatibilité durant la transition.
+
+PHASE 10 — INDUSTRIALISATION ET RELEASE NATIVES
+[ ] Valider installation, mise à jour, reprise et diagnostic sur les
+    distributions cibles. Publier la release native et valider stabilité,
+    parité TUI et protections forensiques avant la dernière phase.
+
+PHASE 11 — DERNIÈRE PHASE : DOCKER ET PODMAN FACULTATIFS
+[ ] Commencer après validation de la release native multi-Linux. Définir les
+    usages de portabilité, de reproductibilité et d’isolation supplémentaire,
+    puis l’empaquetage, les tests et la documentation facultatifs.
+[ ] Vérifier l’isolation et l’accès aux périphériques. Garder l’installation,
+    les tests et toutes les fonctionnalités natives sans Docker ni Podman.
+
+================================================================================
+ROADMAP PRÉCÉDENTE, RECETTES ET BACKLOG — ARCHIVES INTÉGRALES
+================================================================================
+L’ordre des phases actives ci-dessus s’applique à la reprise de ces tâches.
+
+================================================================================
 VIGIL 2.0 — ROADMAP PRINCIPALE
 ================================================================================
 [ ] à faire / [x] validé avec preuve. Une phase à la fois, validation humaine
