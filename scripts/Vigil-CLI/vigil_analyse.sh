@@ -86,12 +86,12 @@ echo -ne "\nEntrez le numéro du périphérique à analyser (ou \"q\" pour annul
 read -r SELECTED_NUM
 
 if [[ "$SELECTED_NUM" == "q" ]]; then
-    echo -e "Annulé."
+    echo -e "$(vigil_text "Annulé." "Cancelled.")"
     exit 0
 fi
 
 if ! [[ "$SELECTED_NUM" =~ ^[0-9]+$ ]] || [[ "$SELECTED_NUM" -lt 1 || "$SELECTED_NUM" -gt ${#MOUNT_POINTS[@]} ]]; then
-    echo -e "${RED}❌ Numéro invalide.${NC}"
+    echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.")${NC}"
     log_action "analysis_attempt" "" "" "failed" "Numéro de périphérique invalide"
     exit 1
 fi

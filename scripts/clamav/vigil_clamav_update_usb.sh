@@ -34,7 +34,7 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Mise à jour terminée avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
@@ -175,13 +175,13 @@ while true; do
     read -r SELECTED_NUM
 
     if [ "$SELECTED_NUM" = "q" ]; then
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
         final_pause
         exit 0
     fi
 
     if ! [[ "$SELECTED_NUM" =~ ^[0-9]+$ ]] || [ "$SELECTED_NUM" -lt 1 ] || [ "$SELECTED_NUM" -gt "$DEVICE_NUM" ]; then
-        echo -e "${RED}❌ Numéro invalide. Entrez un numéro entre 1 et $DEVICE_NUM.${NC}"
+        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $DEVICE_NUM.${NC}"
         continue
     fi
 

@@ -143,7 +143,7 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Recensement terminé avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     else
@@ -209,19 +209,19 @@ clear
 print_banner
 
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}  Vigil - Recensement des fichiers          ${NC}"
+echo -e "${BLUE}  Vigil - $(vigil_text "Recensement des fichiers" "File inventory")          ${NC}"
 echo -e "${BLUE}============================================${NC}"
 if [ "$DO_NO_PROJECT" -eq 1 ]; then
-    echo -e "${BLUE}Projet : (sans projet)${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") $(vigil_text "(sans projet)" "(no case)")${NC}"
 else
-    echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 fi
 log_action "start" "Début du recensement"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # --- Verifier que /investigation contient des peripheriques montes ---
-echo -e "${BLUE}=== Vérification des périphériques montés ===${NC}"
+echo -e "${BLUE}=== $(vigil_text "Vérification des périphériques montés" "Checking mounted devices") ===${NC}"
 MOUNTED_DIRS=0
 MOUNT_INFO=""
 CENSUS_ROOTS=()
@@ -261,7 +261,7 @@ echo ""
 
 # --- Etape 1 : recensement des fichiers ---
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}  Étape 1 : Recensement des fichiers        ${NC}"
+echo -e "${BLUE}  Étape 1 : $(vigil_text "Recensement des fichiers" "File inventory")        ${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}Inventaire intégral des fichiers dans /investigation/...${NC}"
 echo ""
@@ -312,7 +312,7 @@ EOFJSON
                 --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" \
                 --fname-prefix "rapport_census_${WORK_DIR##*.}" --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-                echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+                echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
                 log_action "success" "Rapport PDF généré : $PDF_OUT"
                 if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
                     cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
@@ -915,7 +915,7 @@ if [ -f "$JSON_FILE" ] && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 
         --fname-prefix "rapport_census_${WORK_DIR##*.}" \
         --dir "$RAPPORTS_DIR" 2>&1)
     if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-        echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+        echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
         log_action "success" "Rapport PDF généré : $PDF_OUT"
         # Copie du rapport PDF dans le dossier du projet (pour l'export).
         if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then

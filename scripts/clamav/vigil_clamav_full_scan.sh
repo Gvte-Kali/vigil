@@ -33,7 +33,7 @@ print_banner() {
 print_options_table() {
     echo -e "${BOLD}  Récapitulatif${NC}"
     echo -e "${GREY}  ---------------------------------${NC}"
-    echo -e "  Utilisateur : ${BOLD}${ACTIVE_USER}${NC}"
+    echo -e "  $(vigil_text "Utilisateur :" "Operator:") ${BOLD}${ACTIVE_USER}${NC}"
     echo -e "  Archives    : ${BOLD}contenu scanné${NC}"
     echo -e "  Taille max  : ${BOLD}$([ "$SIZE_MODE" = "limit" ] && echo "limitée (512 Mo max)" || echo "illimitée (2047 Mo max)")${NC}"
     echo -e "  Chiffrées   : ${BOLD}signalées${NC}"
@@ -119,7 +119,7 @@ else
         echo "Créez un utilisateur via la page Configuration de la GUI"
         echo "(Configuration du système → Utilisateurs)."
         echo ""
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     fi
@@ -147,7 +147,7 @@ else
             read -r CHOICE
             [ -z "$CHOICE" ] && continue
             if [ "$CHOICE" = "q" ]; then
-                echo -e "${YELLOW}Annulé.${NC}"
+                echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
                 exit 0
             fi
             if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "${#USERS_LIST[@]}" ]; then
@@ -179,7 +179,7 @@ if [ ! -f "$MOUNT_SCRIPT" ]; then
     ERRORS=$((ERRORS + 1))
     echo ""
     echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s).${NC}"
-    echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
     read -r
     exit 1
 fi
@@ -203,7 +203,7 @@ if [ "$_mount_rc" -ne 0 ]; then
     ERRORS=$((ERRORS + 1))
     echo ""
     echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s).${NC}"
-    echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
     read -r
     exit 1
 fi
@@ -214,7 +214,7 @@ if ! read_investigation_mounts /investigation || [ "${#INVESTIGATION_MOUNTS[@]}"
     ERRORS=$((ERRORS + 1))
     echo ""
     echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s).${NC}"
-    echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
     read -r
     exit 1
 fi
@@ -266,7 +266,7 @@ if [ "$ERRORS" -gt 0 ]; then
 else
     echo -e "${GREEN}✅ Scan antivirus complet terminé avec succès.${NC}"
 fi
-echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
 read -r
 if [ "$ERRORS" -gt 0 ]; then
     exit 1

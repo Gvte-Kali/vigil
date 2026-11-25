@@ -118,16 +118,16 @@ read -r SELECTED_NUM
 
 if [[ "$SELECTED_NUM" == "q" ]]; then
     if [[ "$NO_LOG" == false ]]; then
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
     fi
     exit 0
 fi
 
 if ! [[ "$SELECTED_NUM" =~ ^[0-9]+$ ]] || [[ "$SELECTED_NUM" -lt 1 || "$SELECTED_NUM" -gt ${#MOUNT_POINTS[@]} ]]; then
     if [[ "$NO_LOG" == false ]]; then
-        echo -e "${RED}❌ Numéro invalide.${NC}"
+        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.")${NC}"
     else
-        echo -e "❌ Numéro invalide."
+        echo -e "❌ $(vigil_text "Numéro invalide." "Invalid number.")"
     fi
     log_action "umount_attempt" "" "" "failed" "Numéro de périphérique invalide"
     exit 1

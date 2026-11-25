@@ -31,3 +31,11 @@ vigil_banner() {
     vigil_style '1;96' "$1"
     printf '\n'
 }
+
+vigil_text() {
+    if [ "${VIGIL_LANG:-fr}" = en ]; then
+        printf '%s' "$2"
+    else
+        printf '%s' "$1"
+    fi
+}

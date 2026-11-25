@@ -168,12 +168,12 @@ final_pause() {
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s) d'exécution.${NC}"
         [ "$INFECTED_TOTAL" -gt 0 ] && echo -e "${RED}  ($INFECTED_TOTAL fichier(s) infecté(s) détecté(s)).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     elif [ "$INFECTED_TOTAL" -gt 0 ]; then
         echo -e "${RED}❌ Scan terminé : $INFECTED_TOTAL fichier(s) infecté(s) détecté(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
     else
         echo -e "${GREEN}✅ Scan terminé sans erreur, aucun fichier infecté.${NC}"
@@ -275,7 +275,7 @@ print_banner
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}  Vigil - Scan antivirus ClamAV               ${NC}"
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # --- Vérification des dépendances ---
@@ -396,7 +396,7 @@ while true; do
     [ -z "$CHOICE" ] && continue
 
     if [ "$CHOICE" = "q" ]; then
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
         echo -e "${YELLOW}Scan annulé par l'utilisateur.${NC}"
         final_pause
         exit 0
@@ -653,7 +653,7 @@ else
                 --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
                 PDF_GENERATED=1
-                echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+                echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
                 if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
                     common_reports="$VIGIL_BASE/rapports"
                     report_name="${PDF_OUT##*/}"

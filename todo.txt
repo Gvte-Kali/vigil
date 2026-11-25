@@ -22,6 +22,8 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [ ] Recette VM du triage d’acquisition et de stockage, y compris support composite et rendu Chafa après sudo.
 [x] En-tête du montage sur une ligne, terminaux plus hauts et aperçu des preuves locales par identifiant.
 [ ] Recette Parrot de la hauteur du terminal et du double-clic hors support.
+[x] Langue de la GUI transmise aux terminaux et à l’acquisition après sudo. Premiers messages FR/EN.
+[ ] Traduire les messages spécifiques des scripts historiques, les outils de maintenance et les PDF. Recette FR/EN complète.
 [x] Accueil, explorateur, catalogue, entité et actions rapides remaniés.
 [ ] Recette manuelle des terminaux sous Parrot, Hyprland, Wayland et X11.
 [ ] Recette opérateur non destructive des montages et de l’acquisition.

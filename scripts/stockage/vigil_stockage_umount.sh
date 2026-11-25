@@ -117,7 +117,7 @@ final_pause() {
     if [ "$ERRORS" -gt 0 ]; then
         [ "${VIGIL_QT_STORAGE:-}" = "1" ] && exit 1
         echo -e "${RED}\u274c Script termine avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entree pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entree pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
@@ -129,11 +129,11 @@ final_pause() {
 clear
 print_banner
 if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
-    echo -e "${BLUE}Projet : (aucun)${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") $(vigil_text "(aucun)" "(none)")${NC}"
 else
-    echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 fi
-echo -e "${BLUE}Entite : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}Entite : ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # S'assurer que /stockage existe

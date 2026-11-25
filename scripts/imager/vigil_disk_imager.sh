@@ -76,7 +76,7 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
@@ -128,7 +128,7 @@ echo -e "${GREY}Formats disponibles :${NC}"
 [ "$_HAVE_AFF" -eq 1 ]   && echo -e "  ${GREEN}✅${NC} AFF (afflib)"    || echo -e "  ${YELLOW}⚠️${NC} AFF absent — sudo apt install afflib-tools"
 
 echo ""
-echo -e "${BLUE}Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 log_action "disk_imager" "start" "Début de l'imagerie forensique" ""
 echo -e "${YELLOW}⚠️  COPIE FORENSIQUE DE DISQUE${NC}"
@@ -138,7 +138,7 @@ echo -e "${GREY}Le disque source est ACCÉDÉ EN LECTURE SEULE uniquement.${NC}"
 echo ""
 
 clear_banner
-echo -e "${BLUE}Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 # ============================================================================
 # 1. SÉLECTION DU DISQUE SOURCE
@@ -224,12 +224,12 @@ while true; do
     echo -ne "${BOLD}${YELLOW}Entrez le numéro du disque source à copier (ou \"q\" pour quitter) : ${NC}"
     read -r SOURCE_CHOICE
     if [ "$SOURCE_CHOICE" = "q" ]; then
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
         final_pause
         exit 0
     fi
     if ! [[ "$SOURCE_CHOICE" =~ ^[0-9]+$ ]] || [ "$SOURCE_CHOICE" -lt 1 ] || [ "$SOURCE_CHOICE" -gt "$SOURCE_NUM" ]; then
-        echo -e "${RED}❌ Numéro invalide. Entrez un numéro entre 1 et $SOURCE_NUM.${NC}"
+        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $SOURCE_NUM.${NC}"
         continue
     fi
     SOURCE_DEV="/dev/${SOURCE_DEVICES[$((SOURCE_CHOICE-1))]}"
@@ -479,13 +479,13 @@ if [ "$TARGET_MODE" = "external" ]; then
         read -r TARGET_CHOICE
         if [ "$TARGET_CHOICE" = "q" ]; then
             sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
-            echo -e "${YELLOW}Annulé.${NC}"
+            echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
             _cleanup_target
             final_pause
             exit 0
         fi
         if ! [[ "$TARGET_CHOICE" =~ ^[0-9]+$ ]] || [ "$TARGET_CHOICE" -lt 1 ] || [ "$TARGET_CHOICE" -gt "$TARGET_NUM" ]; then
-            echo -e "${RED}❌ Numéro invalide. Entrez un numéro entre 1 et $TARGET_NUM.${NC}"
+            echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $TARGET_NUM.${NC}"
             continue
         fi
         TARGET_DEV="/dev/${TARGET_DEVICES[$((TARGET_CHOICE-1))]}"
@@ -629,7 +629,7 @@ else
         read -r LOCAL_FORCE
         if [ "$LOCAL_FORCE" != "o" ] && [ "$LOCAL_FORCE" != "O" ] && [ "$LOCAL_FORCE" != "y" ] && [ "$LOCAL_FORCE" != "Y" ]; then
             sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
-            echo -e "${YELLOW}Annulé.${NC}"
+            echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
             final_pause
             exit 0
         fi

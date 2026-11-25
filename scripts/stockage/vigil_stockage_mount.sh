@@ -75,7 +75,7 @@ final_pause() {
     if [ "$ERRORS" -gt 0 ]; then
         [ "${VIGIL_QT_STORAGE:-}" = "1" ] && exit 1
         echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
@@ -207,7 +207,7 @@ select_active_user() {
             ACTIVE_USER="${choices[$((answer - 1))]}"
             break
         fi
-        echo -e "${RED}✗ Choix invalide.${NC}"
+        echo -e "${RED}✗ $(vigil_text "Choix invalide." "Invalid choice.")${NC}"
     done
     printf '%s' "$ACTIVE_USER" > "$ACTIVE_USER_FILE" 2>/dev/null || true
 }
@@ -218,11 +218,11 @@ select_active_user() {
 clear
 print_banner
 if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
-    echo -e "${BLUE}Projet : (aucun)${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") $(vigil_text "(aucun)" "(none)")${NC}"
 else
-    echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 fi
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 echo -e "${YELLOW}⚠️  ATTENTION : montage en lecture/écriture.${NC}"
 echo ""
@@ -272,7 +272,7 @@ fi
 while IFS= read -r -d '' dir; do
     [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ] && sudo rmdir "$dir" 2>/dev/null
 done < <(find "$STOCKAGE_DIR" -mindepth 1 -depth -type d -print0 2>/dev/null)
-echo -e "${GREEN}✅ Nettoyage initial terminé.${NC}"
+echo -e "${GREEN}✅ $(vigil_text "Nettoyage initial terminé." "Initial cleanup complete.")${NC}"
 
 fi
 
@@ -348,32 +348,32 @@ run_usb_triage() {
 
     echo ""
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  Triage USB (détection Rubber Ducky)${NC}"
+    echo -e "${BLUE}  $(vigil_text "Triage USB (détection Rubber Ducky)" "USB triage (Rubber Ducky detection)")${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "${YELLOW}⚠️  Pour sécuriser le montage, DÉBRANCHEZ tous les périphériques USB${NC}"
-    echo -e "${YELLOW}    à brancher (clé, disque...) avant de continuer.${NC}"
+    echo -e "${YELLOW}⚠️  $(vigil_text "Pour sécuriser le montage, DÉBRANCHEZ tous les périphériques USB" "For safe mounting, DISCONNECT all USB devices")${NC}"
+    echo -e "${YELLOW}    $(vigil_text "à brancher (clé, disque...) avant de continuer." "you plan to use (flash drive, disk, etc.) before continuing.")${NC}"
     echo ""
-    echo -ne "${BOLD}${YELLOW}Débranchez les périphériques USB, puis appuyez sur Entrée...${NC}"
+    echo -ne "${BOLD}${YELLOW}$(vigil_text "Débranchez les périphériques USB, puis appuyez sur Entrée..." "Disconnect the USB devices, then press Enter...")${NC}"
     read -r
 
     usb_snapshot > "$base_file"
     baseline_count=$(grep -cve '^[[:space:]]*$' "$base_file" 2>/dev/null)
     baseline_count=${baseline_count:-0}
-    echo -e "${GREEN}✅ Baseline USB enregistrée : $baseline_count périphérique(s) présents.${NC}"
+    echo -e "${GREEN}✅ $(vigil_text "Baseline USB enregistrée :" "USB baseline recorded:") $baseline_count $(vigil_text "périphérique(s) présents." "device(s) present.")${NC}"
     log_action "usb_triage_stockage" "" "$base_file" "success" "Baseline USB : $baseline_count périphérique(s)"
 
     echo ""
-    echo -e "${YELLOW}BRANCHEZ maintenant les périphériques USB à monter.${NC}"
+    echo -e "${YELLOW}$(vigil_text "BRANCHEZ maintenant les périphériques USB à monter." "Connect the USB devices to mount now.")${NC}"
     echo ""
-    echo -ne "${BOLD}${YELLOW}Branchez tous les périphériques à monter, puis appuyez sur Entrée...${NC}"
+    echo -ne "${BOLD}${YELLOW}$(vigil_text "Branchez tous les périphériques à monter, puis appuyez sur Entrée..." "Connect the devices to mount and press Enter...")${NC}"
     read -r
 
     # Attente de la détection noyau : 10 s avec barre de progression.
     # Le tampon clavier est purgé pendant l'attente : des Entrées tapées
     # pendant le décompte ne doivent PAS être réutilisées plus tard comme
     # réponse à un prompt (bug des doubles Entrée).
-    echo -e "${BLUE}Attente de la détection par le noyau (10 s)...${NC}"
+    echo -e "${BLUE}$(vigil_text "Attente de la détection par le noyau (10 s)..." "Waiting for kernel detection (10 s)...")${NC}"
     local _total=10 _elapsed=0 _fill=""
     while [ "$_elapsed" -lt "$_total" ]; do
         _fill=""
@@ -392,7 +392,7 @@ run_usb_triage() {
 
     clear
     print_banner
-    echo -e "${GREEN}✅ $after_count périphérique(s) USB détecté(s) au total.${NC}"
+    echo -e "${GREEN}✅ $after_count $(vigil_text "périphérique(s) USB détecté(s) au total." "USB device(s) detected in total.")${NC}"
 
     : > "$new_file"
     # Whitelist de sécurité : un périphérique DÉJÀ VU à la baseline (même port
@@ -447,9 +447,9 @@ run_usb_triage() {
                 echo "$ifname" | sudo tee "/sys/bus/usb/drivers/usbhid/unbind" >/dev/null 2>&1 || true
             done < <(usb_hid_keyboard_ifaces "$devdir")
             if echo 0 | sudo tee "$devdir/authorized" >/dev/null 2>&1; then
-                echo -e "${RED}🚨 Périphérique blacklisté bloqué :${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— non montable (blacklist)${NC}"
+                echo -e "${RED}🚨 $(vigil_text "Périphérique blacklisté bloqué :" "Blocked denylisted device:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— non montable (blacklist)${NC}"
             else
-                echo -e "${RED}🚨 Périphérique blacklisté détecté :${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}— ÉCHEC du blocage, DÉBRANCHEZ-LE${NC}"
+                echo -e "${RED}🚨 $(vigil_text "Périphérique blacklisté détecté :" "Denylisted device detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}$(vigil_text "— ÉCHEC du blocage, DÉBRANCHEZ-LE" "— blocking FAILED, DISCONNECT IT")${NC}"
             fi
             log_action "usb_triage_hid_stockage" "" "$devdir" "alert" "Périphérique blacklisté : ${mfr:-?} ${prod:-?} ($vid:$pid) — blocage appliqué"
             HID_BLOCKED_PORTS+=("$port")
@@ -462,7 +462,7 @@ run_usb_triage() {
                || { [ -n "$ser" ] && grep -qxF "$ser" "$USB_WHITELIST_FILE" 2>/dev/null; }; then
                 protected=$((protected + 1))
                 echo "$busdev" >> "$prot_file"
-                echo -e "${GREEN}  ✅ Clavier HID whitelisté : ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — frappes actives (whitelist).${NC}"
+                echo -e "${GREEN}  ✅ $(vigil_text "Clavier HID whitelisté :" "Allowlisted HID keyboard:") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — frappes actives (whitelist).${NC}"
                 log_action "usb_triage_hid_stockage" "" "$devdir" "warning" "Clavier HID whitelisté (non bloqué) : ${mfr:-?} ${prod:-?} ($vid:$pid)"
                 continue
             fi
@@ -473,7 +473,7 @@ run_usb_triage() {
             echo -e "${RED}┃  ⚠ PÉRIPHÉRIQUE SUSPECT DÉTECTÉ${NC}"
             echo -e "${RED}┗${_bar}┛${NC}"
             echo ""
-            echo -e "  ${BOLD}Périphérique détecté :${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid)${NC}"
+            echo -e "  ${BOLD}$(vigil_text "Périphérique détecté :" "Device detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid)${NC}"
             echo -e "  ${GREY}Un périphérique de stockage ne se présente jamais comme un clavier :${NC}"
             echo -e "  ${GREY}par sécurité ses frappes sont BLOQUÉES automatiquement et il ne peut${NC}"
             echo -e "  ${GREY}pas être monté. Pour whitelister un clavier/souris de travail, utilisez${NC}"
@@ -495,11 +495,11 @@ run_usb_triage() {
             done < <(usb_hid_keyboard_ifaces "$devdir")
             if [ "$one_blocked" -gt 0 ]; then
                 blocked=$((blocked + 1))
-                echo -e "${RED}🚨 Clavier HID détecté :${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— frappes bloquées, non montable${NC}"
+                echo -e "${RED}🚨 $(vigil_text "Clavier HID détecté :" "HID keyboard detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}$(vigil_text "— frappes bloquées, non montable" "— keystrokes blocked, device cannot be mounted")${NC}"
                 log_action "usb_triage_hid_stockage" "" "$devdir" "alert" "Clavier HID détecté et bloqué : ${mfr:-?} ${prod:-?} ($vid:$pid, série $ser)"
             else
                 unblockable=$((unblockable + 1))
-                echo -e "${RED}🚨 Clavier HID détecté :${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}— ÉCHEC du blocage, DÉBRANCHEZ-LE${NC}"
+                echo -e "${RED}🚨 $(vigil_text "Clavier HID détecté :" "HID keyboard detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}$(vigil_text "— ÉCHEC du blocage, DÉBRANCHEZ-LE" "— blocking FAILED, DISCONNECT IT")${NC}"
                 log_action "usb_triage_hid_stockage" "" "$devdir" "alert" "Clavier HID détecté, ÉCHEC du blocage : ${mfr:-?} ${prod:-?} ($vid:$pid)"
             fi
         fi
@@ -920,7 +920,7 @@ if [ "$DEVICE_NUM" -eq 0 ]; then
             echo -e "  ${BOLD}/dev/$m_name${NC}  ${GREY}• Monté dans :${NC} ${BOLD}$m_mount${NC}  ${GREY}• Taille :${NC} ${BOLD}$m_size${NC}"
         done
         echo ""
-        echo -ne "${BOLD}${YELLOW}Démonter ces périphériques et relancer la détection ? (o/n, q pour quitter) : ${NC}"
+        echo -ne "${BOLD}${YELLOW}$(vigil_text "Démonter ces périphériques et relancer la détection ? (o/n, q pour quitter) :" "Unmount these devices and rescan? (o=yes, n=no, q=quit):") ${NC}"
         read -r UM_ANSWER
         if [ "$UM_ANSWER" = "q" ] || [ "$UM_ANSWER" = "Q" ]; then
             echo -e "${YELLOW}Quitter.${NC}"
@@ -978,7 +978,7 @@ done
 for _disk_key in ${_DISK_SEQ[@]+"${_DISK_SEQ[@]}"}; do
     _dsize=${PARENT_SIZE["$_disk_key"]:-?}
     _dmodel=${PARENT_MODEL["$_disk_key"]:-?}
-    echo -e "  ${BOLD}${BLUE} Disque /dev/$_disk_key${NC}  ${GREY}• Taille:${NC} ${BOLD}$_dsize${NC}  ${GREY}• Modèle:${NC} ${BOLD}$_dmodel${NC}"
+    echo -e "  ${BOLD}${BLUE} Disque /dev/$_disk_key${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Modèle:${NC} ${BOLD}$_dmodel${NC}"
     for i in "${!USB_DEVICES[@]}"; do
         IFS='|' read -r KIND DEVICE_NAME DEVICE_SIZE DEVICE_MODEL FSTYPE LABEL PARTTYPE PKNAME <<< "${USB_DEVICES[$i]}"
         if [ "$KIND" = "part" ]; then _key="$PKNAME"; else _key="$DEVICE_NAME"; fi
@@ -986,7 +986,7 @@ for _disk_key in ${_DISK_SEQ[@]+"${_DISK_SEQ[@]}"}; do
         if [ "$KIND" = "whole" ]; then
             echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD} Monter tout le disque${NC}  ${GREY}(${FSTYPE} partition(s))${NC}"
         elif [ "$KIND" = "rawdisk" ]; then
-            echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD}/dev/$DEVICE_NAME${NC}  ${GREY}• FS:${NC} ${BOLD}${FSTYPE:-?}${NC}  ${GREY}• Taille:${NC} ${BOLD}$DEVICE_SIZE${NC}"
+            echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD}/dev/$DEVICE_NAME${NC}  ${GREY}• FS:${NC} ${BOLD}${FSTYPE:-?}${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$DEVICE_SIZE${NC}"
         else
             _partinfo="${BOLD}/dev/$DEVICE_NAME${NC}"
             [ -n "$PARTTYPE" ] && [ "$PARTTYPE" != "Linux filesystem" ] && _partinfo="$_partinfo  ${GREY}[$PARTTYPE]${NC}"
@@ -1017,13 +1017,13 @@ while true; do
     echo -ne "${BOLD}${YELLOW}Entrez le numéro du périphérique à monter (ou \"q\" pour quitter) : ${NC}"
     read -r SELECTED_NUM
     if [ "$SELECTED_NUM" = "q" ]; then
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
         log_action "mount_cancelled_stockage" "" "$STOCKAGE_DIR" "success" "Montage annulé par l'utilisateur"
         final_pause
         exit 0
     fi
     if ! [[ "$SELECTED_NUM" =~ ^[0-9]+$ ]] || [ "$SELECTED_NUM" -lt 1 ] || [ "$SELECTED_NUM" -gt "$DEVICE_NUM" ]; then
-        echo -e "${RED}❌ Numéro invalide. Entrez un numéro entre 1 et $DEVICE_NUM.${NC}"
+        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $DEVICE_NUM.${NC}"
         continue
     fi
     SELECTED_INDEX=$((SELECTED_NUM-1))
@@ -1033,7 +1033,7 @@ done
 
 if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
     echo "Montage en lecture-écriture de /dev/$SELECTED_DEVICE."
-    echo "Saisissez OUI (ou YES) si ce périphérique est bien un support de travail."
+    echo "$(vigil_text "Saisissez OUI (ou YES) si ce périphérique est bien un support de travail." "Type YES (or OUI) if this is a confirmed work drive.")"
     read -r confirmation
     case "$confirmation" in OUI|YES) ;; *) exit 0 ;; esac
 
@@ -1061,7 +1061,7 @@ if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
 fi
 
 # --- 4. Montage selon le kind d'entrée sélectionnée ---
-echo -e "\n${YELLOW}Montage en lecture/écriture...${NC}"
+echo -e "\n${YELLOW}$(vigil_text "Montage en lecture/écriture..." "Mounting read/write...")${NC}"
 if [ "$SELECTED_KIND" = "whole" ]; then
     # Monter toutes les partitions du disque sous /stockage/<disk>/<part>
     echo -e "${YELLOW}Montage de toutes les partitions de /dev/$SELECTED_DEVICE...${NC}"

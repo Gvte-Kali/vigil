@@ -518,7 +518,7 @@ class Workspace(QMainWindow):
             acquisition, "Cloner un disque", "Clone a disk",
             "Copie bit à bit sur un disque USB cible et vérifie son SHA-256.",
             "Copy bit for bit to a USB disk and verify its SHA-256.",
-            "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("clone"), "clone"),
+            "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("clone", language=self.language), "clone"),
             destructive=True,
         )
         self.quick_action_card(
@@ -1827,7 +1827,7 @@ class Workspace(QMainWindow):
 
     def launch_external(self, arguments, operation, *, case_id=None):
         context = {"operation": operation, "operator": self.operator.currentText(),
-                   "case_id": case_id}
+                   "case_id": case_id, "language": self.language}
         run = launch_tracked(arguments, self.database_path.parent / "terminal-runs", context,
                              self.settings.value("external_terminal", ""))
         self.external_runs.append(run)
@@ -1936,9 +1936,9 @@ class Workspace(QMainWindow):
                 self, tr("Choisir le dossier de destination", "Choose the destination folder"), str(Path.home()),
             )
             if directory:
-                self.start_quick_action(lambda: acquisition_command("image", local_directory=Path(directory)), "image-raw")
+                self.start_quick_action(lambda: acquisition_command("image", local_directory=Path(directory), language=self.language), "image-raw")
         elif choice == external:
-            self.start_quick_action(lambda: acquisition_command("image", external=True), "image-raw")
+            self.start_quick_action(lambda: acquisition_command("image", external=True, language=self.language), "image-raw")
 
     def quick_storage(self, operation):
         operator = self.require_operator()

@@ -7,13 +7,22 @@ from contextlib import contextmanager
 from itertools import cycle
 from threading import Event, Thread
 
-SYNC_NOTICE = (
-    "La copie logique est terminée. Vigil procède maintenant à la synchronisation des écritures "
-    "en attente vers le support de destination.\n\n"
-    "Cette étape peut prendre plusieurs minutes selon le volume de données, les performances du "
-    "support, son interface de connexion et son système de fichiers.\n\n"
-    "Ne débranchez pas le périphérique avant la fin de l’opération."
-)
+
+def tr(french, english):
+    return english if os.environ.get("VIGIL_LANG") == "en" else french
+
+
+def sync_notice():
+    return tr(
+        "La copie logique est terminée. Vigil procède maintenant à la synchronisation des écritures "
+        "en attente vers le support de destination.\n\n"
+        "Cette étape peut prendre plusieurs minutes selon le volume de données, les performances du "
+        "support, son interface de connexion et son système de fichiers.\n\n"
+        "Ne débranchez pas le périphérique avant la fin de l’opération.",
+        "The logical copy is complete. Vigil is flushing pending writes to the destination.\n\n"
+        "This can take several minutes depending on the amount of data, the drive, its connection "
+        "and its filesystem.\n\nDo not disconnect the device until this operation is complete.",
+    )
 
 
 def interactive(stream):
@@ -26,8 +35,9 @@ def accent(text):
 
 def human_size(value):
     value = float(value)
-    for unit in ("o", "Kio", "Mio", "Gio", "Tio", "Pio"):
-        if value < 1024 or unit == "Pio":
+    units = tr(("o", "Kio", "Mio", "Gio", "Tio", "Pio"), ("B", "KiB", "MiB", "GiB", "TiB", "PiB"))
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
             return f"{value:.1f} {unit}"
         value /= 1024
 

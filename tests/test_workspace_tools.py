@@ -116,11 +116,14 @@ class WorkspaceToolsTest(unittest.TestCase):
         from vigil.external_terminal import launch_tracked, terminal_command
 
         with tempfile.TemporaryDirectory() as tmp, patch("vigil.external_terminal.launch_terminal") as launch:
-            run = launch_tracked([sys.executable, "-c", "raise SystemExit(7)"],
-                                 Path(tmp), {"operation": "fixture", "operator": "Alice"}, "kitty")
+            run = launch_tracked([sys.executable, "-c", "import os; print(os.environ['VIGIL_LANG']); raise SystemExit(7)"],
+                                 Path(tmp), {"operation": "fixture", "operator": "Alice", "language": "en"}, "kitty")
             self.assertIsNone(run.status())
             args = launch.call_args.args[0]
-            self.assertEqual(subprocess.run(args, capture_output=True, timeout=5).returncode, 7)
+            result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 7)
+            self.assertIn("en\n", result.stdout)
+            self.assertIn("Exit code : 7", result.stdout)
             self.assertEqual(run.status(), 7)
         with patch.dict("os.environ", {"WAYLAND_DISPLAY": "wayland-1"}, clear=True), \
                 patch("vigil.external_terminal.shutil.which",

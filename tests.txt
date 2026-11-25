@@ -452,3 +452,8 @@ Recette interface et terminaux
 [ ] Dans Preuves, double-cliquer sur un fichier après retrait du support.
     Vérifier l’aperçu de la copie locale. Pour une ancienne preuve sans
     copie locale, vérifier le message et que Vigil reste ouvert.
+
+[ ] Basculer Vigil de FR à EN puis ouvrir un montage d’affaire, un montage
+    de stockage, une analyse et une acquisition RAW. Vérifier les titres,
+    les invites de triage et la fin de terminal dans chaque langue.
+    Confirmer que le terminal de protection au démarrage affiche FR et EN.

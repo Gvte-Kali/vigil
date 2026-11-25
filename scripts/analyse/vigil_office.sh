@@ -119,7 +119,7 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Analyse terminée avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     else
@@ -183,13 +183,13 @@ print_banner
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}  Vigil - Analyse des fichiers bureautiques ${NC}"
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 log_action "start" "Début de l\'analyse"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # --- Verifier que /investigation contient des peripheriques montes ---
-echo -e "${BLUE}=== Vérification des périphériques montés ===${NC}"
+echo -e "${BLUE}=== $(vigil_text "Vérification des périphériques montés" "Checking mounted devices") ===${NC}"
 if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
     case_analysis_prepare
 else
@@ -266,7 +266,7 @@ EOFJSON
             PDF_OUT=$(python3 "$PDF_SCRIPT" --kind office --json "$JSON_FILE" \
                 --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-                echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+                echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
                 log_action "success" "Rapport PDF généré : $PDF_OUT"
                 if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
                     cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
@@ -452,7 +452,7 @@ if [ -f "$JSON_FILE" ] && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 
         --project "$ACTIVE_PROJECT" \
         --dir "$RAPPORTS_DIR" 2>&1)
     if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-        echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+        echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
         log_action "success" "Rapport PDF généré : $PDF_OUT"
         # Copie du rapport PDF dans le dossier du projet (pour l'export).
         if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then

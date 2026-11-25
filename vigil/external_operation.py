@@ -23,6 +23,9 @@ def write_status(directory, name, value):
 def main():
     directory = Path(sys.argv[1])
     args = sys.argv[2:]
+    context = json.loads((directory / "context.json").read_text(encoding="utf-8"))
+    language = "en" if context.get("language") == "en" else "fr"
+    environment = {**os.environ, "VIGIL_LANG": language}
     write_status(directory, "started.json", {"pid": os.getpid(), "start": process_start(os.getpid())})
     operation = None
     interrupted = None
@@ -36,7 +39,7 @@ def main():
     for sig in (signal.SIGINT, signal.SIGHUP, signal.SIGTERM):
         signal.signal(sig, interrupt)
     try:
-        operation = subprocess.Popen(args)
+        operation = subprocess.Popen(args, env=environment)
         if interrupted is not None and operation.poll() is None:
             operation.send_signal(interrupted)
         result = operation.wait()
@@ -45,10 +48,11 @@ def main():
         print(str(error), file=sys.stderr)
         status = 127
     write_status(directory, "result.json", {"exit_code": status})
-    print(f"\nCode de sortie / Exit code: {status}", flush=True)
+    label = "Exit code" if language == "en" else "Code de sortie"
+    print(f"\n{label} : {status}", flush=True)
     if sys.stdin.isatty() and interrupted is None:
         try:
-            input("Entrée / Enter")
+            input("Press Enter" if language == "en" else "Appuyez sur Entrée")
         except EOFError:
             pass
     return status
