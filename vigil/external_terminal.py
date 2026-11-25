@@ -11,6 +11,7 @@ from uuid import uuid4
 
 TERMINALS = {
     "xdg-terminal-exec": (),
+    "ghostty": ("-e",),
     "kitty": ("-o", "initial_window_height=44c"),
     "alacritty": ("-o", "window.dimensions={ columns = 80, lines = 44 }", "-e"),
     "foot": ("--window-size-chars=80x44",),

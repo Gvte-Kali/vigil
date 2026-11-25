@@ -19,6 +19,38 @@ class WorkspaceTest(unittest.TestCase):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_case_content_does_not_force_window_wider_than_a_small_display(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.show()
+            self.app.processEvents()
+            self.assertLessEqual(window.minimumSizeHint().width(), 1024)
+            self.assertLessEqual(window.minimumSizeHint().height(), 640)
+            self.close_workspace(window)
+
+    def test_isolated_gui_never_starts_privileged_terminal(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with patch.dict(os.environ, {"VIGIL_DEV_ROOT": str(root), "VIGIL_DATA_DIR": str(root / "data")}), \
+                 patch("vigil.desktop.capture_startup_state") as capture, \
+                 patch("vigil.desktop.launch_terminal") as terminal, \
+                 patch("vigil.desktop.launch_tracked") as tracked:
+                window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                                   root / "cases.sqlite")
+                window.start_hotplug_protection()
+                with self.assertRaisesRegex(ValueError, "System action disabled"):
+                    window.launch_external(["unshare"], "fixture")
+                capture.assert_not_called()
+                terminal.assert_not_called()
+                tracked.assert_not_called()
+                self.close_workspace(window)
+
     def test_language_switch_persistence_and_case_selection(self):
         from vigil.desktop import Workspace
 

@@ -9,6 +9,16 @@ nav_order: 50
 Vigil cible un poste dédié sous ParrotOS, avec une base Debian.
 Le script de post-installation configure le système et nécessite les droits administrateur.
 
+## Installation native dans un venv utilisateur
+
+L’installateur détecte Debian et ses dérivés, Arch, Fedora et openSUSE.
+Pour une validation sans privilèges sur Parrot/Debian ou Arch/Omarchy,
+suivre la [recette native GUI et TUI](../development/native-recette.md).
+
+    python3 scripts/post-install/install_native.py --profile complet --dry-run
+    python3 scripts/dev/workspace.py setup
+    python3 scripts/dev/workspace.py doctor
+
 ## Installer et lancer
 
 Consulter la [procédure de transition des privilèges](../development/phase-01-transition.md), puis placer le dépôt dans `/opt/vigil` et lancer depuis la session opérateur :

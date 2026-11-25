@@ -1,3 +1,33 @@
+VIGIL 2.0 — STABILISATION NATIVE
+=================================
+
+Exécuté le 25 novembre 2026 sur Debian 13, Python 3.12, PySide6 6.12.
+Point de départ : 47c4c5f sur vigil-2.0.
+
+[x] Venv dédié créé depuis zéro avec le profil complet sans paquets système.
+[x] 144 tests sur la suite complète avec Qt offscreen, sans test ignoré.
+[x] 25 tests Qt sous X11, serveur Xorg avec sortie virtuelle.
+[x] 25 tests Qt sous Wayland, compositeur Weston sans moniteur physique.
+[x] vigil gui et vigil-gui : ouverture réelle via les points d’entrée du
+    venv sous X11 et Wayland. Lanceur système et publication couverts par
+    les tests avec chemins et commandes substitués.
+[x] Plans dry-run des trois profils vérifiés sur des fixtures os-release
+    Debian/Parrot, Arch/Omarchy, Fedora et openSUSE. Aucun plan exécuté
+    contre le gestionnaire de paquets du poste.
+[x] TUI lancée dans un pseudo-terminal depuis le venv, avec choix de
+    l’opérateur et fermeture confirmée via Ctrl+Q.
+[x] Fixture RAW inspectée via le CLI : table MBR, partition à l’octet 512.
+[x] Dossiers isolés, refus des opérations système et adaptation Ghostty
+    vérifiés par tests. Ghostty n’a pas été lancé sur cette machine.
+
+[ ] Recette interactive complète sur une VM Parrot/Debian et une VM Arch.
+[ ] Hyprland/Omarchy et intégration avec le bureau et ses terminaux natifs.
+[ ] Disponibilité réelle des paquets sur chaque distribution.
+[ ] Montages, protection USB, acquisition et restitution sur supports
+    jetables dans une VM dédiée, après autorisation.
+Voir docs/development/native-recette.md. Les tests graphiques automatisés
+ne couvrent pas chaque interaction ni tous les modules externes.
+
 VIGIL 2.0 — RECETTE SUR PARROT OS
 ================================
 

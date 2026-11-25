@@ -32,6 +32,7 @@ from .inspection import inspect_file, inspect_open_file, investigation_mounts
 from .module_scaffold import create_module_draft
 from .evidence_panel import EvidencePanel
 from .desktop_integration import checked_descriptor, graphical_user, prepare_view, reveal_in_file_manager
+from . import dev_mode
 from .entity import data_directory, legacy_base
 from .entity_panel import EntityPanel
 from .history import PAGE_SIZE, case_events
@@ -123,7 +124,7 @@ class Workspace(QMainWindow):
         self.closing_checks = False
         self.startup_state_error = None
         try:
-            if not os.environ.get("VIGIL_SESSION_SNAPSHOT"):
+            if not dev_mode.active() and not os.environ.get("VIGIL_SESSION_SNAPSHOT"):
                 capture_startup_state(database_path)
         except (OSError, ValueError) as error:
             self.startup_state_error = error
@@ -321,7 +322,11 @@ class Workspace(QMainWindow):
         self.case_navigation.setIconSize(QSize(16, 16))
         case_workspace.insertWidget(case_workspace.count() - 1, self.case_navigation)
         self.case_pages = QStackedWidget()
-        case_body.addWidget(self.case_pages, 1)
+        case_content = QScrollArea()
+        case_content.setFrameShape(QFrame.Shape.NoFrame)
+        case_content.setWidgetResizable(True)
+        case_content.setWidget(self.case_pages)
+        case_body.addWidget(case_content, 1)
         self.case_navigation.setObjectName("caseNavigation")
         self.bind(self.case_navigation.setAccessibleName, "Vues de l’affaire", "Case views")
 
@@ -1992,7 +1997,10 @@ class Workspace(QMainWindow):
             active = token.stat().st_uid == 0 and token.read_text().strip() == f"{os.getuid()} {start}"
         except (OSError, IndexError):
             active = False
-        if active:
+        if dev_mode.active():
+            text = self.tr_pair("Mode recette · opérations système désactivées",
+                                "Development mode · system operations disabled")
+        elif active:
             text = self.tr_pair("Protection des nouveaux disques active", "New disk protection active")
         elif Path("/usr/local/sbin/vigil-hotplug").is_file():
             text = self.tr_pair("Protection des nouveaux disques inactive · autorisation sudo requise",
@@ -2007,6 +2015,8 @@ class Workspace(QMainWindow):
         )
 
     def start_hotplug_protection(self):
+        if dev_mode.active():
+            return
         pending = json.loads(os.environ.get("VIGIL_SESSION_PENDING", "[]"))
         if pending:
             self.notify(
@@ -2148,6 +2158,8 @@ class Workspace(QMainWindow):
             self.settings.sync()
 
     def launch_external(self, arguments, operation, *, case_id=None, device_mode=None):
+        if dev_mode.active():
+            raise ValueError(dev_mode.BLOCKED)
         if device_mode is not None:
             arguments = [sys.executable, "-m", "vigil.device_manager", device_mode, *arguments]
         context = {"operation": operation, "operator": self.operator.currentText(),
@@ -2169,6 +2181,8 @@ class Workspace(QMainWindow):
 
     def start_quick_action(self, command, operation="quick-action", *, case_id=None):
         try:
+            if dev_mode.active():
+                raise ValueError(dev_mode.BLOCKED)
             self.launch_external(command(), operation, case_id=case_id)
         except (OSError, ValueError) as error:
             self.fail(error)
@@ -2355,11 +2369,13 @@ class Workspace(QMainWindow):
         error = None
         stage = "system"
         try:
-            check_shutdown_state()
+            if not dev_mode.active():
+                check_shutdown_state()
             stage = "save"
             self.save_before_close()
             stage = "system"
-            check_shutdown_state()
+            if not dev_mode.active():
+                check_shutdown_state()
         except (OSError, ValueError, sqlite3.Error) as failure:
             error = failure
         finally:
@@ -2387,7 +2403,7 @@ class Workspace(QMainWindow):
 
 
 def main():
-    if not os.environ.get("VIGIL_SESSION_ID"):
+    if not dev_mode.active() and not os.environ.get("VIGIL_SESSION_ID"):
         from .session import supervise
         return supervise(sys.argv[1:])
     if os.geteuid() == 0:
@@ -2398,7 +2414,7 @@ def main():
     database_path = storage.default_database()
     preferences = database_path.parent / "preferences" / f"{os.getuid()}.ini"
     settings = QSettings(str(preferences), QSettings.Format.IniFormat)
-    if not preferences.exists():
+    if not preferences.exists() and not dev_mode.active():
         legacy_settings = QSettings("Vigil", "Vigil2")
         settings.setValue("language", legacy_settings.value("language", "fr"))
     window = Workspace(settings, database_path)

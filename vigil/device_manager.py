@@ -10,6 +10,7 @@ import syslog
 from contextlib import contextmanager
 from pathlib import Path
 
+from . import dev_mode
 from .block_inventory import block_context, devices, external_storage, idle, inspect_usb, usb_parent
 from .entity import data_directory, legacy_base
 from .storage import default_database
@@ -170,6 +171,8 @@ def triage(zone, path=None):
 
 
 def operate(action, zone, *, device=None, target=None, confirm_write=False):
+    if dev_mode.active():
+        raise ValueError(dev_mode.BLOCKED)
     zone = normalized_zone(zone)
     interactive = device is None and target is None
     if interactive and not sys.stdin.isatty():

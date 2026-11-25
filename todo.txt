@@ -24,6 +24,9 @@ PHASE 02 — CONSOLIDATION DU CORE
 [ ] Commencer chaque parcours Textual dès que ses services sont prêts.
 
 PHASE 03 — SÉCURITÉ, PORTABILITÉ ET INSTALLATION NATIVES
+[x] Installer en venv utilisateur, préparer la recette isolée GUI/TUI et
+    proposer les profils minimal, forensic et complet avec simulation.
+[ ] Valider les paquets réellement installés sur les distributions cibles.
 [ ] Utiliser XDG, détecter les dépendances et adapter l’installation native
     à Debian, Ubuntu, Kali, Parrot, Fedora, Arch et openSUSE.
 [ ] Valider l’usage local, SSH et headless, les privilèges limités, l’absence
@@ -72,6 +75,11 @@ PHASE 06 — TUI TEXTUAL ET MIGRATION FONCTIONNELLE
     la GUI. Préserver --help, --version et les sorties JSON de Typer.
 
 PHASE 07 — PARITÉ ET STABILISATION NATIVES
+[x] Vérifier le shell Qt, les dialogues, les lanceurs et les intégrations
+    Core sur fixtures. Documenter la recette Parrot/Debian et Arch/Omarchy
+    et consigner les backends réellement testés dans tests.txt.
+[ ] Rejouer la recette interactive complète sous Hyprland/Omarchy et tester
+    les parcours privilégiés en VM sur supports jetables.
 [ ] Valider chaque parcours de la matrice avec et sans affaire active selon
     le parcours. Rejouer conflits, débranchements, interruptions et restitution
     sur les distributions cibles.

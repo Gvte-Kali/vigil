@@ -216,6 +216,16 @@ def supervise(arguments, *, interface="gui", state=None):
         print("Lancez Vigil en tant qu’utilisateur ordinaire. / Run Vigil as a regular user.",
               file=sys.stderr)
         return 1
+    from . import dev_mode
+
+    if dev_mode.active():
+        try:
+            dev_mode.validate(state)
+            module = "vigil.tui" if terminal_workspace else "vigil.desktop"
+            return subprocess.run([sys.executable, "-m", module, *arguments], check=False).returncode
+        except (OSError, ValueError) as error:
+            print(error, file=sys.stderr)
+            return 1
     identifier = uuid4().hex
     started = time.monotonic()
     boot = boot_identity()
@@ -574,6 +584,9 @@ def main():
         return wait_session(Path(sys.argv[2]))
     if len(sys.argv) == 3 and sys.argv[1] in {"--show-report", "--review-report"}:
         return show_report_file(Path(sys.argv[2]), review=sys.argv[1] == "--review-report")
+    if sys.argv[1:] in (["-h"], ["--help"]):
+        print("Usage: vigil gui  (alias: vigil-gui)\nOpen the Qt workspace / Ouvrir l’espace de travail Qt.")
+        return 0
     return supervise(sys.argv[1:])
 
 

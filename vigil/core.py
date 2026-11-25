@@ -97,6 +97,8 @@ def script_diagnostics():
 
 
 def doctor():
+    from .external_terminal import TERMINALS
+
     return {
         "scripts": script_diagnostics(),
         "desktop": os.environ.get("XDG_CURRENT_DESKTOP"),
@@ -104,8 +106,7 @@ def doctor():
         "x11" if os.environ.get("DISPLAY") else "headless",
         "tools": {tool: shutil.which(tool) for tool in (
             "bash", "sh", "python3", "unshare", "sudo", "file", "jq", "clamscan", "freshclam", "ewfinfo", "affinfo",
-            "xdg-terminal-exec", "konsole", "gnome-terminal", "xfce4-terminal",
-            "kitty", "xterm",
+            "chafa", "lsblk", "findmnt", "mmls", "pv", *TERMINALS,
         )},
     }
 

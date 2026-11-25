@@ -32,6 +32,7 @@ from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .shutdown_state import check_shutdown_state
 from .tui_screens import Form, Operation
 from .tui_picker import FileSystemPicker, PickerOptions
+from . import dev_mode
 from .tui_widgets import ActionCard, CardGrid, MetricCard, NavigationItem, SectionPanel, StatusIndicator, icon, supports_unicode
 from .entity import FIELDS, data_directory, legacy_base, load_entity, save_entity
 from .system_info import cpu_ticks, system_metrics
@@ -284,7 +285,7 @@ class Workspace(App):
         await self.initialize_workspace()
         self.adjust_sidebar()
         self.set_interval(3, self.refresh_dashboard)
-        if os.environ.get("VIGIL_SESSION_ID"):
+        if os.environ.get("VIGIL_SESSION_ID") or dev_mode.active():
             if not self.operator:
                 await self.choose_session_operator()
             else:
@@ -307,10 +308,15 @@ class Workspace(App):
         return await asyncio.to_thread(pending_sessions, self.state.parent / "sessions")
 
     async def offer_protection(self):
+        if dev_mode.active():
+            return
         if Path("/usr/local/sbin/vigil-hotplug").is_file() and not self.protection_active():
             await self.request_protection()
 
     async def request_protection(self):
+        if dev_mode.active():
+            self.notify(dev_mode.BLOCKED, severity="warning")
+            return
         t = self.tr
         if self.protection_active():
             self.notify(t("Protection USB déjà active.", "USB protection is already active."))
@@ -460,6 +466,9 @@ class Workspace(App):
         count = len(rows)
         protection = self.protection_active()
         state = t("Protection USB active", "USB protection active") if protection else t("Protection USB inactive", "USB protection inactive")
+        if dev_mode.active():
+            state = t("Mode recette · opérations système désactivées",
+                      "Development mode · system operations disabled")
         self.query_one("#status-bar", StatusIndicator).show(
             state, f"{count} {t('montage(s)', 'mount(s)')}  ·  /investigation RO  ·  /stockage RW",
             active=protection,
@@ -621,7 +630,8 @@ class Workspace(App):
 
     async def confirm_quit(self):
         try:
-            await asyncio.to_thread(check_shutdown_state)
+            if not dev_mode.active():
+                await asyncio.to_thread(check_shutdown_state)
         except CORE_ERRORS as error:
             self.info(self.tr("Fermeture suspendue", "Close blocked"), error)
             return
@@ -1168,6 +1178,8 @@ class Workspace(App):
                 self.info(t("Résultats des analyses", "Analysis results"), f"{results}\n" + "\n".join(paths))
 
     async def launch_workflow(self, action, fields, case, operator):
+        if dev_mode.active():
+            raise ValueError(dev_mode.BLOCKED)
         t = self.tr
         mode = None
         name = self.case_rows.get(case, {}).get("name", "")
