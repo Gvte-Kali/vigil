@@ -3,7 +3,6 @@
 import argparse
 import fcntl
 import hashlib
-import json
 import os
 import re
 import shutil
@@ -13,36 +12,21 @@ import struct
 import subprocess
 import sys
 import tempfile
-import textwrap
 import time
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 # The launcher uses isolated Python. Load the companion module from this script's directory.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path[:0] = [str(SCRIPT_DIR), str(SCRIPT_DIR.parent / "lib")]
+from vigil_block_inventory import block_access, command, devices, external_storage, fields, filesystem
 from vigil_progress import Progress, sync_notice, duration, human_size, indeterminate, tr
 
 BLOCK_RO_SET = 0x125D
 BLOCK_RO_GET = 0x125E
 CHUNK_SIZE = 4 * 1024 * 1024
 FILESYSTEMS = {"ext4", "exfat", "vfat", "ntfs"}
-DEVICE_COLUMNS = "NAME,TYPE,SIZE,TRAN,MODEL,SERIAL,FSTYPE,MAJ:MIN,MOUNTPOINTS,RO,LABEL,PTTYPE,PARTTYPE"
-
-
-def command(program, *args):
-    return subprocess.run((program, *args), capture_output=True, text=True, check=True).stdout
-
-
-def devices(*args):
-    options = ("/usr/bin/lsblk", "--json", "--bytes", "--paths", "--output")
-    try:
-        output = command(*options, DEVICE_COLUMNS + ",PARTTYPENAME", *args)
-    except subprocess.CalledProcessError as error:
-        # Older util-linux releases can expose the raw partition type only.
-        if "PARTTYPENAME" not in (error.stderr or ""):
-            raise
-        output = command(*options, DEVICE_COLUMNS, *args)
-    return json.loads(output)["blockdevices"]
+TRIAGE = SCRIPT_DIR / "vigil_acquire_triage.sh"
 
 
 def disk_sequence(row):
@@ -60,7 +44,7 @@ def check_disk(row, sequence):
     if (current["type"] != "disk" or current["maj:min"] != row["maj:min"]
             or current["size"] != row["size"] or disk_sequence(current) != sequence):
         raise ValueError(f"Identité du disque modifiée : {row['name']}")
-    if row.get("tran") == "usb":
+    if "usb_identity" in row:
         identity = usb_identity(current)
         if identity != row["usb_identity"]:
             raise ValueError(f"Identité USB modifiée : {row['name']}")
@@ -95,81 +79,32 @@ def section(title):
         print(terminal_style(line, "96"))
 
 
-def describe_device(row):
-    is_disk = row["type"] == "disk"
-    fields = []
-    if is_disk:
-        fields.extend((f"Modèle : {menu_text(row.get('model')) or tr('inconnu', 'unknown')}",
-                       f"Série : {menu_text(row.get('serial')) or tr('inconnue', 'unknown')}",
-                       f"Connexion : {menu_text(row.get('tran')) or tr('inconnue', 'unknown')}",
-                       f"Table : {menu_text(row.get('pttype')) or tr('inconnue', 'unknown')}"))
-    else:
-        part_type = row.get("parttypename") or row.get("parttype")
-        fields.append(f"Type : {menu_text(part_type) or tr('inconnu', 'unknown')}")
-    if not is_disk or not row.get("children"):
-        fields.append(f"FS : {menu_text(row.get('fstype')) or tr('inconnu', 'unknown')}")
-    if label := menu_text(row.get("label")):
-        fields.append(f"Volume : {label}")
-    ro = row.get("ro")
-    mode = "RO" if ro in (1, "1") else "RW" if ro in (0, "0") else tr("inconnu", "unknown")
-    fields.append(tr("Bloc :", "Block:") + f" {mode}")
-    mounts = ", ".join(menu_text(mount) for mount in (row.get("mountpoints") or ()) if mount)
-    fields.append(tr("Montage :", "Mounted at:") + f" {mounts or tr('aucun', 'none')}")
-    return fields
+def triage_command(action, directory, *arguments):
+    sys.stdout.flush()
+    return subprocess.run(("/usr/bin/bash", str(TRIAGE), action, str(directory), *arguments),
+                          stdout=subprocess.PIPE, text=True, check=False)
 
 
-def print_device(row, indent, prefix=""):
-    name = menu_text(row["name"])
-    label = f"{prefix} {name}" if prefix else name
-    print(f"{indent}{terminal_style(label, '1;96')}  {terminal_style(menu_size(row['size']), '1')}")
-    width = max(20, shutil.get_terminal_size((80, 24)).columns - len(indent) - 2)
-    line = []
-    length = 0
-    for field in describe_device(row):
-        if line and length + len(field) + 7 > width:
-            print(f"{indent}  " + "   •   ".join(line))
-            line, length = [], 0
-        key, _, value = field.partition(" : ")
-        if len(field) > width:
-            for chunk in textwrap.wrap(field, width=width, break_long_words=False, break_on_hyphens=False):
-                print(f"{indent}  {chunk}")
-            continue
-        tone = "92" if key == "Bloc" and value == "RO" else "93" if key == "Bloc" and value == "RW" else "1"
-        line.append(f"{terminal_style(key + ' :', '90')} {terminal_style(value, tone)}")
-        length += len(field) + (7 if len(line) > 1 else 0)
-    if line:
-        print(f"{indent}  " + "   •   ".join(line))
-
-
-def choose(rows, title, *, parents=None):
-    if not rows:
-        raise ValueError(f"Aucun périphérique admissible : {title}")
-    section(title)
-    print()
-    previous_parent = None
-    for index, row in enumerate(rows, 1):
-        parent = parents.get(row["name"]) if parents else None
-        if parent and parent is not previous_parent:
-            if previous_parent is not None:
-                print()
-            print_device(parent, "  ", tr("Disque parent :", "Parent disk :"))
-            previous_parent = parent
-        indent = "    " if parent else "  "
-        print_device(row, indent, f"[{index}]")
-        if row["type"] == "disk":
-            for part in row.get("children", ()):
-                if part["type"] == "part":
-                    print_device(part, "      ", "└─")
-            print()
-    if previous_parent is not None:
-        print()
+def choose(inventory, title, prompt, directory):
     while True:
-        choice = input(terminal_style(tr("Numéro ou q pour annuler : ", "Number or q to cancel: "), "1;93")).strip()
-        if choice.lower() == "q":
+        options = inventory()
+        records = []
+        for disk, part, _ in options:
+            row = part or disk
+            kind = "part" if part else "disk" if disk.get("children") else "rawdisk"
+            records.append(fields(
+                kind, Path(row["name"]).name, menu_size(row["size"]),
+                disk.get("model"), row.get("fstype"), row.get("label"), row.get("parttypename"),
+                Path(disk["name"]).name if part else "", block_access(row),
+                menu_size(disk["size"]), disk.get("model"),
+            ))
+        result = triage_command("select", directory, title, prompt, *records)
+        if result.returncode == 2:
+            continue
+        if result.returncode == 1:
             raise InterruptedError(tr("Opération annulée.", "Operation cancelled."))
-        if choice.isdecimal() and len(choice) <= 8 and 1 <= int(choice) <= len(rows):
-            return rows[int(choice) - 1]
-        print(terminal_style(tr("Numéro invalide.", "Invalid number."), "91"))
+        result.check_returncode()
+        return options[int(result.stdout)]
 
 
 def block_mode(fd):
@@ -381,39 +316,20 @@ def inspect_usb(device):
     return identity
 
 
-def usb_snapshot():
-    snapshot = {}
-    for device in Path("/sys/bus/usb/devices").iterdir():
-        if not (device / "idVendor").is_file():
-            continue
-        identity = (device.name, (device / "busnum").read_text().strip(),
-                    (device / "devnum").read_text().strip())
-        snapshot[identity] = device
-    return snapshot
-
-
-def triage_usb(role, *, allow_internal=False):
-    section(f"Triage USB HID · {role}")
-    print(tr("Débranchez le support USB qui sera utilisé. Laissez les autres périphériques en place.", "Disconnect the USB drive you will use. Leave other devices connected."))
-    options = tr(" · i : source interne", " · i : internal source") if allow_internal else ""
-    answer = input(f"Entrée : relever l’état initial · q : annuler{options} : ").strip().lower()
-    if answer == "i" and allow_internal:
-        return set()
-    if answer == "q":
+def triage_usb(role, directory, data_directory, *, allow_internal=False):
+    result = triage_command("triage", directory, str(data_directory), role,
+                            "internal" if allow_internal else "")
+    if allow_internal and result.returncode == 3:
+        return None
+    if result.returncode == 1:
         raise InterruptedError(tr("Acquisition annulée.", "Acquisition cancelled."))
-    before = usb_snapshot()
-    if input(tr("Branchez le support USB, puis Entrée · q : annuler : ", "Connect the USB drive, then press Enter · q: cancel : ")).strip().lower() == "q":
-        raise InterruptedError(tr("Acquisition annulée.", "Acquisition cancelled."))
-    command("/usr/bin/udevadm", "settle", "--timeout=10")
-    after = usb_snapshot()
-    new = after.keys() - before.keys()
-    if not new:
-        raise ValueError(tr("Aucun nouveau support USB détecté. Relancez et suivez les étapes de branchement.", "No new USB drive detected. Restart and follow the connection prompts."))
-    for identity in sorted(new):
-        if inspect_usb(after[identity]) != identity:
-            raise ValueError(tr("L’identité USB a changé pendant le triage.", "The USB identity changed during triage."))
-    print(terminal_style(f"Triage terminé : {len(new)} nouveau(x) périphérique(s), aucune interface HID détectée.", "92"))
-    return new
+    result.check_returncode()
+    approved = set()
+    for line in result.stdout.splitlines():
+        port, busdev = line.split("|")
+        bus, dev = busdev.split(":")
+        approved.add((port, bus, dev))
+    return approved
 
 
 def triaged_disk(row, approved):
@@ -427,11 +343,42 @@ def triaged_disk(row, approved):
         return False
 
 
-def target_disks(source, sequence):
-    approved = triage_usb("destination")
-    check_disk(source, sequence)
-    return [row for row in devices() if row["type"] == "disk" and row["tran"] == "usb"
-            and row["maj:min"] != source["maj:min"] and triaged_disk(row, approved) and idle(row)]
+def disk_options(approved, *, source=None, sequence=None, image=False):
+    if source is not None:
+        check_disk(source, sequence)
+    for disk in devices():
+        if disk["type"] != "disk" or not disk["size"]:
+            continue
+        if source is not None and (disk["maj:min"] == source["maj:min"]
+                                   or disk["name"] == source["name"] or disk["size"] < source["size"]):
+            continue
+        try:
+            if not idle(disk):
+                continue
+            if approved is None:
+                if external_storage(disk) or not disk.get("tran"):
+                    continue
+            elif not external_storage(disk) or not triaged_disk(disk, approved):
+                continue
+            current_sequence = disk_sequence(disk)
+        except OSError:
+            continue
+        if not image:
+            yield disk, None, current_sequence
+            continue
+        for part in disk.get("children", ()):
+            if (part["type"] == "part" and part["size"] >= source["size"]
+                    and filesystem(part) in FILESYSTEMS
+                    and (part["fstype"] != "vfat" or source["size"] < 2**32)):
+                yield disk, part, current_sequence
+
+
+def choose_target(source, sequence, directory, data_directory, *, image=False):
+    approved = triage_usb(tr("Destination", "Destination"), directory, data_directory)
+    title = (tr("Partition USB de destination", "USB destination partition") if image
+             else tr("Disque USB de destination à écraser", "USB destination disk to overwrite"))
+    return choose(lambda: list(disk_options(approved, source=source, sequence=sequence, image=image)),
+                  title, "de destination", directory)
 
 
 @contextmanager
@@ -468,18 +415,18 @@ def writable_target(disk, sequence, partition=None):
                 raise ValueError(f"Restauration de {disk['name']} : " + "; ".join(errors))
 
 
-def run(operation, local_default, *, local_directory=None, external=False):
-    approved = triage_usb("source", allow_internal=True)
-    disks = [row for row in devices() if row["type"] == "disk" and row["size"] > 0
-             and (triaged_disk(row, approved) if approved else row["tran"] not in {"usb", None})
-             and idle(row)]
-    source = choose(disks, tr("Disque source entier, démonté", "Whole unmounted source disk"))
-    sequence = disk_sequence(source)
+def run(operation, local_default, *, local_directory=None, external=False, data_directory=None):
+    data_directory = data_directory or SCRIPT_DIR.parents[1] / "data"
+    with tempfile.TemporaryDirectory(prefix="vigil-source-") as directory:
+        approved = triage_usb(tr("Source", "Source"), directory, data_directory, allow_internal=True)
+        source, _, sequence = choose(lambda: list(disk_options(approved)),
+                                     tr("Disque source entier, démonté", "Whole unmounted source disk"),
+                                     "source", directory)
+    check_disk(source, sequence)
     size = source["size"]
     if operation == "clone":
-        targets = target_disks(source, sequence)
-        target = choose([row for row in targets if row["size"] >= size], tr("Cible USB à écraser", "USB target to overwrite"))
-        target_sequence = disk_sequence(target)
+        with tempfile.TemporaryDirectory(prefix="vigil-destination-") as directory:
+            target, _, target_sequence = choose_target(source, sequence, directory, data_directory)
         section(tr("Confirmation du clonage", "Confirm cloning"))
         print(f"\n  Source : {menu_text(source['name'])} · {menu_size(size)}")
         print(tr("  Cible  :", "  Target:") + f" {menu_text(target['name'])} · {menu_size(target['size'])}\n")
@@ -513,25 +460,8 @@ def run(operation, local_default, *, local_directory=None, external=False):
         if not local.is_dir() or local.stat().st_uid != owner[0] or local.is_relative_to("/investigation"):
             raise ValueError(tr("Choisissez un dossier local existant qui vous appartient, hors de /investigation.", "Choose an existing local folder you own, outside /investigation."))
     else:
-        targets = target_disks(source, sequence)
-        partitions = [(disk, part) for disk in targets for part in disk.get("children", ())
-                      if part["type"] == "part" and part["fstype"] in FILESYSTEMS]
-        if not partitions:
-            formats = ", ".join(sorted(FILESYSTEMS))
-            raise ValueError(tr(
-                f"Aucune partition USB de destination disponible en dehors du disque source {source['name']}.\n"
-                f"    Branchez un second support USB démonté avec une partition compatible ({formats}), "
-                "ou relancez l’action en choisissant « Dossier local ».",
-                f"No eligible USB destination partition separate from the source disk {source['name']}.\n"
-                f"    Connect a second unmounted USB drive with a supported partition ({formats}), "
-                "or restart and choose Local folder.",
-            ))
-        parents = {part["name"]: disk for disk, part in partitions}
-        selected = choose([part for _, part in partitions], tr("Partition USB de destination", "USB destination partition"), parents=parents)
-        target = parents[selected["name"]]
-        target_sequence = disk_sequence(target)
-        if selected["fstype"] == "vfat" and size >= 2**32:
-            raise ValueError(tr("Cette image dépasse la taille maximale d’un fichier FAT32.", "This image exceeds the FAT32 file size limit."))
+        with tempfile.TemporaryDirectory(prefix="vigil-destination-") as directory:
+            target, selected, target_sequence = choose_target(source, sequence, directory, data_directory, image=True)
     section(tr("Confirmation de l’imagerie", "Confirm imaging"))
     print(f"\n  Source : {menu_text(source['name'])} · {menu_size(size)}")
     destination = local if mode == "1" else selected["name"]
@@ -558,6 +488,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("clone", "image"))
     parser.add_argument("--local-default", required=True)
+    parser.add_argument("--data-directory", type=Path)
     parser.add_argument("--language", choices=("fr", "en"))
     destination = parser.add_mutually_exclusive_group()
     destination.add_argument("--local-directory")
@@ -584,7 +515,8 @@ def main():
                     str(terminal_library), str(logo)), check=False)
     section(tr("Vigil - Clonage bit à bit", "Vigil - Bit-for-bit cloning") if args.operation == "clone" else tr("Vigil - Acquisition d’une image RAW", "Vigil - RAW image acquisition"))
     try:
-        run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external)
+        run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external,
+            data_directory=args.data_directory)
         return 0
     except (OSError, ValueError, KeyError, subprocess.SubprocessError, KeyboardInterrupt, EOFError) as error:
         diagnostic = getattr(error, "stderr", None) or str(error)

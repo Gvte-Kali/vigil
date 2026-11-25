@@ -1,6 +1,7 @@
 import hashlib
 import io
 import runpy
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -82,28 +83,58 @@ class AcquisitionTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             acquisition_command("image", local_directory=directory, external=True)
 
-    def test_selection_identifies_disks_and_groups_external_partitions(self):
-        from contextlib import redirect_stdout
+    def test_acquisition_partition_uses_mount_menu_and_selection(self):
+        library = SCRIPT.parents[1] / "lib"
+        row = "part|sdz1|4G|USB Fixture|ext4|Fixture|GPT data|sdz"
+        args = ["/usr/bin/bash", "-c", """
+            . "$1/vigil-terminal.sh"
+            . "$1/vigil-device-triage.sh"
+            declare -A PARENT_SIZE=([sdz]=8G) PARENT_MODEL=([sdz]='USB Fixture')
+            declare -A DEVICE_ACCESS=([sdz1]=RW)
+            USB_DEVICES=("$2")
+            DEVICE_NUM=1
+            display_usb_devices "Partition USB de destination"
+            select_usb_device "de destination"
+        """, "fixture", str(library), row]
+        mount = subprocess.run(args, input="9\n1\n", capture_output=True, text=True, check=True)
+        bridge = SCRIPT.with_name("vigil_acquire_triage.sh")
+        with tempfile.TemporaryDirectory() as tmp:
+            target = ["/usr/bin/bash", str(bridge), "select", tmp,
+                      "Partition USB de destination", "de destination", row + "|RW|8G|USB Fixture"]
+            result = subprocess.run(target, input="9\n1\n", capture_output=True, text=True, check=True)
+            self.assertEqual(result.stdout, "0\n")
+            self.assertTrue(result.stderr.endswith(mount.stdout))
+            for word, status in (("r", 2), ("q", 1)):
+                result = subprocess.run(target, input=f"{word}\n", capture_output=True, text=True)
+                self.assertEqual(result.returncode, status)
+                self.assertEqual(result.stdout, "")
 
-        part = {
-            "name": "/dev/sdz1", "type": "part", "size": 4096, "fstype": "ext4",
-            "label": "Fixture", "parttypename": "Linux filesystem", "ro": False,
-        }
-        disk = {
-            "name": "/dev/sdz", "type": "disk", "size": 8192, "model": "USB Fixture",
-            "serial": "1234", "tran": "usb", "pttype": "gpt", "ro": True, "children": [part],
-        }
-        choose = acquisition["choose"]
-        with patch("builtins.input", return_value="1"), redirect_stdout(io.StringIO()) as output:
-            self.assertIs(choose([disk], "Source"), disk)
-            self.assertIs(choose([part], "Destination", parents={part["name"]: disk}), part)
-        menu = output.getvalue()
-        for expected in ("Modèle : USB Fixture", "Série : 1234", "Table : gpt",
-                         "Type : Linux filesystem", "Volume : Fixture", "FS : ext4",
-                         "Bloc : RO", "Bloc : RW", "Disque parent : /dev/sdz"):
-            self.assertIn(expected, menu)
-        self.assertIn("[1] /dev/sdz1", menu)
-
+    def test_shared_usb_triage_keeps_baseline_port_and_serial_exclusions(self):
+        library = SCRIPT.parents[1] / "lib"
+        with tempfile.TemporaryDirectory() as tmp:
+            result = subprocess.run(["/usr/bin/bash", "-u", "-c", """
+                . "$1/vigil-terminal.sh"
+                . "$1/vigil-device-triage.sh"
+                TRIAGE_DIR=$2
+                USB_WHITELIST_FILE=$2/whitelist.txt
+                USB_BLACKLIST_FILE=$2/blacklist.txt
+                log_action() { :; }
+                sleep() { :; }
+                usb_snapshot() {
+                    if [[ -f "$TRIAGE_DIR/after" ]]; then
+                        printf '%s\n' '1:8|99-1|1234|5678|||keyboard' \
+                            '1:9|99-2|1234|5678|||mouse' '1:10|99-3|1234|5678|||drive'
+                    else
+                        printf '%s\n' '1:2|99-1|1234|5678|||original-keyboard' \
+                            '1:3|99-4|1234|5678|||mouse'
+                        touch "$TRIAGE_DIR/after"
+                    fi
+                }
+                run_usb_triage Source
+            """, "fixture", str(library), tmp],
+                input="\n\n", text=True, capture_output=True, check=True)
+            self.assertIn("Baseline USB enregistrée", result.stdout)
+            self.assertEqual((Path(tmp) / "usb_new.txt").read_text(), "1:10|99-3|1234|5678|||drive\n")
 
     def test_palette_is_applied_only_to_interactive_output(self):
         from unittest.mock import Mock
@@ -117,34 +148,45 @@ class AcquisitionTest(unittest.TestCase):
         with patch.dict("os.environ", {"TERM": "xterm-256color", "NO_COLOR": ""}, clear=True):
             self.assertEqual(style("Vigil", "96", stream=terminal), "Vigil")
 
-    def test_external_image_requires_a_separate_usb_disk(self):
-        from contextlib import redirect_stdout
+    def test_targets_filter_source_busy_disks_and_incompatible_capacity(self):
+        options = acquisition["disk_options"]
+        source = {"name": "/dev/sdb", "maj:min": "8:16", "type": "disk", "tran": "usb", "size": 8192}
+        same_path = dict(source, **{"maj:min": "8:17"})
+        small = dict(source, name="/dev/sdc", size=4096, **{"maj:min": "8:32"})
+        busy = dict(source, name="/dev/sdd", **{"maj:min": "8:48"})
+        good = {"name": "/dev/sde1", "type": "part", "size": 16384, "fstype": "ext4"}
+        tiny = dict(good, name="/dev/sde2", size=1024)
+        bad_fs = dict(good, name="/dev/sde3", fstype="iso9660")
+        target = dict(source, name="/dev/sde", size=32768, children=[good, tiny, bad_fs],
+                      **{"maj:min": "8:64"})
+        with patch.dict(options.__globals__, {
+            "devices": lambda: [source, same_path, small, busy, target],
+            "idle": lambda row: row is not busy, "filesystem": lambda row: row["fstype"],
+            "triaged_disk": lambda *_: True, "disk_sequence": lambda _: "43",
+            "check_disk": lambda disk, seq: self.assertEqual((disk, seq), (source, "42")),
+        }):
+            self.assertEqual(list(options({"fixture"}, source=source, sequence="42")),
+                             [(target, None, "43")])
+            self.assertEqual(list(options({"fixture"}, source=source, sequence="42", image=True)),
+                             [(target, good, "43")])
 
-        run = acquisition["run"]
-        source = {"name": "/dev/sdb", "type": "disk", "size": 8192, "tran": "usb",
-                  "maj:min": "8:16", "children": [{"name": "/dev/sdb1", "fstype": "ntfs"}]}
-        with patch.dict(run.__globals__, {
-            "devices": lambda: [source], "idle": lambda _: True, "disk_sequence": lambda _: "42",
-            "choose": lambda rows, _: rows[0], "target_disks": lambda *_: [],
-            "triage_usb": lambda *_, **__: {"fixture"}, "triaged_disk": lambda *_: True,
-        }), patch.dict("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000"}), redirect_stdout(io.StringIO()):
-            with self.assertRaisesRegex(ValueError, "disque source /dev/sdb"):
-                run("image", "/tmp", external=True)
+    def test_refresh_rebuilds_candidates_and_returns_latest_identity(self):
+        choose = acquisition["choose"]
+        old = {"name": "/dev/sdb", "type": "disk", "size": 8192, "ro": True}
+        current = dict(old, name="/dev/sdc")
+        responses = iter([subprocess.CompletedProcess([], 2, ""), subprocess.CompletedProcess([], 0, "0")])
+        inventories = iter([[(old, None, "42")], [(current, None, "43")]])
+        prompts = []
 
+        def triage_command(*args):
+            prompts.append(args[-1])
+            return next(responses)
 
-    def test_target_list_is_refreshed_after_prompt(self):
-        from contextlib import redirect_stdout
-
-        target_disks = acquisition["target_disks"]
-        source = {"name": "/dev/sdb", "maj:min": "8:16", "type": "disk", "tran": "usb"}
-        target = {"name": "/dev/sdc", "maj:min": "8:32", "type": "disk", "tran": "usb"}
-        with patch.dict(target_disks.__globals__, {
-            "devices": lambda: [source, target], "idle": lambda _: True,
-            "check_disk": lambda *_: None, "triage_usb": lambda _: {"fixture"},
-            "triaged_disk": lambda row, _: row is target,
-        }), redirect_stdout(io.StringIO()):
-            self.assertEqual(target_disks(source, "42"), [target])
-
+        with patch.dict(choose.__globals__, {"triage_command": triage_command}):
+            self.assertEqual(choose(lambda: next(inventories), "Source", "source", "/tmp"),
+                             (current, None, "43"))
+        self.assertIn("sdb", prompts[0])
+        self.assertIn("sdc", prompts[1])
 
     def test_usb_triage_refuses_a_composite_device(self):
         inspect_usb = acquisition["inspect_usb"]

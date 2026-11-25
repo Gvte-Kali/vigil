@@ -165,7 +165,9 @@ def acquisition_command(operation, *, local_directory=None, external=False, lang
         raise ValueError(f"acquisition script unavailable: {script}")
     if language not in {None, "fr", "en"}:
         raise ValueError("invalid script language")
-    arguments = ["--language", language] if language else []
+    arguments = ["--data-directory", str(data_directory())]
+    if language:
+        arguments.extend(("--language", language))
     if local_directory is not None:
         arguments.extend(("--local-directory", str(local_directory)))
     elif external:
