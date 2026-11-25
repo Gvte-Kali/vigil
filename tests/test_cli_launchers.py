@@ -1,4 +1,6 @@
 import os
+import pty
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -119,3 +121,22 @@ class CliLaunchersTest(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("Usage: vigil", runner.invoke(app, ["--help"]).output)
         self.assertIn("Vigil 2.", runner.invoke(app, ["--version"]).output)
+
+    def test_existing_cli_entry_point_shows_logo_before_help(self):
+        # An editable install keeps the original launcher after a git pull.
+        for arguments, status in (([], 2), (["--help"], 0), (["cases", "--help"], 0)):
+            with self.subTest(arguments=arguments):
+                master, terminal = pty.openpty()
+                try:
+                    result = subprocess.run(
+                        [sys.executable, "-c", "from vigil.cli import app; app()", *arguments],
+                        cwd=ROOT, env={**self.env, "TERM": "xterm", "NO_COLOR": "1"},
+                        stdout=terminal, stderr=terminal, timeout=10,
+                    )
+                    output = os.read(master, 4096).decode()
+                finally:
+                    os.close(terminal)
+                    os.close(master)
+                self.assertEqual(result.returncode, status)
+                self.assertTrue(output.startswith("Vigil\r\n"), output)
+                self.assertIn("Usage:", output)

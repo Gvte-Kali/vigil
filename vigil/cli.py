@@ -17,7 +17,16 @@ from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 from .terminal import show_logo
 
-app = typer.Typer(name="vigil", no_args_is_help=True)
+
+class VigilCLI(typer.Typer):
+    def __call__(self, *args, **kwargs):
+        # Existing editable installs still launch app() directly.
+        if sys.stderr.isatty():
+            show_logo(stream=sys.stderr)
+        return super().__call__(*args, **kwargs)
+
+
+app = VigilCLI(name="vigil", no_args_is_help=True)
 modules = typer.Typer(no_args_is_help=True)
 cases = typer.Typer(no_args_is_help=True)
 evidence = typer.Typer(no_args_is_help=True)
@@ -148,8 +157,6 @@ def inspect_raw_command(path: Path, sector_size: int = 512):
 
 
 def main():
-    if sys.stderr.isatty():
-        show_logo(stream=sys.stderr)
     app(prog_name="vigil")
 
 
