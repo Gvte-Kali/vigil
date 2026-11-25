@@ -31,7 +31,8 @@ vigil_owned_launcher() {
         esac
         return 1
     fi
-    vigil_wrapper "$file" vigil.cli:app "$site" ||
+    vigil_wrapper "$file" vigil.cli:main "$site" ||
+        vigil_wrapper "$file" vigil.cli:app "$site" ||
         vigil_wrapper "$file" vigil.session:main "$site" ||
         vigil_wrapper "$file" vigil.desktop:main "$site" ||
         { [ -f "$file" ] && { cmp -s -- "$file" "$site/scripts/Vigil-CLI/vigil" ||
@@ -79,7 +80,7 @@ vigil_publish_link() {
 vigil_publish_launchers() {
     local site="$1" local_bin="$2" system_bin="$3" desktop="$4" file temporary
     vigil_launchers_preflight "$@" || return 1
-    vigil_wrapper "$site/.venv/bin/vigil" vigil.cli:app "$site" ||
+    vigil_wrapper "$site/.venv/bin/vigil" vigil.cli:main "$site" ||
         { launcher_conflict "$site/.venv/bin/vigil"; return 1; }
     vigil_wrapper "$site/.venv/bin/vigil-gui" vigil.session:main "$site" ||
         { launcher_conflict "$site/.venv/bin/vigil-gui"; return 1; }

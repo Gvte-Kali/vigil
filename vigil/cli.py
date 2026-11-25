@@ -1,6 +1,7 @@
 """Vigil 2.0 commands, usable without Qt or a desktop session."""
 import json
 import sqlite3
+import sys
 from contextlib import contextmanager
 from dataclasses import asdict
 from importlib.metadata import PackageNotFoundError, version
@@ -14,6 +15,7 @@ from .case_export import export_case
 from .case_import import import_archive, verify_archive
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
+from .terminal import show_logo
 
 app = typer.Typer(name="vigil", no_args_is_help=True)
 modules = typer.Typer(no_args_is_help=True)
@@ -145,5 +147,11 @@ def inspect_raw_command(path: Path, sector_size: int = 512):
         emit(inspect_raw(path, sector_size))
 
 
-if __name__ == "__main__":
+def main():
+    if sys.stderr.isatty():
+        show_logo(stream=sys.stderr)
     app(prog_name="vigil")
+
+
+if __name__ == "__main__":
+    main()

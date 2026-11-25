@@ -18,6 +18,7 @@ from .entity import legacy_base
 from .external_terminal import TERMINALS, ExternalRun, launch_terminal
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
 from .storage import default_database
+from .terminal import show_logo
 
 REPORTS = Path("/run/vigil-hotplug/reports")
 HELPER = Path("/usr/local/sbin/vigil-hotplug")
@@ -303,23 +304,6 @@ def terminal_style(text, color):
     if sys.stdout.isatty() and os.environ.get("TERM") not in {None, "dumb"} and "NO_COLOR" not in os.environ:
         return f"\033[{color}m{text}\033[0m"
     return text
-
-
-def show_logo():
-    library = legacy_base() / "scripts/lib/vigil-terminal.sh"
-    if library.is_file():
-        subprocess.run(["/bin/sh", "-c", '. "$1"; vigil_logo "$2"', "vigil", str(library),
-                        str(legacy_base() / "data/icons/vigil.svg")], check=False)
-        return
-    logo = Path(sys.prefix) / "share/vigil/vigil.svg"
-    if logo.is_file() and sys.stdout.isatty() and os.environ.get("TERM") not in {None, "dumb"} and "NO_COLOR" not in os.environ:
-        try:
-            subprocess.run(["chafa", "--format", "symbols", "--colors", "256", "--size", "40x20", str(logo)],
-                           stderr=subprocess.DEVNULL, check=True)
-            return
-        except (OSError, subprocess.SubprocessError):
-            pass
-    print(terminal_style("Vigil", "96"))
 
 
 def show_hotplug(report, tr):
