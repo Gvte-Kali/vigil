@@ -176,7 +176,7 @@ sudo tee /usr/share/applications/vigil.desktop >/dev/null <<DESKTOP_EOF
 [Desktop Entry]
 Name=Vigil
 Comment=Outil d'analyse forensique pour périphériques USB
-Exec=/opt/vigil/scripts/post-install/vigil-qt
+Exec=/usr/local/bin/vigil-gui
 Icon=$VIGIL_ICON
 Terminal=false
 Type=Application

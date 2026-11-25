@@ -29,7 +29,7 @@ déclarait l’ancienne commande.
 
 Le paquet installe `vigil` pour Typer et `vigil-gui` pour Qt. Sur un poste
 installé dans `/opt/vigil`, `vigil` pointe vers le venv du site. Le fichier
-desktop appelle le lanceur stable `/opt/vigil/scripts/post-install/vigil-qt`.
+desktop appelle `/usr/local/bin/vigil-gui`, qui pointe vers le lanceur du site `vigil-qt`.
 
 Depuis la session opérateur, après mise à jour de la branche, lancer
 `bash /opt/vigil/scripts/post-install/update-cli.sh`. Le script vérifie les
@@ -49,7 +49,7 @@ Pour un autre venv, réinstaller le paquet depuis cet environnement. Pour
 une installation dans un préfixe géré par la distribution, demander
 l’intervention de son gestionnaire. Un alias shell ou un raccourci
 personnalisé doit être vérifié dans sa propre configuration. Les raccourcis
-personnalisés peuvent utiliser `Exec=/opt/vigil/scripts/post-install/vigil-qt`.
+personnalisés peuvent utiliser `Exec=/usr/local/bin/vigil-gui`.
 
 La complétion Typer utilise `_VIGIL_COMPLETE`. Dans une session interactive,
 `vigil --show-completion` affiche le script et `vigil --install-completion`

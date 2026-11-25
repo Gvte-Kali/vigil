@@ -33,7 +33,8 @@ vigil_owned_launcher() {
     fi
     vigil_wrapper "$file" vigil.cli:app "$site" ||
         vigil_wrapper "$file" vigil.desktop:main "$site" ||
-        { [ -f "$file" ] && cmp -s -- "$file" "$site/scripts/Vigil-CLI/vigil"; }
+        { [ -f "$file" ] && { cmp -s -- "$file" "$site/scripts/Vigil-CLI/vigil" ||
+                             cmp -s -- "$file" "$site/scripts/post-install/vigil-qt"; }; }
 }
 
 vigil_managed_desktop() {
@@ -41,13 +42,13 @@ vigil_managed_desktop() {
     [ ! -L "$file" ] && [ -f "$file" ] && [ "$(grep -c '^Exec=' "$file")" -eq 1 ] &&
         grep -Fxq '[Desktop Entry]' "$file" && grep -Fxq 'Name=Vigil' "$file" &&
         grep -Fxq 'Type=Application' "$file" &&
-        grep -Fxq -e "Exec=$local_bin/vigil" -e "Exec=$site/scripts/post-install/vigil-qt" \
+        grep -Fxq -e "Exec=$local_bin/vigil" -e "Exec=$local_bin/vigil-gui" -e "Exec=$site/scripts/post-install/vigil-qt" \
             -e "Exec=python3 $site/gui/vigil_main_gui.py" "$file"
 }
 
 vigil_launchers_preflight() {
     local site="$1" local_bin="$2" system_bin="$3" desktop="$4" file
-    for file in "$local_bin/vigil" "$system_bin/vigil" "$site/.venv/bin/vigil" "$site/.venv/bin/vigil-gui" \
+    for file in "$local_bin/vigil" "$local_bin/vigil-gui" "$system_bin/vigil" "$site/.venv/bin/vigil" "$site/.venv/bin/vigil-gui" \
                 "$site/.venv/bin/vigil2" "$site/.venv/bin/vigil2-gui" "$HOME/.local/bin/vigil"; do
         if [ -e "$file" ] || [ -L "$file" ]; then
             vigil_owned_launcher "$file" "$site" || { launcher_conflict "$file"; return 1; }
@@ -66,6 +67,14 @@ vigil_launchers_preflight() {
     fi
 }
 
+vigil_publish_link() {
+    if [ -e "$2" ] || [ -L "$2" ]; then
+        sudo ln -sfnT -- "$1" "$2"
+    else
+        sudo ln -sT -- "$1" "$2"
+    fi
+}
+
 vigil_publish_launchers() {
     local site="$1" local_bin="$2" system_bin="$3" desktop="$4" file temporary
     vigil_launchers_preflight "$@" || return 1
@@ -74,11 +83,8 @@ vigil_publish_launchers() {
     vigil_wrapper "$site/.venv/bin/vigil-gui" vigil.desktop:main "$site" ||
         { launcher_conflict "$site/.venv/bin/vigil-gui"; return 1; }
     "$site/.venv/bin/vigil" --version || return 1
-    if [ -e "$local_bin/vigil" ] || [ -L "$local_bin/vigil" ]; then
-        sudo ln -sfnT -- "$site/.venv/bin/vigil" "$local_bin/vigil" || return 1
-    else
-        sudo ln -sT -- "$site/.venv/bin/vigil" "$local_bin/vigil" || return 1
-    fi
+    vigil_publish_link "$site/.venv/bin/vigil" "$local_bin/vigil" || return 1
+    vigil_publish_link "$site/scripts/post-install/vigil-qt" "$local_bin/vigil-gui" || return 1
     # An older PATH entry must not continue to open Tk or Qt.
     for file in "$system_bin/vigil" "$system_bin/vigil2" "$local_bin/vigil2" \
                 "$system_bin/vigil2-gui" "$local_bin/vigil2-gui"; do
@@ -98,7 +104,7 @@ vigil_publish_launchers() {
     done
     if [ -f "$desktop" ]; then
         temporary=$(mktemp) || return 1
-        if ! awk -v launcher="$site/scripts/post-install/vigil-qt" \
+        if ! awk -v launcher="$local_bin/vigil-gui" \
                 '/^Exec=/ { $0 = "Exec=" launcher } { print }' "$desktop" > "$temporary" ||
            ! sudo install -m 0644 -- "$temporary" "$desktop"; then
             rm -- "$temporary"

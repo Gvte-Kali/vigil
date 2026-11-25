@@ -27,6 +27,7 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] Gestionnaire d’affaires Qt avec modèle filtrable, inspecteur, création et suppression contextualisée.
 [x] Archives d’affaires v3 vérifiables et restaurables par Qt et CLI, lecture v2 et migration SQLite 5.
 [x] Commande officielle vigil, migration des lanceurs connus et séparation de la GUI.
+[x] Lanceur système vigil-gui publié par le post-install et la mise à jour des lanceurs.
 [ ] Recette de transfert entre deux postes et de reprise après arrêt brutal en VM.
 [x] Le texte d’attente de l’inspecteur disparaît dès la sélection d’une affaire, sans attendre le prochain cycle Qt.
 [x] Gestionnaire d’affaires sans défilement des actions, avec menu d’import unique et validation séparée.

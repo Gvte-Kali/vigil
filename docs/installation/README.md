@@ -17,11 +17,11 @@ Consulter la [procédure de transition des privilèges](../development/phase-01-
 cd /opt/vigil
 bash scripts/post-install/post_install_vigil.sh
 vigil --help
-/opt/vigil/scripts/post-install/vigil-qt
+/usr/local/bin/vigil-gui
 ```
 
 Le post-install place le venv dans `/opt/vigil/.venv`. La commande `vigil`
-ouvre la CLI. Le raccourci graphique appelle `vigil-qt`, qui démarre Qt
+ouvre la CLI. Le raccourci graphique appelle `/usr/local/bin/vigil-gui`, qui démarre Qt
 avec les données de travail dans `/opt/vigil/data/state`.
 La configuration des signatures se trouve dans le sous-dossier `clamav`.
 Un lancement éditable depuis le code dans /opt/vigil utilise aussi cet

@@ -31,7 +31,7 @@ Placer le dépôt dans `/opt/vigil`, puis lancer :
 cd /opt/vigil
 bash scripts/post-install/post_install_vigil.sh
 vigil --help
-/opt/vigil/scripts/post-install/vigil-qt
+/usr/local/bin/vigil-gui
 ```
 
 L'administrateur doit préparer les répertoires de travail et, sur un poste

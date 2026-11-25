@@ -31,7 +31,7 @@ class CliLaunchersTest(unittest.TestCase):
             path.mkdir(parents=True)
         launcher = self.site / "scripts/post-install/vigil-qt"
         launcher.parent.mkdir(parents=True)
-        launcher.write_text("#!/bin/sh\nexit 0\n")
+        launcher.write_text("#!/bin/sh\n# Vigil Qt launcher fixture\nexit 0\n")
         self.state = self.site / "data/state/cases.sqlite"
         self.state.parent.mkdir(parents=True)
         self.state.write_bytes(b"untouched database fixture")
@@ -68,6 +68,7 @@ class CliLaunchersTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((self.local / "vigil").resolve(), self.site_bin / "vigil")
             self.assertFalse((self.local / "vigil2").exists())
+            self.assertEqual((self.local / "vigil-gui").resolve(), self.site / "scripts/post-install/vigil-qt")
             self.assertEqual(self.state.read_bytes(), b"untouched database fixture")
 
     def test_removes_owned_legacy_entries_and_migrates_desktop(self):
@@ -87,7 +88,7 @@ class CliLaunchersTest(unittest.TestCase):
         for old in (self.site_bin / "vigil2", self.site_bin / "vigil2-gui", self.system / "vigil2",
                     self.system / "vigil", self.user_bin / "vigil"):
             self.assertFalse(os.path.lexists(old))
-        self.assertIn(f"Exec={self.site}/scripts/post-install/vigil-qt", self.desktop.read_text())
+        self.assertIn(f"Exec={self.local}/vigil-gui", self.desktop.read_text())
         self.assertEqual(self.state.read_bytes(), b"untouched database fixture")
 
     def test_foreign_vigil_is_left_untouched(self):
@@ -99,6 +100,15 @@ class CliLaunchersTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(str(foreign), result.stderr)
         self.assertEqual(foreign.read_bytes(), before)
+        self.assertFalse(os.path.lexists(self.local / "vigil"))
+
+    def test_foreign_gui_launcher_blocks_migration(self):
+        foreign = self.local / "vigil-gui"
+        foreign.write_text("third-party launcher")
+        result = self.shell()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(str(foreign), result.stderr)
+        self.assertEqual(foreign.read_text(), "third-party launcher")
         self.assertFalse(os.path.lexists(self.local / "vigil"))
 
     def test_help_version_and_command_families(self):
