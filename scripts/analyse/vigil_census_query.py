@@ -49,6 +49,7 @@ def query_files(db_path, mismatched=False, octet_stream=False,
     if not os.path.isfile(db_path):
         raise FileNotFoundError(f"Index introuvable : {db_path}")
     conn = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    conn.execute("PRAGMA trusted_schema = OFF")
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()

@@ -15,7 +15,7 @@ from uuid import uuid4
 from .inspection import investigation_mounts, list_evidence_directory, open_evidence_path
 
 ANTIVIRUS_CASE_NAME = "Scan antivirus"
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 APPLICATION_ID = 0x5649474C
 DELETED_CASES_DDL = """CREATE TABLE deleted_cases (
     case_id TEXT PRIMARY KEY REFERENCES cases(id), deleted_at TEXT NOT NULL
@@ -28,6 +28,19 @@ CASE_DETAILS_DDL = """CREATE TABLE case_details (
     case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
     reference TEXT NOT NULL, description TEXT NOT NULL
 )"""
+ARCHIVE_DDL = (
+    """CREATE TABLE archive_operators (
+        operator_id TEXT PRIMARY KEY REFERENCES operators(id) ON DELETE CASCADE
+    )""",
+    """CREATE TABLE case_archives (
+        case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
+        sha256 TEXT NOT NULL UNIQUE, provenance TEXT NOT NULL
+    )""",
+    """CREATE TABLE archive_events (
+        sequence INTEGER PRIMARY KEY REFERENCES audit(sequence) ON DELETE CASCADE,
+        provenance TEXT NOT NULL
+    )""",
+)
 SCHEMA = (
     "CREATE TABLE operators (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE)",
     """CREATE TABLE cases (
@@ -47,6 +60,7 @@ SCHEMA = (
         case_id TEXT NOT NULL REFERENCES cases(id), action TEXT NOT NULL,
         details TEXT NOT NULL
     )""",
+    *ARCHIVE_DDL,
 )
 
 
@@ -85,14 +99,17 @@ def database(path):
                     connection.execute(statement)
                 connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            elif app_id == APPLICATION_ID and version in (1, 2, 3):
+            elif app_id == APPLICATION_ID and version in (1, 2, 3, 4):
                 if version == 1:
                     connection.execute(DELETED_CASES_DDL)
                 if version < 3:
                     connection.execute(CASE_DIRECTORIES_DDL)
                     for case_id, name in connection.execute("SELECT id, name FROM cases ORDER BY created_at, id"):
                         assign_case_directory(connection, case_id, name)
-                connection.execute(CASE_DETAILS_DDL)
+                if version < 4:
+                    connection.execute(CASE_DETAILS_DDL)
+                for statement in ARCHIVE_DDL:
+                    connection.execute(statement)
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif app_id != APPLICATION_ID or version != SCHEMA_VERSION:
                 raise ValueError("unsupported Vigil database or schema version")
@@ -116,7 +133,11 @@ def register_operator(connection, name):
 
 
 def list_operators(connection):
-    return list(connection.execute("SELECT id, name FROM operators ORDER BY name COLLATE NOCASE, id"))
+    return list(connection.execute("""
+        SELECT id, name FROM operators WHERE id NOT IN (
+            SELECT operator_id FROM archive_operators
+        ) ORDER BY name COLLATE NOCASE, id
+    """))
 
 
 def require_active_case(connection, case_id):
@@ -200,12 +221,14 @@ def case_manager_rows(state):
             )
             SELECT c.id, c.name, c.created_at, d.reference, d.description,
                    a.latest, n.name AS directory,
-                   coalesce(e.total, 0) AS evidence_count, o.name AS operator
+                   coalesce(e.total, 0) AS evidence_count,
+                   coalesce(json_extract(p.provenance, '$.operator'), o.name) AS operator
             FROM cases c JOIN case_directories n ON n.case_id = c.id
             LEFT JOIN case_details d ON d.case_id = c.id
             LEFT JOIN activity a ON a.case_id = c.id
             LEFT JOIN audit v ON v.sequence = a.creation_event
             LEFT JOIN operators o ON o.id = v.operator_id
+            LEFT JOIN archive_events p ON p.sequence = v.sequence
             LEFT JOIN evidence_counts e ON e.case_id = c.id
             WHERE c.name <> ? AND c.id NOT IN (SELECT case_id FROM deleted_cases)
             """, (ANTIVIRUS_CASE_NAME,))]
@@ -253,6 +276,7 @@ def case_manager_artifacts(state, case_id, name):
         try:
             connection = sqlite3.connect(index.as_uri() + "?mode=ro", uri=True, timeout=0.2)
             try:
+                connection.execute("PRAGMA trusted_schema = OFF")
                 row = connection.execute("SELECT total_files FROM inventory_meta ORDER BY id DESC LIMIT 1").fetchone()
                 metadata["inventory"] = row[0] if row else None
             finally:
@@ -501,15 +525,22 @@ def delete_evidence(state, case_id, evidence_id, operator):
             pass
 
 
+def is_archive_case(connection, case_id):
+    return connection.execute("SELECT 1 FROM case_archives WHERE case_id = ?", (case_id,)).fetchone() is not None
+
+
 def verify_file(state, evidence_id, operator, *, use_copy=False):
     with database(state) as connection:
         record = connection.execute(
             "SELECT * FROM evidence WHERE id = ?", (evidence_id,)
         ).fetchone()
+        restored = record is not None and is_archive_case(connection, record["case_id"])
     if record is None:
         raise ValueError("unknown evidence ID")
     stored = evidence_copy_path(state, record["case_id"], evidence_id)
-    path = stored if use_copy and stored.exists() else Path(record["path"])
+    if (restored or use_copy) and not stored.is_file():
+        raise ValueError("referenced evidence content is unavailable")
+    path = stored if restored or use_copy else Path(record["path"])
     size, digest = fingerprint(path)
     result = {
         "id": evidence_id, "expected_sha256": record["sha256"], "sha256": digest,
@@ -521,6 +552,8 @@ def verify_file(state, evidence_id, operator, *, use_copy=False):
 
 
 def process_explorer_selection(state, case_id, operator, sources, *, register, use_saved_copy=False):
+    with database(state) as connection:
+        restored = is_archive_case(connection, case_id)
     pending = [(Path(path), tuple(mount) if mount else None, directory)
                for path, mount, directory in reversed(sources)]
     seen = set()
@@ -538,12 +571,17 @@ def process_explorer_selection(state, case_id, operator, sources, *, register, u
                 continue
             source = path
             if not register and use_saved_copy and mount is None:
-                source = find_evidence_copy(state, case_id, path) or path
+                copy = find_evidence_copy(state, case_id, path)
+                if copy is None and restored:
+                    raise ValueError("referenced evidence content is unavailable")
+                source = copy or path
             if source == path and path.is_relative_to("/investigation") and mount is None:
                 raise ValueError("no local copy or verified read-only mount for this evidence path")
             if state.exists() and state.samefile(source):
                 raise ValueError("database and evidence must be separate files")
             if register:
+                if restored and mount is None:
+                    raise ValueError("select a verified mounted source to register evidence")
                 result = register_file(state, case_id, path, operator, mount=mount)
                 results.append((str(path), result["sha256"], "existing" if result["existing"] else "added", []))
                 continue

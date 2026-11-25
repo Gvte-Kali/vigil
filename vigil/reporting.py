@@ -63,7 +63,9 @@ def case_pdf_reports(state, case_id, legacy_path=None):
     if not re.fullmatch(r"[0-9a-f]{32}", case_id):
         raise ValueError("invalid case ID")
     custody = case_storage_directory(state, case_id)
-    return sync_report_copies(custody, Path(legacy_path) if legacy_path else None)
+    restored = custody / "projet-v1"
+    return sync_report_copies(custody, Path(legacy_path) if legacy_path else
+                              restored if restored.is_dir() else None)
 
 
 def pdf_analysis_kind(path):

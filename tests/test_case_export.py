@@ -84,10 +84,13 @@ class CaseExportTest(unittest.TestCase):
                 connection.execute("DROP TABLE deleted_cases")
                 connection.execute("DROP TABLE case_directories")
                 connection.execute("DROP TABLE case_details")
+                connection.execute("DROP TABLE archive_events")
+                connection.execute("DROP TABLE archive_operators")
+                connection.execute("DROP TABLE case_archives")
                 connection.execute("PRAGMA user_version = 1")
             with storage.database(state) as connection:
                 self.assertEqual(storage.require_active_case(connection, case)["name"], "Version one case")
-                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
+                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 5)
 
 
     def test_existing_case_directory_is_renamed_without_losing_files(self):
@@ -99,6 +102,9 @@ class CaseExportTest(unittest.TestCase):
             with sqlite3.connect(state) as connection:
                 connection.execute("DROP TABLE case_directories")
                 connection.execute("DROP TABLE case_details")
+                connection.execute("DROP TABLE archive_events")
+                connection.execute("DROP TABLE archive_operators")
+                connection.execute("DROP TABLE case_archives")
                 connection.execute("PRAGMA user_version = 2")
             previous = state.parent / "legacy-custody" / first
             previous.mkdir(parents=True)
