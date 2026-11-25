@@ -470,3 +470,15 @@ Recette interface et terminaux
 [ ] Créer « Équipe / 42 » et « Equipe 42 ». Vérifier les dossiers distincts
     Equipe_42 et Equipe_42_2. Dans le sélecteur, vérifier la surbrillance
     au clic simple, puis la confirmation au double-clic et via le bouton.
+
+[ ] Ouvrir le Gestionnaire d’affaires en FR et EN. Vérifier les états vides,
+    la recherche insensible à la casse, les quatre tris et la conservation
+    de la sélection. Activer par Entrée, double-clic et « Ouvrir l’affaire ».
+[ ] Créer une affaire avec référence et description, puis en importer une.
+    Vérifier la sélection sans activation, le retour d’import et les
+    métadonnées, y compris celles provenant d’un index de recensement.
+[ ] Sélectionner une affaire distincte de l’affaire active et vérifier les
+    deux confirmations de suppression. Vérifier le blocage pendant une
+    opération et l’absence d’altération des preuves originales.
+[ ] Vérifier le redimensionnement du séparateur et les zones de défilement
+    sur X11, Wayland et Hyprland, avec une mise à l’échelle de 150 %.

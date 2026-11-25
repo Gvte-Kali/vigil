@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from . import storage
 from .case_export import export_case
+from .case_manager import CaseManager, NewCaseDialog
 from .case_removal import purge_case
 from .adapters import CENSUS_LIMIT, analysis_command, query_census
 from .core import BUILTIN_MODULES, discover, doctor
@@ -273,34 +274,9 @@ class Workspace(QMainWindow):
         dashboard_side.addWidget(self.diagnostics, 1)
 
 
-        self.case_controls = QWidget(self)
-        self.case_controls.hide()
-        cases = QVBoxLayout(self.case_controls)
-        cases.setContentsMargins(0, 0, 0, 0)
         self.case_picker = None
-        self.case_search = QLineEdit()
-        self.case_search.setClearButtonEnabled(True)
-        self.bind(self.case_search.setPlaceholderText, "Rechercher une affaire", "Search cases")
-        self.bind(self.case_search.setAccessibleName, "Rechercher une affaire", "Search cases")
-        self.case_search.textChanged.connect(self.filter_cases)
-        cases.addWidget(self.case_search)
-        self.cases = QListWidget()
-        cases.addWidget(self.cases)
-        self.cases.itemDoubleClicked.connect(self.case_clicked)
-        choose = QHBoxLayout()
-        cases.addLayout(choose)
-        self.select_case_button = self.button(
-            choose, "Sélectionner l’affaire", "Select case",
-            lambda: self.case_clicked(self.cases.currentItem()), primary=True,
-        )
-        self.case_name = QLineEdit()
-        self.bind(self.case_name.setPlaceholderText, "Nom de l’affaire", "Case name")
-        case_actions = QHBoxLayout()
-        cases.addLayout(case_actions)
-        case_actions.addWidget(self.case_name, 1)
-        self.button(case_actions, "Créer une affaire", "Create case", self.create_case, primary=True)
-        self.button(case_actions, "Importer un ancien projet", "Import legacy project", self.import_case)
-        self.button(cases, "Supprimer l’affaire active", "Delete active case", self.delete_active_case)
+        self.cases = QListWidget(self)
+        self.cases.hide()
 
         self.navigation_group("INVESTIGATION", "INVESTIGATION")
         case_workspace = self.page("Affaire en cours", "Current case", heading=False)
@@ -775,7 +751,7 @@ class Workspace(QMainWindow):
         self.refresh_dashboard()
 
     def notify(self, french, english, details="", *, copy_text=""):
-        message = QMessageBox(self)
+        message = QMessageBox(self.case_picker or self)
         message.setWindowTitle("Vigil")
         message.setTextFormat(Qt.TextFormat.PlainText)
         message.setText(self.tr_pair(french, english))
@@ -819,6 +795,7 @@ class Workspace(QMainWindow):
             self.modules.addItem(self.tr_pair("Manifeste invalide", "Invalid manifest") + f"  ·  {path}")
 
     def refresh_cases(self, selected=None):
+        requested = selected
         try:
             with storage.database(self.database_path) as connection:
                 rows = list(connection.execute(
@@ -838,15 +815,11 @@ class Workspace(QMainWindow):
             self.add_row(self.cases, name, case_id)
             if case_id == selected:
                 self.cases.setCurrentRow(self.cases.count() - 1)
-        self.filter_cases(self.case_search.text())
         self.cases.blockSignals(False)
         self.refresh_evidence()
-
-    def filter_cases(self, text):
-        query = text.strip().casefold()
-        for index in range(self.cases.count()):
-            item = self.cases.item(index)
-            item.setHidden(query not in item.text().casefold())
+        if self.case_picker is not None:
+            self.case_picker.active_id = self.active_case_id
+            self.case_picker.reload(requested)
 
     @staticmethod
     def add_row(widget, label, identifier):
@@ -861,33 +834,41 @@ class Workspace(QMainWindow):
         ), None)
 
     def choose_case(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle(self.tr_pair("Choisir l’affaire", "Choose case"))
-        dialog.resize(660, 440)
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(self.case_controls)
+        state = self.database_path
+        dialog = CaseManager(self, lambda: storage.case_manager_rows(state), self.new_case,
+                             self.import_case, self.delete_selected_case, self.open_managed_case)
         self.case_picker = dialog
-        self.case_controls.show()
+        dialog.reload()
         try:
             dialog.exec()
         finally:
             self.case_picker = None
-            self.case_controls.setParent(self)
-            self.case_controls.hide()
             dialog.deleteLater()
 
-    def delete_active_case(self):
-        case = self.active_case_item()
-        if case is None:
-            self.notify("Choisissez d’abord une affaire.", "Choose a case first.")
+    def open_managed_case(self, case_id):
+        item = next((self.cases.item(i) for i in range(self.cases.count())
+                     if self.cases.item(i).data(Qt.ItemDataRole.UserRole) == case_id), None)
+        if item is not None:
+            self.case_clicked(item)
+
+    def delete_selected_case(self, case_id):
+        if not case_id:
+            return
+        if self.case_resources_in_use():
+            return
+        try:
+            with storage.database(self.database_path) as connection:
+                name = storage.require_active_case(connection, case_id)["name"]
+                if name == storage.ANTIVIRUS_CASE_NAME:
+                    raise ValueError("the antivirus case cannot be deleted")
+        except (OSError, ValueError, sqlite3.Error) as error:
+            self.fail(error)
             return
         operator = self.require_operator()
         if not operator:
             return
         parent = self.case_picker or self
         tr = self.tr_pair
-        name = case.text()
-        case_id = self.active_case_id
         dialog = QMessageBox(parent)
         dialog.setWindowTitle(tr("Supprimer l’affaire", "Delete case"))
         dialog.setTextFormat(Qt.TextFormat.PlainText)
@@ -907,8 +888,8 @@ class Workspace(QMainWindow):
         confirm.setIcon(QMessageBox.Icon.Warning)
         confirm.setTextFormat(Qt.TextFormat.PlainText)
         confirm.setText(tr(
-            f"Supprimer les preuves copiées, résultats, rapports locaux et journal de « {name} » ?",
-            f"Delete saved evidence, results, local reports and audit history for “{name}”?",
+            f"Supprimer définitivement les copies de preuves, résultats, rapports locaux et journal de « {name} » ? Cet effacement est irréversible.",
+            f"Permanently delete saved evidence, results, local reports and audit history for “{name}”? This cannot be undone.",
         ) if choice == purge else tr(
             f"Retirer « {name} » de la liste en conservant ses données ?",
             f"Remove “{name}” from the list and retain its data?",
@@ -937,10 +918,12 @@ class Workspace(QMainWindow):
         ) != QMessageBox.StandardButton.Yes:
             return
 
+        if self.case_resources_in_use():
+            return
         try:
-            if read_zones()["/investigation"]:
-                self.notify("Démontez le support d’investigation avant de supprimer l’affaire.",
-                            "Unmount the investigation volume before deleting the case.")
+            if any(read_zones().values()):
+                self.notify("Démontez les volumes d’investigation et de stockage avant de supprimer l’affaire.",
+                            "Unmount investigation and storage volumes before deleting the case.")
                 return
             if choice == purge:
                 leftovers = purge_case(self.database_path, case_id)
@@ -956,6 +939,14 @@ class Workspace(QMainWindow):
             return
         self.refresh_cases()
         self.reset_history()
+
+    def case_resources_in_use(self):
+        self.refresh_external_runs()
+        if self.busy is not None or self.external_runs:
+            self.notify("Attendez la fin des opérations Vigil avant de supprimer une affaire.",
+                        "Wait for Vigil operations to finish before deleting a case.")
+            return True
+        return False
 
     def case_clicked(self, item):
         if item is None or item.isHidden():
@@ -976,7 +967,7 @@ class Workspace(QMainWindow):
             self.case_picker.accept()
 
     def confirm_case_selection(self, current, target):
-        dialog = QMessageBox(self)
+        dialog = QMessageBox(self.case_picker or self)
         title = (self.tr_pair("Changer d’affaire", "Switch case") if current is not None
                  else self.tr_pair("Confirmer l’affaire", "Confirm case"))
         dialog.setWindowTitle(title)
@@ -1420,29 +1411,54 @@ class Workspace(QMainWindow):
             return None
         return self.operator.currentText()
 
-    def create_case(self):
+    def new_case(self):
         operator = self.require_operator()
-        name = self.case_name.text().strip()
         if not operator:
             return
-        if not name:
-            self.notify("Saisissez le nom de l’affaire.", "Enter the case name.")
-            return
+        dialog = NewCaseDialog(self.case_picker or self, self.tr_pair, operator)
+        try:
+            while dialog.exec() == QDialog.DialogCode.Accepted:
+                name = dialog.name.text().strip()
+                reference = dialog.reference.text().strip()
+                description = dialog.description.toPlainText().strip()
+                if self.create_case(name, reference, description):
+                    return
+        finally:
+            dialog.deleteLater()
+
+    def create_case(self, name, reference="", description=""):
+        name = name.strip()
+        operator = self.require_operator()
+        if not operator:
+            return False
+        if (not name or len(name) > 120 or not name.isprintable()
+                or name in {".", ".."} or any(char in name for char in "/\\")
+                or name.casefold() == storage.ANTIVIRUS_CASE_NAME.casefold()):
+            self.notify("Saisissez un nom valide sans séparateur de chemin ni nom réservé.",
+                        "Enter a valid name without path separators or reserved names.")
+            return False
+        if (len(reference) > 120 or (reference and not reference.isprintable())
+                or len(description) > 4000
+                or any(not char.isprintable() and char not in "\n\t" for char in description)):
+            self.notify("Vérifiez la référence et la description (4 000 caractères maximum).",
+                        "Check the reference and description (maximum 4,000 characters).")
+            return False
         try:
             with storage.database(self.database_path) as connection:
-                case_id = storage.create_case(connection, name, operator)
+                case_id = storage.create_case(connection, name, operator,
+                                              reference=reference, description=description)
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
-            return
-        self.case_name.clear()
+            return False
         self.refresh_cases(case_id)
+        return True
 
     def import_case(self):
         operator = self.require_operator()
         if not operator:
             return
         directory = QFileDialog.getExistingDirectory(
-            self, self.tr_pair("Dossier du projet historique", "Legacy project folder"),
+            self.case_picker or self, self.tr_pair("Dossier du projet historique", "Legacy project folder"),
             options=QFileDialog.Option.DontUseNativeDialog,
         )
         if not directory:
@@ -1453,9 +1469,10 @@ class Workspace(QMainWindow):
             with storage.database(self.database_path) as connection:
                 case_id = storage.create_case(connection, name, operator, str(path), raw)
         except (OSError, ValueError, sqlite3.Error) as error:
-            self.fail(error)
+            self.notify("Import impossible ou projet incompatible.", "Import failed or project is incompatible.", str(error))
             return
         self.refresh_cases(case_id)
+        self.notify("Projet importé.", "Project imported.", name)
 
     def choose_file(self):
         path, _ = QFileDialog.getOpenFileName(

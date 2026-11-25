@@ -82,6 +82,11 @@ def export_case(state, case_id, operator, destination):
     custody = case_storage_directory(state, case_id)
     with database(state) as connection:
         case = dict(require_active_case(connection, case_id))
+        details = connection.execute(
+            "SELECT reference, description FROM case_details WHERE case_id = ?", (case_id,),
+        ).fetchone()
+        if details is not None:
+            case.update(dict(details))
         evidence = [dict(row) for row in connection.execute(
             "SELECT * FROM evidence WHERE case_id = ? ORDER BY id", (case_id,))]
         legacy = Path(case["legacy_path"]) if case["legacy_path"] else None

@@ -15,7 +15,7 @@ from uuid import uuid4
 from .inspection import investigation_mounts, list_evidence_directory, open_evidence_path
 
 ANTIVIRUS_CASE_NAME = "Scan antivirus"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 APPLICATION_ID = 0x5649474C
 DELETED_CASES_DDL = """CREATE TABLE deleted_cases (
     case_id TEXT PRIMARY KEY REFERENCES cases(id), deleted_at TEXT NOT NULL
@@ -23,6 +23,10 @@ DELETED_CASES_DDL = """CREATE TABLE deleted_cases (
 CASE_DIRECTORIES_DDL = """CREATE TABLE case_directories (
     case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE
+)"""
+CASE_DETAILS_DDL = """CREATE TABLE case_details (
+    case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
+    reference TEXT NOT NULL, description TEXT NOT NULL
 )"""
 SCHEMA = (
     "CREATE TABLE operators (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE)",
@@ -32,6 +36,7 @@ SCHEMA = (
     )""",
     DELETED_CASES_DDL,
     CASE_DIRECTORIES_DDL,
+    CASE_DETAILS_DDL,
     """CREATE TABLE evidence (
         id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES cases(id),
         path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL
@@ -80,12 +85,14 @@ def database(path):
                     connection.execute(statement)
                 connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            elif app_id == APPLICATION_ID and version in (1, 2):
+            elif app_id == APPLICATION_ID and version in (1, 2, 3):
                 if version == 1:
                     connection.execute(DELETED_CASES_DDL)
-                connection.execute(CASE_DIRECTORIES_DDL)
-                for case_id, name in connection.execute("SELECT id, name FROM cases ORDER BY created_at, id"):
-                    assign_case_directory(connection, case_id, name)
+                if version < 3:
+                    connection.execute(CASE_DIRECTORIES_DDL)
+                    for case_id, name in connection.execute("SELECT id, name FROM cases ORDER BY created_at, id"):
+                        assign_case_directory(connection, case_id, name)
+                connection.execute(CASE_DETAILS_DDL)
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif app_id != APPLICATION_ID or version != SCHEMA_VERSION:
                 raise ValueError("unsupported Vigil database or schema version")
@@ -157,7 +164,7 @@ def assign_case_directory(connection, case_id, name):
     connection.execute("INSERT INTO case_directories VALUES (?, ?)", (case_id, candidate))
 
 
-def create_case(connection, name, operator, legacy_path=None, legacy_info=None):
+def create_case(connection, name, operator, legacy_path=None, legacy_info=None, *, reference="", description=""):
     if not name.strip():
         raise ValueError("case name required")
     case_id = uuid4().hex
@@ -173,9 +180,86 @@ def create_case(connection, name, operator, legacy_path=None, legacy_info=None):
         require_active_case(connection, existing)
         return existing
     assign_case_directory(connection, case_id, name)
+    if reference or description:
+        connection.execute("INSERT INTO case_details VALUES (?, ?, ?)", (case_id, reference, description))
     audit(connection, operator, case_id, "case.import" if legacy_path else "case.create",
           {"legacy_path": legacy_path})
     return case_id
+
+
+def case_manager_rows(state):
+    """Read case summaries without opening evidence, reports or census databases."""
+    with database(state) as connection:
+        return [dict(row) for row in connection.execute("""
+            WITH activity AS (
+                SELECT case_id, max(timestamp) AS latest,
+                       min(CASE WHEN action IN ('case.create', 'case.import') THEN sequence END) AS creation_event
+                FROM audit GROUP BY case_id
+            ), evidence_counts AS (
+                SELECT case_id, count(*) AS total FROM evidence GROUP BY case_id
+            )
+            SELECT c.id, c.name, c.created_at, d.reference, d.description,
+                   a.latest, n.name AS directory,
+                   coalesce(e.total, 0) AS evidence_count, o.name AS operator
+            FROM cases c JOIN case_directories n ON n.case_id = c.id
+            LEFT JOIN case_details d ON d.case_id = c.id
+            LEFT JOIN activity a ON a.case_id = c.id
+            LEFT JOIN audit v ON v.sequence = a.creation_event
+            LEFT JOIN operators o ON o.id = v.operator_id
+            LEFT JOIN evidence_counts e ON e.case_id = c.id
+            WHERE c.name <> ? AND c.id NOT IN (SELECT case_id FROM deleted_cases)
+            """, (ANTIVIRUS_CASE_NAME,))]
+
+
+def case_manager_artifacts(state, case_id, name):
+    """Read published case metadata without scanning a device or modifying the case."""
+    if not re.fullmatch(r"[0-9a-f]{32}", case_id) or not re.fullmatch(r"[A-Za-z0-9_]+", name):
+        raise ValueError("invalid case directory")
+    root = state.parent / "legacy-custody"
+    planned, previous = root / name, root / case_id
+    directory = previous if previous.exists() and not planned.exists() else planned
+    if directory.resolve() != directory.absolute() or directory.resolve().is_relative_to("/investigation"):
+        raise ValueError("invalid case directory")
+    metadata = {"path": str(directory), "inventory": None, "analyses": None, "reports": None}
+    if not directory.is_dir():
+        return metadata
+
+    def local(path):
+        return path.resolve() == path.absolute()
+
+    analyses = directory / "analyses"
+    runs = sorted(path for path in analyses.iterdir() if local(path) and path.is_dir()) if (
+        local(analyses) and analyses.is_dir()
+    ) else []
+    finished = []
+    for run in runs:
+        status = run / "exit-code"
+        if local(status) and status.is_file():
+            with status.open("rb") as stream:
+                finished.append(stream.read(16).strip())
+    metadata["analyses"] = finished.count(b"0")
+    reports = directory / "rapports"
+    if local(reports) and reports.is_dir():
+        metadata["reports"] = sum(
+            not (Path(folder) / filename).is_symlink() and (Path(folder) / filename).is_file()
+            for folder, _, files in os.walk(reports) for filename in files if filename.endswith(".pdf")
+        )
+    candidates = [
+        index for folder in [directory, *(run for run in runs if run.name.startswith("vigil.census-"))]
+        for index in folder.glob("census_*.sqlite") if local(index) and index.is_file()
+    ]
+    if candidates:
+        index = max(candidates, key=lambda path: path.stat().st_mtime_ns)
+        try:
+            connection = sqlite3.connect(index.as_uri() + "?mode=ro", uri=True, timeout=0.2)
+            try:
+                row = connection.execute("SELECT total_files FROM inventory_meta ORDER BY id DESC LIMIT 1").fetchone()
+                metadata["inventory"] = row[0] if row else None
+            finally:
+                connection.close()
+        except sqlite3.Error:
+            pass
+    return metadata
 
 
 def find_antivirus_case(connection):

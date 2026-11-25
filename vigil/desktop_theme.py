@@ -29,6 +29,12 @@ QLineEdit, QComboBox, QListWidget {
 QListWidget::item { padding: 8px; border-radius: 4px; }
 QListWidget::item:hover:!selected { background: #263444; }
 QListWidget::item:selected { background: #57C7D4; color: #101318; }
+QListView#caseManagerList {
+    background: #18212B; alternate-background-color: #263444; selection-background-color: #203741;
+    border: 1px solid #35404E; border-radius: 6px;
+}
+QPushButton[caseDestructive="true"]:enabled { color: #FF9CA3; border-color: #75434B; }
+QPushButton[caseDestructive="true"]:enabled:hover { background: #482A34; }
 QListWidget#navigation {
     background: #101318; border: none; padding: 0 7px 0 0;
     selection-background-color: #203741; selection-color: #80DEE8;

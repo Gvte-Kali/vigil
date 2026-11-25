@@ -83,10 +83,11 @@ class CaseExportTest(unittest.TestCase):
             with sqlite3.connect(state) as connection:
                 connection.execute("DROP TABLE deleted_cases")
                 connection.execute("DROP TABLE case_directories")
+                connection.execute("DROP TABLE case_details")
                 connection.execute("PRAGMA user_version = 1")
             with storage.database(state) as connection:
                 self.assertEqual(storage.require_active_case(connection, case)["name"], "Version one case")
-                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
+                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 4)
 
 
     def test_existing_case_directory_is_renamed_without_losing_files(self):
@@ -97,6 +98,7 @@ class CaseExportTest(unittest.TestCase):
                 second = storage.create_case(connection, "Equipe 42", "Alice")
             with sqlite3.connect(state) as connection:
                 connection.execute("DROP TABLE case_directories")
+                connection.execute("DROP TABLE case_details")
                 connection.execute("PRAGMA user_version = 2")
             previous = state.parent / "legacy-custody" / first
             previous.mkdir(parents=True)
@@ -110,6 +112,25 @@ class CaseExportTest(unittest.TestCase):
             self.assertFalse(previous.exists())
             self.assertEqual(storage.case_storage_directory(state, first), renamed)
             self.assertEqual(storage.case_storage_directory(state, second).name, "Equipe_42_2")
+
+    def test_manager_reads_published_metadata_without_opening_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "cases.sqlite"
+            with storage.database(state) as connection:
+                case = storage.create_case(connection, "Metrics", "Alice")
+            directory = storage.case_storage_directory(state, case)
+            run = directory / "analyses" / "vigil.census-fixture"
+            run.mkdir(parents=True)
+            (run / "exit-code").write_text("0\n")
+            with sqlite3.connect(run / "census_fixture.sqlite") as connection:
+                connection.execute("CREATE TABLE inventory_meta(id INTEGER, total_files INTEGER)")
+                connection.execute("INSERT INTO inventory_meta VALUES (1, 42)")
+            reports = directory / "rapports"
+            reports.mkdir()
+            (reports / "fixture.pdf").touch()
+            self.assertEqual(storage.case_manager_artifacts(state, case, "Metrics"), {
+                "path": str(directory), "inventory": 42, "analyses": 1, "reports": 1,
+            })
 
     def test_purge_removes_only_selected_local_case_and_reports(self):
         with tempfile.TemporaryDirectory() as tmp:

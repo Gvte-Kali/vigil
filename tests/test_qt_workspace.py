@@ -33,15 +33,10 @@ class WorkspaceTest(unittest.TestCase):
             flag = window.language_buttons["fr"].icon().pixmap(QSize(24, 16), 2).toImage()
             self.assertEqual(flag.pixelColor(46, 16).name(), "#ed2939")
             window.add_operator("Alice")
-            window.case_name.setText("Test & preuve")
-            window.create_case()
+            window.create_case("Test & preuve")
             with patch.object(window, "confirm_case_selection", return_value=True):
                 window.case_clicked(window.cases.currentItem())
-            window.case_search.setText("unmatched")
-            self.assertTrue(window.cases.item(0).isHidden())
             self.assertIn("Test & preuve", window.active_case.text())
-            window.case_search.setText("PREUVE")
-            self.assertFalse(window.cases.item(0).isHidden())
             window.language_buttons["en"].click()
             self.assertNotIn("Cases", [window.navigation.item(i).text() for i in range(window.navigation.count())])
             self.assertEqual(window.case_title.text(), "Current case · Test & preuve")
@@ -54,7 +49,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(reopened.case_navigation.tabText(1), "Preuves")
             self.close_workspace(reopened)
 
-    def test_case_picker_reuses_controls_and_restores_cases_page(self):
+    def test_case_manager_filters_preserves_selection_and_requires_explicit_open(self):
         from vigil.desktop import QDialog, Workspace
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -62,21 +57,30 @@ class WorkspaceTest(unittest.TestCase):
             window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
                                root / "cases.sqlite")
             window.add_operator("Alice")
-            window.case_name.setText("Fixture")
-            window.create_case()
+            window.create_case("Zulu")
+            window.create_case("Fixture", "REF-42", "Test description")
 
             def select():
                 dialog = window.case_picker
-                self.assertTrue(dialog.isAncestorOf(window.case_search))
-                self.assertTrue(dialog.isAncestorOf(window.cases))
-                item = window.cases.item(0)
-                window.cases.setCurrentItem(item)
-                window.cases.itemClicked.emit(item)
+                deadline = time.monotonic() + 3
+                while dialog.loading and time.monotonic() < deadline:
+                    self.app.processEvents()
+                    time.sleep(0.01)
+                self.assertFalse(dialog.loading)
+                self.assertEqual(dialog.proxy.rowCount(), 2)
+                dialog.list.setCurrentIndex(dialog.proxy.index(0, 0))
+                selected = dialog.selected_id()
+                dialog.sort.setCurrentIndex(1)
+                self.assertEqual(dialog.selected_id(), selected)
+                dialog.search.setText("FIXTURE")
+                self.assertEqual(dialog.proxy.rowCount(), 1)
+                self.assertEqual(dialog.selected_id(), selected)
+                self.assertIn("REF-42", [label.text() for label in dialog.findChildren(type(dialog.count))])
                 self.assertFalse(window.active_case_id)
                 if pick_with_button:
-                    window.select_case_button.click()
+                    dialog.open.click()
                 else:
-                    window.cases.itemDoubleClicked.emit(item)
+                    dialog.list.doubleClicked.emit(dialog.list.currentIndex())
                 return dialog.result()
 
             with patch.object(window, "confirm_case_selection", return_value=True), \
@@ -85,8 +89,28 @@ class WorkspaceTest(unittest.TestCase):
                     window.active_case_id = ""
                     window.choose_case()
                     self.assertTrue(window.active_case_id)
-            self.assertIs(window.case_controls.parentWidget(), window)
-            self.assertTrue(window.case_controls.isHidden())
+            self.assertIsNone(window.case_picker)
+            self.close_workspace(window)
+
+    def test_case_manager_refuses_deletion_during_operations(self):
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.add_operator("Alice")
+            window.create_case("First")
+            window.create_case("Second")
+            first, second = (window.cases.item(i).data(256) for i in range(2))
+            window.active_case_id = first
+            window.external_runs.append(type("PendingRun", (), {"status": lambda self: None})())
+            with patch.object(window, "notify") as notify:
+                window.delete_selected_case(second)
+            notify.assert_called_once()
+            self.assertEqual(window.cases.count(), 2)
+            self.assertEqual(window.active_case_id, first)
+            window.external_runs.clear()
             self.close_workspace(window)
 
     def test_background_file_registration_and_verification(self):
@@ -99,8 +123,7 @@ class WorkspaceTest(unittest.TestCase):
                 root / "cases.sqlite",
             )
             window.add_operator("Alice")
-            window.case_name.setText("Fixture")
-            window.create_case()
+            window.create_case("Fixture")
             with patch.object(window, "confirm_case_selection", return_value=True):
                 window.case_clicked(window.cases.currentItem())
             source = root / "synthetic.raw"
@@ -178,8 +201,7 @@ class WorkspaceTest(unittest.TestCase):
             window = Workspace(QSettings(str(root / "settings"), QSettings.Format.IniFormat),
                                root / "cases.sqlite")
             window.add_operator("Alice")
-            window.case_name.setText("Fixture")
-            window.create_case()
+            window.create_case("Fixture")
             with patch.object(window, "confirm_case_selection", return_value=True):
                 window.case_clicked(window.cases.currentItem())
             from vigil.storage import case_storage_directory
@@ -217,8 +239,7 @@ class WorkspaceTest(unittest.TestCase):
             window = Workspace(QSettings(config, QSettings.Format.IniFormat), database)
             window.add_operator("Alice")
             for name in ("First", "Second"):
-                window.case_name.setText(name)
-                window.create_case()
+                window.create_case(name)
             self.assertEqual(window.active_case_id, "")
             window.cases.setCurrentRow(0)
             with patch.object(window, "confirm_case_selection", return_value=False) as confirm:

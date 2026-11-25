@@ -28,3 +28,17 @@ Le check syntaxique et la caractérisation ne valident pas les parcours interact
 | Performances | Chronométrer et mesurer mémoire sur large corpus synthétique versionné ; mesurer seule et ensemble la collecte puis la lecture d'index. Fixer budgets après mesures. |
 
 Recette manuelle phase 00 sur la branche dédiée. Relire les preuves et écarts de chaque ligne, reproduire les commandes sûres, confirmer l'accord avant la phase suivante. Retour documentaire par revert du commit phase 00 sur la branche, avec état initial `a2553ba` disponible pour comparaison.
+
+## Gestionnaire d’affaires Qt
+
+La base SQLite passe au schéma 4 pour les références et descriptions
+facultatives. Avant une mise à jour, fermer Vigil et sauvegarder le dossier
+`data/state`. Pour revenir au schéma précédent, restaurer la sauvegarde avec
+le code précédent.
+
+La recette automatisée vérifie le filtrage, le maintien de la sélection au
+tri, les deux modes d’ouverture explicite, le refus de suppression pendant
+une opération et la lecture des métadonnées de recensement existantes. Le
+rendu Qt hors écran a été contrôlé à 150 % sur une fenêtre de 900 × 600 puis
+560 × 380 pixels logiques. La recette sous X11, Wayland et Hyprland figure
+dans `tests.txt`.
