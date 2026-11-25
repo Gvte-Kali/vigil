@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTimer, QTranslator, QUrl, Qt, Signal, Slot
+from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QThreadPool, QTimer, QTranslator, QUrl, Qt, Signal, Slot
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
@@ -22,15 +22,16 @@ from PySide6.QtWidgets import (
 from . import storage
 from .case_export import export_case
 from .case_import import import_archive, verify_archive
-from .case_manager import CaseManager, NewCaseDialog
+from .case_manager import CaseLoad, CaseManager, NewCaseDialog
 from .case_removal import purge_case
 from .adapters import CENSUS_LIMIT, analysis_command, query_census
 from .core import BUILTIN_MODULES, discover, doctor
 from .desktop_theme import ACCENT, ICONS, SPACE, STYLE, SUCCESS, VIOLET, WARNING
 from .images import inspect_raw
-from .inspection import inspect_file, investigation_mounts
+from .inspection import inspect_file, inspect_open_file, investigation_mounts
 from .module_scaffold import create_module_draft
 from .evidence_panel import EvidencePanel
+from .desktop_integration import checked_descriptor, graphical_user, prepare_view, reveal_in_file_manager
 from .entity import data_directory, legacy_base
 from .entity_panel import EntityPanel
 from .history import PAGE_SIZE, case_events
@@ -122,7 +123,8 @@ class Workspace(QMainWindow):
         self.closing_checks = False
         self.startup_state_error = None
         try:
-            capture_startup_state(database_path)
+            if not os.environ.get("VIGIL_SESSION_SNAPSHOT"):
+                capture_startup_state(database_path)
         except (OSError, ValueError) as error:
             self.startup_state_error = error
         self.active_case_id = ""
@@ -325,8 +327,16 @@ class Workspace(QMainWindow):
 
         explorer = self.case_view("Explorateur", "Evidence explorer")
         self.explorer_case_id = None
+        self.preview_request = None
+        self.preview_generation = 0
+        self.preview_jobs = {}
+        self.preview_timer = QTimer(self)
+        self.preview_timer.setSingleShot(True)
+        self.preview_timer.timeout.connect(self.start_queued_preview)
         self.explorer = EvidencePanel(self.tr_pair, self.preview_evidence, self.process_explorer_selection,
-                                      self.action_icon, lambda: bool(self.active_case_id))
+                                      self.action_icon, lambda: bool(self.active_case_id),
+                                      passive_preview=self.queue_explorer_preview,
+                                      external_action=self.external_explorer_action)
         explorer.addWidget(self.explorer)
         self.explorer_page = explorer.parentWidget()
 
@@ -964,6 +974,7 @@ class Workspace(QMainWindow):
                 self.cases.setCurrentItem(current)
             return
         self.active_case_id = target_id
+        self.save_session_context()
         self.refresh_evidence()
         self.reset_history()
         if self.case_picker is not None:
@@ -1030,7 +1041,21 @@ class Workspace(QMainWindow):
                     copies[evidence_id] = copy
             except (OSError, ValueError):
                 continue
-        self.explorer.set_files(rows, copies=copies, keep_state=keep_explorer, archived=archived)
+        result_folders = {}
+        try:
+            custody = storage.case_storage_directory(self.database_path, self.active_case_id)
+            for folder, labels in (
+                ("analyses", ("Résultats d’analyse", "Analysis results")),
+                ("rapports", ("Rapports PDF", "PDF reports")),
+                ("rapports-json", ("Rapports JSON", "JSON reports")),
+            ):
+                root = custody / folder
+                if root.is_dir() and not root.is_symlink() and next(root.iterdir(), None) is not None:
+                    result_folders[root] = labels
+        except (OSError, ValueError):
+            pass
+        self.explorer.set_files(rows, copies=copies, keep_state=keep_explorer,
+                                archived=archived, result_folders=result_folders)
         self.refresh_explorer_mounts()
         self.update_evidence_tree(rows, copies, archived=archived)
 
@@ -1157,12 +1182,126 @@ class Workspace(QMainWindow):
             self.dashboard_events.addItem(QListWidgetItem(self.action_icon("list", ACCENT),
                 f"{event['timestamp']}  ·  {event['action']}  ·  {event['operator']}"))
 
-    def preview_evidence(self, name, digest, mount=None, *, evidence_id=None):
-        if self.busy is not None:
+    def queue_explorer_preview(self, *resource):
+        self.preview_generation += 1
+        if not resource:
+            self.preview_request = None
+            return
+        self.preview_request = self.active_case_id, resource, self.preview_generation
+        self.preview_timer.start(45)
+
+    def start_queued_preview(self):
+        if self.preview_request is None:
+            return
+        case_id, resource, generation = self.preview_request
+        self.preview_request = None
+        if self.active_case_id == case_id:
+            self.preview_evidence(*resource, generation=generation)
+
+    def external_explorer_action(self, action, resource):
+        if not self.active_case_id or self.busy is not None:
+            return
+        name, digest, mount, directory = resource
+        original = Path(name)
+        case_id = self.active_case_id
+        operator = self.require_operator()
+        if not operator:
+            return
+        if action != "copy" and not graphical_user():
+            self.notify("Session graphique non privilégiée introuvable.",
+                        "No non-privileged graphical session is available.")
+            return
+
+        if action != "copy":
+            dialog = QMessageBox(self)
+            dialog.setTextFormat(Qt.TextFormat.PlainText)
+            if action == "folder":
+                dialog.setText(self.tr_pair("Ouvrir dans l’explorateur système ?",
+                                            "Open in the system file manager?"))
+                dialog.setInformativeText(self.tr_pair(
+                    "Le gestionnaire de fichiers peut générer automatiquement des miniatures.",
+                    "The file manager may generate thumbnails automatically.",
+                ))
+            else:
+                dialog.setText(self.tr_pair("Ouvrir une copie de consultation ?",
+                                            "Open a viewing copy?"))
+                dialog.setInformativeText(self.tr_pair(
+                    "L’application par défaut peut traiter des contenus actifs. La copie n’est pas isolée de l’OS.",
+                    "The default application may process active content. The copy is not sandboxed from the OS.",
+                ))
+            dialog.setStandardButtons(QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Cancel)
+            dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+            if dialog.exec() != QMessageBox.StandardButton.Open:
+                return
+
+        def prepare():
+            scope = storage.case_storage_directory(self.database_path, case_id) if mount is None else None
+            result_file = scope is not None and digest is None and any(
+                original.is_relative_to(scope / folder) for folder in ("analyses", "rapports", "rapports-json")
+            )
+            if mount is None and not directory and not result_file:
+                source = storage.find_evidence_copy(self.database_path, case_id, original, digest)
+                if source is None:
+                    raise ValueError("Referenced content unavailable / Contenu référencé indisponible")
+            else:
+                source = original
+            if action == "file":
+                return prepare_view(self.database_path, source, original.name, mount=mount, scope=scope), None
+            if action == "folder" and not directory:
+                with checked_descriptor(source, mount=mount, scope=scope):
+                    pass
+            target = source.parent if action == "folder" and not directory else source
+            with checked_descriptor(target, mount=mount, scope=scope,
+                                    directory=directory or action == "folder"):
+                return target, source if action == "folder" and not directory else None
+
+        def record(result, *, location=None, error=None):
+            if action == "copy":
+                return
+            try:
+                with storage.database(self.database_path) as connection:
+                    row = connection.execute(
+                        "SELECT id FROM evidence WHERE case_id = ? AND path = ? AND sha256 = ?",
+                        (case_id, name, digest),
+                    ).fetchone()
+                    storage.audit(connection, operator, case_id, "explorer.external.request", {
+                        "action": action, "path": name, "evidence_id": row["id"] if row else None,
+                        "resource": "directory" if directory else "file",
+                        "requested_location": str(location) if location is not None else None,
+                        "result": result, "error": str(error) if error else None,
+                    })
+            except (OSError, ValueError, sqlite3.Error) as diagnostic:
+                self.fail(diagnostic)
+
+        def failed(error):
+            record("failed", error=error)
+            self.fail(error)
+
+        def launch(prepared):
+            target, selected = prepared
+            if action == "copy":
+                QApplication.clipboard().setText(str(target))
+                return
+            if self.active_case_id != case_id:
+                failed(ValueError(self.tr_pair("L’affaire active a changé.", "The active case changed.")))
+                return
+            accepted = (selected is not None and reveal_in_file_manager(selected)) or QDesktopServices.openUrl(
+                QUrl.fromLocalFile(str(target)))
+            if accepted:
+                record("os_accepted", location=target)
+            else:
+                failed(ValueError(self.tr_pair("Le système n’a pas accepté l’ouverture.",
+                                                "The system did not accept the open request.")))
+
+        self.run_task(prepare, launch, on_error=failed)
+
+    def preview_evidence(self, name, digest, mount=None, *, evidence_id=None, generation=None):
+        if self.busy is not None and generation is None:
             return
         case_id = self.active_case_id
 
         original = Path(name)
+        result_folders = tuple(self.explorer.result_folders)
 
         def inspect():
             if mount is None and digest and case_id:
@@ -1183,10 +1322,15 @@ class Workspace(QMainWindow):
                         "et ajoutez de nouveau le fichier aux preuves.",
                         "This evidence has no local copy. Remount the original device read-only and add the file again.",
                     ))
+            if mount is None and digest is None:
+                root = next((folder for folder in result_folders if original.is_relative_to(folder)), None)
+                with checked_descriptor(original, scope=root) as descriptor:
+                    return inspect_open_file(descriptor, original.name)
             return inspect_file(original, mount=mount)
 
         def display(snapshot):
             if (self.active_case_id == case_id
+                    and (generation is None or generation == self.preview_generation)
                     and (mount is None or self.explorer.mounts.get(mount[0]) == mount[1])):
                 try:
                     self.explorer.show_preview(name, digest, snapshot)
@@ -1197,7 +1341,29 @@ class Workspace(QMainWindow):
                 if evidence_id is not None:
                     self.case_navigation.setCurrentIndex(self.case_pages.indexOf(self.explorer_page))
 
-        self.run_task(inspect, display)
+        def preview_failed(error):
+            if generation is None:
+                self.fail(error)
+            elif generation == self.preview_generation:
+                for view in self.explorer.views:
+                    view.clear()
+                self.explorer.hint.setText(str(error))
+
+        if generation is None:
+            self.run_task(inspect, display, on_error=preview_failed)
+        else:
+            self.preview_jobs[generation] = (display, preview_failed)
+            job = CaseLoad(generation, inspect)
+            job.signals.completed.connect(self.complete_preview)
+            QThreadPool.globalInstance().start(job)
+
+    @Slot(int, object, object)
+    def complete_preview(self, generation, snapshot, error):
+        success, failure = self.preview_jobs.pop(generation)
+        if error is not None:
+            failure(error)
+        else:
+            success(snapshot)
 
     def reset_history(self, *_):
         self.history_rows.clear()
@@ -1338,7 +1504,18 @@ class Workspace(QMainWindow):
         self.operator.blockSignals(False)
         self.save_operator()
 
+    def save_session_context(self):
+        if path := os.environ.get("VIGIL_SESSION_CONTEXT"):
+            from .session import write_state
+            case = self.active_case_item()
+            try:
+                write_state(Path(path), {"operator": self.operator.currentText() if self.operator.currentData() else None,
+                                         "case": case.text() if case is not None else None})
+            except OSError:
+                logging.getLogger(__name__).exception("Could not save session context")
+
     def save_operator(self, *_):
+        self.save_session_context()
         self.settings.setValue("operator_id", self.operator.currentData() or "")
 
     def session_operator_input(self):
@@ -1767,7 +1944,7 @@ class Workspace(QMainWindow):
         else:
             self.notify("Aucune extension discordante.", "No extension mismatches.")
 
-    def run_task(self, operation, on_success):
+    def run_task(self, operation, on_success, *, on_error=None):
         if self.case_picker is not None:
             self.case_picker.setEnabled(False)
         self.busy = QThread(self)
@@ -1779,6 +1956,7 @@ class Workspace(QMainWindow):
         self.busy.finished.connect(self.worker.deleteLater)
         self.busy.finished.connect(self.finish_task)
         self.on_success = on_success
+        self.on_task_error = on_error or self.fail
         for button in self.buttons:
             button.setEnabled(False)
         self.statusBar().showMessage(self.tr_pair("Calcul en cours…", "Computing…"))
@@ -1802,14 +1980,15 @@ class Workspace(QMainWindow):
         self.refresh_dashboard()
         if error is not None:
             logging.getLogger(__name__).warning("Background operation failed: %s", error)
-            self.fail(error)
+            self.on_task_error(error)
         else:
             self.on_success(result)
 
     def refresh_hotplug_status(self):
-        token = Path("/run/vigil-hotplug") / str(os.getpid())
+        pid = os.environ.get("VIGIL_SESSION_GUARD", str(os.getpid()))
+        token = Path("/run/vigil-hotplug") / pid
         try:
-            start = Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19]
+            start = (Path("/proc") / pid / "stat").read_text().rsplit(")", 1)[1].split()[19]
             active = token.stat().st_uid == 0 and token.read_text().strip() == f"{os.getuid()} {start}"
         except (OSError, IndexError):
             active = False
@@ -1828,6 +2007,16 @@ class Workspace(QMainWindow):
         )
 
     def start_hotplug_protection(self):
+        pending = json.loads(os.environ.get("VIGIL_SESSION_PENDING", "[]"))
+        if pending:
+            self.notify(
+                "Une session antérieure doit être vérifiée. La protection automatique n’est pas réactivée.",
+                "A previous session needs review. Automatic protection was not reactivated.",
+                "\n".join(pending),
+            )
+            from .session import review_previous
+            review_previous(self.database_path, pending, self.settings.value("external_terminal", ""))
+            return
         helper = "/usr/local/sbin/vigil-hotplug"
         if not Path(helper).is_file():
             return
@@ -1835,8 +2024,8 @@ class Workspace(QMainWindow):
             script = legacy_base() / "scripts/post-install/activate-hotplug.sh"
             if not script.is_file():
                 raise FileNotFoundError(script)
-            launch_terminal(["/usr/bin/sh", str(script), str(os.getpid())],
-                            self.settings.value("external_terminal", ""))
+            launch_terminal(["/usr/bin/sh", str(script), os.environ.get("VIGIL_SESSION_GUARD", str(os.getpid()))],
+                            self.settings.value("external_terminal", ""), detached=True)
         except (OSError, ValueError) as error:
             self.statusBar().showMessage(str(error), 10000)
 
@@ -2196,6 +2385,9 @@ class Workspace(QMainWindow):
 
 
 def main():
+    if not os.environ.get("VIGIL_SESSION_ID"):
+        from .session import supervise
+        return supervise(sys.argv[1:])
     if os.geteuid() == 0:
         print("Lancez Vigil en tant qu’utilisateur ordinaire. / Run Vigil as a regular user.",
               file=sys.stderr)

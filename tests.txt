@@ -506,3 +506,14 @@ Recette interface et terminaux
     affiche le bilan, puis simuler une restauration non confirmée et
     vérifier la tentative ciblée avec R. Vérifier qu’un volume restant
     monté est signalé et qu’une autre session conserve sa protection.
+
+[ ] En VM, lancer Vigil depuis le paquet et depuis python -m vigil.desktop.
+    Vérifier le terminal au bout des deux parcours et simuler un premier
+    émulateur en échec. Refaire après SIGTERM et SIGKILL de Qt uniquement.
+[ ] Fermer le terminal pendant l’attente d’une opération synthétique.
+    Vérifier le rapport persistant et la restitution après la fin du suivi.
+    Refaire avec arrêt du superviseur puis vérifier le diagnostic au lancement.
+[ ] Sur fixtures, cliquer rapidement deux fichiers et vérifier HEX, ASCII
+    et métadonnées. Double-cliquer un dossier puis un document autorisé.
+    Vérifier la copie de consultation, le refus d’un exécutable et les
+    actions de dossier et de chemin avec et sans FileManager1.

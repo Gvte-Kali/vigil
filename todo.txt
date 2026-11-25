@@ -30,6 +30,9 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] Lanceur système vigil-gui publié par le post-install et la mise à jour des lanceurs.
 [x] Bilan de sortie Qt normal et anormal, reçu hotplug et nouvelle tentative ciblée. Tests synthétiques.
 [ ] Recette VM de la restauration udev et du terminal après arrêt inattendu.
+[x] Supervision des opérations suivies, bilan détaché avec repli et journal des sessions interrompues.
+[x] Explorateur Qt avec aperçu au clic, ouverture externe sur copie et journalisation.
+[ ] Recette VM des fermetures d’environnement graphique et de la récupération udev concurrente.
 [ ] Recette de transfert entre deux postes et de reprise après arrêt brutal en VM.
 [x] Le texte d’attente de l’inspecteur disparaît dès la sélection d’une affaire, sans attendre le prochain cycle Qt.
 [x] Gestionnaire d’affaires sans défilement des actions, avec menu d’import unique et validation séparée.

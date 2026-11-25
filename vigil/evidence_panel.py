@@ -1,44 +1,57 @@
 """Inert explorer for the files registered in the active case."""
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .desktop_integration import checked_descriptor
 from .inspection import list_evidence_directory
 
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtCore import QItemSelectionModel, Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QLabel, QMenu, QLineEdit, QPlainTextEdit, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
+    QAbstractItemView, QHBoxLayout, QLabel, QMenu, QLineEdit, QPlainTextEdit, QPushButton, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem,
     QVBoxLayout, QWidget,
 )
 
 
 class EvidencePanel(QWidget):
-    def __init__(self, translate, request_preview, selection_action, icon, has_case):
+    def __init__(self, translate, request_preview, selection_action, icon, has_case, *, passive_preview, external_action):
         super().__init__()
         self.tr_pair = translate
         self.request_preview = request_preview
         self.selection_action = selection_action
+        self.passive_preview = passive_preview
+        self.external_action = external_action
         self.icon = icon
         self.has_case = has_case
         self.mounts = {}
         self.registered_files = {}
         self.archived = False
         self.local_copies = {}
+        self.result_folders = {}
+        self.displayed_directory = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.filter = QLineEdit()
         self.filter.setClearButtonEnabled(True)
         self.filter.addAction(icon("search", "#55C5D2"), QLineEdit.ActionPosition.LeadingPosition)
         self.filter.textChanged.connect(self.apply_filter)
-        layout.addWidget(self.filter)
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(self.filter, 1)
+        self.open_folder = QPushButton(icon("folder-open", "#55C5D2"), "")
+        self.open_folder.clicked.connect(lambda: self.external("folder", self.current_location()))
+        toolbar.addWidget(self.open_folder)
+        layout.addLayout(toolbar)
         split = QSplitter()
         layout.addWidget(split)
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
+        self.tree.setExpandsOnDoubleClick(False)
         self.tree.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.open_context_menu)
-        self.tree.itemActivated.connect(self.inspect)
+        self.tree.currentItemChanged.connect(self.select_preview)
+        self.tree.itemDoubleClicked.connect(self.open_item)
         self.tree.itemExpanded.connect(self.expand_directory)
         split.addWidget(self.tree)
         details = QWidget()
@@ -60,21 +73,24 @@ class EvidencePanel(QWidget):
 
     def retranslate(self):
         tr = self.tr_pair
+        self.open_folder.setText(tr("Ouvrir le dossier", "Open folder"))
+        self.open_folder.setEnabled(self.current_location() is not None)
         self.filter.setPlaceholderText(tr("Filtrer les fichiers affichés", "Filter displayed files"))
         if not self.has_case():
             hint = tr("Choisissez une affaire pour accéder aux preuves.", "Choose a case to see its evidence.")
         elif not self.mounts and not self.registered_files:
             hint = tr("Aucun support monté ni preuve enregistrée.", "No mounted devices or registered evidence.")
         else:
-            hint = tr("Ouvrez un fichier pour afficher ses 4 premiers Kio.", "Open a file to see its first 4 KiB.")
+            hint = tr("Sélectionnez un fichier pour afficher ses 4 premiers Kio.", "Select a file to see its first 4 KiB.")
         self.hint.setText(hint)
         self.update_mount_status()
         self.tabs.setTabText(0, tr("Métadonnées", "Metadata"))
         self.tabs.setTabText(1, tr("Hexadécimal", "Hex"))
         self.tabs.setTabText(2, tr("Chaînes ASCII", "ASCII strings"))
 
-    def set_files(self, rows, *, copies=None, keep_state=True, archived=False):
+    def set_files(self, rows, *, copies=None, keep_state=True, archived=False, result_folders=None):
         self.archived = archived
+        self.result_folders = result_folders or {}
         copies = copies or {}
         self.local_copies = {name: copies.get(evidence_id) for evidence_id, name, _ in rows}
         self.registered_files = {name: digest for _, name, digest in rows}
@@ -82,6 +98,7 @@ class EvidencePanel(QWidget):
 
     def set_mounts(self, mounts):
         if mounts != self.mounts:
+            self.displayed_directory = None
             self.mounts = dict(mounts)
             self.rebuild_tree()
 
@@ -89,7 +106,7 @@ class EvidencePanel(QWidget):
     def item_key(item):
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if data and len(data) == 4:
-            return ("mounted", data[0], tuple(data[2]))
+            return ("mounted", data[0], tuple(data[2] or ()))
         return ("registered", data[0]) if data else ("group", item.text(0))
 
     def items(self):
@@ -113,6 +130,8 @@ class EvidencePanel(QWidget):
                     populated.add(key)
                 if item.isSelected():
                     selected.add(key)
+        if not keep_state:
+            self.displayed_directory = None
         self.tree.clear()
         if not keep_state:
             for view in self.views:
@@ -135,6 +154,8 @@ class EvidencePanel(QWidget):
             group.setExpanded(self.item_key(group) not in collapsed)
         for root, mount_id in sorted(self.mounts.items()):
             self.add_live_item(self.tree, root, Path(root), (root, mount_id), True)
+        for root, labels in self.result_folders.items():
+            self.add_live_item(self.tree, self.tr_pair(*labels), root, None, True)
         if keep_state:
             for item in self.items():
                 key = self.item_key(item)
@@ -175,8 +196,16 @@ class EvidencePanel(QWidget):
             return
         path, _, mount, _ = data
         try:
-            rows = list_evidence_directory(path, *mount)
-        except (OSError, ValueError) as error:
+            if mount:
+                rows = list_evidence_directory(path, *mount)
+            else:
+                scope = next(root for root in self.result_folders if Path(path).is_relative_to(root))
+                with checked_descriptor(Path(path), scope=scope, directory=True) as descriptor:
+                    with os.scandir(descriptor) as entries:
+                        rows = sorted((entry.name, entry.is_dir(follow_symlinks=False))
+                                      for entry in entries if entry.is_dir(follow_symlinks=False)
+                                      or entry.is_file(follow_symlinks=False))
+        except (OSError, ValueError, StopIteration) as error:
             item.setToolTip(0, f"{path}\n{error}")
             self.hint.setText(str(error))
             return
@@ -217,22 +246,95 @@ class EvidencePanel(QWidget):
                                if not child.isHidden())
         return sources
 
+    def resource(self, item):
+        if item is None:
+            return None
+        data = item.data(0, Qt.ItemDataRole.UserRole)
+        if not data:
+            if item.childCount():
+                first = item.child(0).data(0, Qt.ItemDataRole.UserRole)
+                copy = self.local_copies.get(first[0])
+                if copy:
+                    return str(copy.parents[1]), None, None, True
+            return None
+        if len(data) == 4:
+            return tuple(data)
+        copy = self.local_copies.get(data[0])
+        if copy:
+            return (*data, None, False)
+        return None
+
+    def current_location(self):
+        item = self.tree.currentItem()
+        if item is not None:
+            return self.resource(item)
+        if self.displayed_directory is not None:
+            return self.displayed_directory
+        if self.tree.topLevelItemCount() == 1:
+            return self.resource(self.tree.topLevelItem(0))
+        return None
+
+    def external(self, action, resource):
+        if resource is not None:
+            self.external_action(action, resource)
+
+    def select_preview(self, item, _previous):
+        resource = self.resource(item)
+        if resource is not None and resource[3]:
+            self.displayed_directory = resource
+        self.open_folder.setEnabled(self.current_location() is not None)
+        data = item.data(0, Qt.ItemDataRole.UserRole) if item is not None else None
+        if data and (len(data) == 2 or not data[3]):
+            self.passive_preview(*data[:3])
+        else:
+            self.passive_preview()
+            for view in self.views:
+                view.clear()
+
+    def open_item(self, item, _column):
+        resource = self.resource(item)
+        if resource is not None and resource[3]:
+            item.setExpanded(True)
+        elif resource is not None:
+            self.external("file", resource)
+        elif item.data(0, Qt.ItemDataRole.UserRole):
+            self.hint.setText(self.tr_pair("Le contenu référencé est indisponible.",
+                                          "The referenced content is unavailable."))
+
     def open_context_menu(self, position):
         item = self.tree.itemAt(position)
         if item is None:
             return
         if not item.isSelected():
             self.tree.setCurrentItem(item)
-        sources = self.selected_sources()
-        if not sources:
-            return
+        sources = [row for row in self.selected_sources() if row[1] or not any(
+            Path(row[0]).is_relative_to(root) for root in self.result_folders
+        )]
+        resource = self.resource(item)
         tr = self.tr_pair
         menu = QMenu(self)
-        add = menu.addAction(tr("Ajouter aux preuves", "Add to evidence"))
-        verify = menu.addAction(tr("Vérifier l’intégrité", "Verify integrity"))
-        selected = menu.exec(self.tree.viewport().mapToGlobal(position))
-        if selected in (add, verify):
-            self.selection_action(sources, selected == add)
+        if resource is not None:
+            directory = resource[3]
+            if directory:
+                menu.addAction(self.icon("folder", "#55C5D2"), tr("Ouvrir dans Vigil", "Open in Vigil"),
+                               lambda: item.setExpanded(True))
+            else:
+                menu.addAction(self.icon("external-link", "#55C5D2"),
+                               tr("Ouvrir avec l’application par défaut", "Open with default application"),
+                               lambda: self.external("file", resource))
+            menu.addAction(self.icon("folder-open", "#55C5D2"),
+                           tr("Ouvrir le dossier", "Open folder"), lambda: self.external("folder", resource))
+            menu.addAction(self.icon("copy", "#55C5D2"), tr("Copier le chemin", "Copy path"),
+                           lambda: self.external("copy", resource))
+        if sources:
+            if resource is not None:
+                menu.addSeparator()
+            menu.addAction(tr("Ajouter aux preuves", "Add to evidence"),
+                           lambda: self.selection_action(sources, True))
+            menu.addAction(tr("Vérifier l’intégrité", "Verify integrity"),
+                           lambda: self.selection_action(sources, False))
+        if not menu.isEmpty():
+            menu.exec(self.tree.viewport().mapToGlobal(position))
         menu.deleteLater()
 
     def inspect(self, item, _column):

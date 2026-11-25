@@ -261,6 +261,43 @@ class WorkspaceTest(unittest.TestCase):
             self.assertTrue(window.isVisible())
             self.close_workspace(window)
 
+    def test_explorer_click_previews_latest_and_double_click_routes_by_type(self):
+        from vigil import storage
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "settings"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.add_operator("Alice")
+            window.create_case("Fixture")
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
+            for name in ("first", "second"):
+                source = root / f"{name}.txt"
+                source.write_text(name)
+                storage.register_file(window.database_path, window.active_case_id, source, "Alice")
+            window.refresh_evidence()
+            group = window.explorer.tree.topLevelItem(0)
+            window.explorer.tabs.setCurrentIndex(1)
+            with patch.object(window.explorer, "external_action") as external:
+                for index in range(2):
+                    window.explorer.tree.setCurrentItem(group.child(index))
+                deadline = time.monotonic() + 3
+                while window.explorer.views[2].toPlainText() != "second" and time.monotonic() < deadline:
+                    self.app.processEvents()
+                    time.sleep(0.01)
+                self.assertEqual(window.explorer.views[2].toPlainText(), "second")
+                self.assertEqual(window.explorer.tabs.currentIndex(), 1)
+                self.assertIn("7365", window.explorer.views[1].toPlainText().replace(" ", ""))
+                external.assert_not_called()
+                window.explorer.open_item(group, 0)
+                self.assertTrue(group.isExpanded())
+                external.assert_not_called()
+                window.explorer.open_item(group.child(1), 0)
+                self.assertEqual(external.call_args.args[0], "file")
+            self.close_workspace(window)
+
     def test_pdf_table_sorts_dates_and_selects_the_correct_report_folder(self):
         from PySide6.QtCore import Qt
         from vigil.desktop import QDesktopServices, Workspace
