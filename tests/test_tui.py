@@ -18,15 +18,19 @@ class TerminalWorkspaceTest(unittest.IsolatedAsyncioTestCase):
             source.write_text("Vigil fixture")
             workspace = Workspace(state, language="en")
             async with workspace.run_test(size=(104, 34)) as pilot:
-                await pilot.click("#--content-tab-entity")
+                await pilot.click("#nav-entity")
                 await pilot.pause()
                 workspace.query_one("#operator-name", Input).value = "Alice"
+                workspace.query_one("#set-operator").scroll_visible(immediate=True)
+                await pilot.pause()
                 self.assertTrue(await pilot.click("#set-operator"))
                 await pilot.pause()
-                await pilot.click("#--content-tab-cases")
+                await pilot.click("#nav-cases")
                 await pilot.pause()
-                workspace.query_one("#case-name", Input).value = "Example [bold]"
                 self.assertTrue(await pilot.click("#create-case"))
+                workspace.screen.query_one("#field-name", Input).value = "Example [bold]"
+                self.assertTrue(await pilot.click("#confirm"))
+                await workspace.workers.wait_for_complete()
                 await pilot.pause()
                 self.assertEqual(workspace.query_one("#case-table", DataTable).row_count, 1)
                 self.assertIsNone(workspace.active_case)
@@ -35,7 +39,7 @@ class TerminalWorkspaceTest(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("Alice  ·  Example [bold]", str(workspace.query_one("#session", Static).render()))
                 await pilot.click("#--content-tab-evidence")
                 await pilot.pause()
-                workspace.query_one("#evidence-path", Input).value = str(source)
+                workspace.screen.query_one("#evidence-path", Input).value = str(source)
                 self.assertTrue(await pilot.click("#add-evidence"))
                 await workspace.workers.wait_for_complete()
                 await pilot.pause()
@@ -54,3 +58,57 @@ class TerminalWorkspaceTest(unittest.IsolatedAsyncioTestCase):
         result = runner.invoke(app, ["tui"])
         self.assertEqual(result.exit_code, 1, result.output)
         self.assertIn("interactive terminal", result.output)
+
+    async def test_shell_navigation_and_tabs_match_workspace_order(self):
+        from textual.widgets import Button, TabPane
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Workspace(Path(tmp) / "cases.sqlite", language="fr", operator="Alice")
+            async with workspace.run_test(size=(100, 32)) as pilot:
+                self.assertEqual([button.id for button in workspace.query("#sidebar Button")],
+                                 ["nav-dashboard", "nav-cases", "nav-quick", "nav-entity", "nav-catalogue"])
+                self.assertEqual([pane.id for pane in workspace.query("#workspace-tabs TabPane")],
+                                 ["sources", "explorer", "evidence", "analyses", "history", "reports", "export"])
+                self.assertTrue(await pilot.click("#language"))
+                await pilot.pause()
+                self.assertEqual(str(workspace.query_one("#nav-cases", Button).label), "Current case")
+                await pilot.resize_terminal(76, 25)
+                await pilot.click("#sidebar-toggle")
+                self.assertTrue(workspace.query_one("#sidebar").has_class("compact"))
+                await pilot.pause(0.3)
+                await pilot.press("enter")
+                await pilot.pause()
+                self.assertFalse(workspace.query_one("#sidebar").has_class("compact"))
+                self.assertTrue(await pilot.click("#nav-quick"))
+                self.assertEqual(workspace.current_page, "quick")
+                self.assertEqual([button.id for button in workspace.query("#acquisition-group Button")],
+                                 ["clone", "raw"])
+
+    async def test_embedded_terminal_disables_visible_echo_for_secret_prompt(self):
+        import sys
+
+        from textual.widgets import Button
+        from vigil.tui_screens import Operation
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Workspace(Path(tmp) / "cases.sqlite", language="en", operator="Alice")
+            async with workspace.run_test(size=(90, 28)) as pilot:
+                operation = Operation("Fixture", workspace.tr, [sys.executable, "-c", """
+import sys, termios
+fd = sys.stdin.fileno()
+attrs = termios.tcgetattr(fd)
+attrs[3] &= ~termios.ECHO
+termios.tcsetattr(fd, termios.TCSANOW, attrs)
+print('Secret: ', end='', flush=True)
+assert input() == 'fixture-secret'
+print('Copied', flush=True)
+"""], "en")
+                workspace.push_screen(operation)
+                await pilot.pause(0.35)
+                field = operation.query_one(Input)
+                self.assertTrue(field.password)
+                field.value = "fixture-secret"
+                await pilot.press("enter")
+                await workspace.workers.wait_for_complete()
+                self.assertEqual(operation.status, 0)
+                self.assertFalse(operation.query_one("#operation-close", Button).disabled)

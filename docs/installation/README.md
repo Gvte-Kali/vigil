@@ -20,8 +20,9 @@ vigil --help
 /usr/local/bin/vigil-gui
 ```
 
-Le post-install place le venv dans `/opt/vigil/.venv`. La commande `vigil`
-ouvre la CLI. Le raccourci graphique appelle `/usr/local/bin/vigil-gui`, qui démarre Qt
+Le post-install place le venv dans `/opt/vigil/.venv`. En terminal interactif,
+`vigil`, `vigil tui` et `vigil-tui` ouvrent le workspace Textual supervisé.
+Les sous-commandes CLI restent automatisables. Le raccourci graphique appelle `/usr/local/bin/vigil-gui`, qui démarre Qt
 avec les données de travail dans `/opt/vigil/data/state`.
 La configuration des signatures se trouve dans le sous-dossier `clamav`.
 Un lancement éditable depuis le code dans /opt/vigil utilise aussi cet
@@ -54,7 +55,7 @@ cd /opt/vigil
 git pull --ff-only
 bash scripts/post-install/update-cli.sh
 hash -r
-command -v vigil
+command -v vigil vigil-tui
 vigil --version
 vigil --help
 ```
@@ -64,32 +65,22 @@ Un conflit de commande est signalé avec son chemin. Le détail des
 emplacements gérés, du retour arrière et des raccourcis personnalisés
 figure dans [la transition CLI](../development/cli-command-transition.md).
 
-## Essayer l’interface Textual sur le poste de développement
+## Lancer le workspace Textual
 
-Sur Parrot avec une installation éditable existante dans `/opt/vigil`, fermer
-les sessions Vigil et actualiser le paquet depuis le compte opérateur.
+Sur un poste Parrot déjà installé dans `/opt/vigil`, fermer les sessions et
+mettre à jour les lanceurs avec la procédure précédente. Le script publie
+`/usr/local/bin/vigil-tui` et installe les dépendances dans le venv du site.
+Lancer ensuite `vigil`, `vigil tui` ou `vigil-tui` depuis un terminal local
+ou une session SSH interactive. Ces trois commandes ouvrent la même TUI
+supervisée. `vigil-gui` et `vigil gui` ouvrent Qt.
 
-```bash
-cd /opt/vigil
-git status --short
-git switch vigil-2.0
-git pull --ff-only
-.venv/bin/python -m pip install -e '.[desktop]'
-vigil tui
-```
+La TUI utilise la base du site et se lance depuis le compte opérateur.
+Les opérations privilégiées demandent une autorisation dans le terminal
+intégré. Options utiles : `vigil-tui --lang en` pour l’anglais et
+`vigil-tui --db /chemin/vers/vigil-dev.sqlite` pour une base de test.
 
-La réinstallation du paquet ajoute Textual au venv. Elle utilise la même base
-d’affaires sous `/opt/vigil/data/state`. Si la commande du PATH pointe ailleurs,
-lancer `.venv/bin/vigil tui` ou suivre la procédure de mise à jour des lanceurs
-ci-dessus. Utiliser `vigil tui --lang en` pour l’anglais. `vigil gui` ouvre
-l’espace de travail Qt. La CLI existante reste accessible via `vigil --help`.
-
-Le premier lot couvre la consultation système, la sélection de l’opérateur,
-la création et l’activation d’une affaire, l’enregistrement de preuves et la
-vérification SHA-256 de leur copie, la vérification des montages et le
-catalogue. Les autres parcours restent disponibles dans Qt ou la CLI selon
-la fonctionnalité. Pour travailler sur une base de test distincte, utiliser
-`vigil tui --db /chemin/vers/vigil-dev.sqlite`.
+La [matrice de parité](../development/tui-parity.md) détaille les parcours
+raccordés et les recettes encore ouvertes.
 
 ## Modifications du poste
 

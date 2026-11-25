@@ -24,14 +24,15 @@ vigil_owned_launcher() {
         target=$(readlink -- "$file") || return 1
         case "$target" in /*) ;; *) target="$(dirname -- "$file")/$target" ;; esac
         case "$(realpath -sm -- "$target")" in
-            "$site/.venv/bin/vigil"|"$site/.venv/bin/vigil-gui"|\
+            "$site/.venv/bin/vigil"|"$site/.venv/bin/vigil-gui"|"$site/.venv/bin/vigil-tui"|\
             "$site/.venv/bin/vigil2"|"$site/.venv/bin/vigil2-gui"|\
             "$site/scripts/post-install/vigil-qt"|"$site/gui/vigil_main_gui.py"|\
             "$site/scripts/Vigil-CLI/vigil") return 0 ;;
         esac
         return 1
     fi
-    vigil_wrapper "$file" vigil.cli:main "$site" ||
+    vigil_wrapper "$file" vigil.cli:tui_main "$site" ||
+        vigil_wrapper "$file" vigil.cli:main "$site" ||
         vigil_wrapper "$file" vigil.cli:app "$site" ||
         vigil_wrapper "$file" vigil.session:main "$site" ||
         vigil_wrapper "$file" vigil.desktop:main "$site" ||
@@ -50,7 +51,8 @@ vigil_managed_desktop() {
 
 vigil_launchers_preflight() {
     local site="$1" local_bin="$2" system_bin="$3" desktop="$4" file
-    for file in "$local_bin/vigil" "$local_bin/vigil-gui" "$system_bin/vigil" "$site/.venv/bin/vigil" "$site/.venv/bin/vigil-gui" \
+    for file in "$local_bin/vigil" "$local_bin/vigil-gui" "$local_bin/vigil-tui" "$system_bin/vigil" "$system_bin/vigil-tui" \
+                "$site/.venv/bin/vigil" "$site/.venv/bin/vigil-gui" "$site/.venv/bin/vigil-tui" "$HOME/.local/bin/vigil-tui" \
                 "$site/.venv/bin/vigil2" "$site/.venv/bin/vigil2-gui" "$HOME/.local/bin/vigil"; do
         if [ -e "$file" ] || [ -L "$file" ]; then
             vigil_owned_launcher "$file" "$site" || { launcher_conflict "$file"; return 1; }
@@ -62,6 +64,11 @@ vigil_launchers_preflight() {
     fi
     case "$file" in
         ""|"$local_bin/vigil"|"$system_bin/vigil"|"$site/.venv/bin/vigil"|"$HOME/.local/bin/vigil") ;;
+        *) launcher_conflict "$file (PATH)"; return 1 ;;
+    esac
+    file=$(type -P vigil-tui || true)
+    case "$file" in
+        ""|"$local_bin/vigil-tui"|"$system_bin/vigil-tui"|"$site/.venv/bin/vigil-tui"|"$HOME/.local/bin/vigil-tui") ;;
         *) launcher_conflict "$file (PATH)"; return 1 ;;
     esac
     if [ -e "$desktop" ] || [ -L "$desktop" ]; then
@@ -84,11 +91,14 @@ vigil_publish_launchers() {
         { launcher_conflict "$site/.venv/bin/vigil"; return 1; }
     vigil_wrapper "$site/.venv/bin/vigil-gui" vigil.session:main "$site" ||
         { launcher_conflict "$site/.venv/bin/vigil-gui"; return 1; }
+    vigil_wrapper "$site/.venv/bin/vigil-tui" vigil.cli:tui_main "$site" ||
+        { launcher_conflict "$site/.venv/bin/vigil-tui"; return 1; }
     "$site/.venv/bin/vigil" --version || return 1
+    vigil_publish_link "$site/.venv/bin/vigil-tui" "$local_bin/vigil-tui" || return 1
     vigil_publish_link "$site/.venv/bin/vigil" "$local_bin/vigil" || return 1
     vigil_publish_link "$site/scripts/post-install/vigil-qt" "$local_bin/vigil-gui" || return 1
     # An older PATH entry must not continue to open Tk or Qt.
-    for file in "$system_bin/vigil" "$system_bin/vigil2" "$local_bin/vigil2" \
+    for file in "$system_bin/vigil" "$system_bin/vigil-tui" "$system_bin/vigil2" "$local_bin/vigil2" \
                 "$system_bin/vigil2-gui" "$local_bin/vigil2-gui"; do
         if [ -e "$file" ] || [ -L "$file" ]; then
             if vigil_owned_launcher "$file" "$site"; then
@@ -98,7 +108,7 @@ vigil_publish_launchers() {
             fi
         fi
     done
-    for file in "$HOME/.local/bin/vigil" "$site/.venv/bin/vigil2" "$site/.venv/bin/vigil2-gui" \
+    for file in "$HOME/.local/bin/vigil" "$HOME/.local/bin/vigil-tui" "$site/.venv/bin/vigil2" "$site/.venv/bin/vigil2-gui" \
                 "$HOME/.local/bin/vigil2" "$HOME/.local/bin/vigil2-gui"; do
         if { [ -e "$file" ] || [ -L "$file" ]; } && vigil_owned_launcher "$file" "$site"; then
             rm -- "$file" || return 1
@@ -115,6 +125,7 @@ vigil_publish_launchers() {
         rm -- "$temporary"
     fi
     "$local_bin/vigil" --help >/dev/null || return 1
+    "$local_bin/vigil-tui" --help >/dev/null || return 1
     hash -r
     file=$(type -P vigil || true)
     if [ -z "$file" ] || [ "$(realpath -m -- "$file")" != "$site/.venv/bin/vigil" ]; then

@@ -22,6 +22,9 @@ from .terminal import show_logo
 class VigilCLI(typer.Typer):
     def __call__(self, *args, **kwargs):
         # Existing editable installs still launch app() directly.
+        if (not sys.argv[1:] and not args and kwargs.get("args") is None
+                and sys.stdin.isatty() and sys.stdout.isatty() and "_VIGIL_COMPLETE" not in os.environ):
+            kwargs["args"] = ["tui"]
         if sys.stderr.isatty() and "_VIGIL_COMPLETE" not in os.environ:
             if os.environ.get("TERM") not in (None, "dumb"):
                 print("\033[H\033[2J", end="", file=sys.stderr, flush=True)
@@ -148,18 +151,22 @@ def launch_tui(
         typer.echo("Un terminal interactif est requis / An interactive terminal is required.", err=True)
         raise typer.Exit(1)
     try:
-        from .tui import Workspace
+        import textual
     except ModuleNotFoundError as error:
         if error.name != "textual":
             raise
         typer.echo("Textual manquant : réinstallez Vigil / Textual missing: reinstall Vigil.", err=True)
         raise typer.Exit(1) from error
+    from .session import supervise
+
+    state = (db or storage.default_database()).absolute()
+    arguments = ["--db", str(state), "--lang", lang]
     if operator is not None:
         operator = operator.strip()
-        with command():
-            with storage.database(db or storage.default_database()) as connection:
-                storage.register_operator(connection, operator)
-    Workspace(db or storage.default_database(), language=lang, operator=operator).run()
+        if not 1 <= len(operator) <= 120 or not operator.isprintable():
+            raise typer.BadParameter("printable name of 1–120 characters required", param_hint="--operator")
+        arguments.extend(("--operator", operator))
+    raise typer.Exit(supervise(arguments, interface="tui", state=state))
 
 
 @app.command("gui")
@@ -260,6 +267,10 @@ def inspect_raw_command(path: Path, sector_size: int = 512):
 
 def main():
     app(prog_name="vigil")
+
+
+def tui_main():
+    app(args=["tui", *sys.argv[1:]], prog_name="vigil")
 
 
 if __name__ == "__main__":

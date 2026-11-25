@@ -94,7 +94,7 @@ class ExternalRun:
         return "unknown"
 
 
-def launch_tracked(arguments, root, context, preferred=""):
+def prepare_tracked(arguments, root, context):
     if root.resolve() != root.absolute() or root.resolve().is_relative_to("/investigation"):
         raise ValueError("invalid terminal result directory")
     run_id = uuid4().hex
@@ -106,12 +106,17 @@ def launch_tracked(arguments, root, context, preferred=""):
         encoding="utf-8",
     )
     runner = Path(__file__).resolve().with_name("external_operation.py")
+    return ExternalRun(directory, time.monotonic()), [sys.executable, "-I", str(runner), str(directory), *arguments]
+
+
+def launch_tracked(arguments, root, context, preferred=""):
+    run, argv = prepare_tracked(arguments, root, context)
     try:
-        launch_terminal([sys.executable, "-I", str(runner), str(directory), *arguments], preferred)
+        launch_terminal(argv, preferred)
     except OSError:
-        (directory / "result.json").write_text('{"exit_code": "launch_failed"}', encoding="utf-8")
+        (run.directory / "result.json").write_text('{"exit_code": "launch_failed"}', encoding="utf-8")
         raise
-    return ExternalRun(directory, time.monotonic())
+    return run
 
 
 def launch_script(path, *arguments):

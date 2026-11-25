@@ -140,23 +140,28 @@ def pending_sessions(folder):
     return unresolved
 
 
+def prepare_previous_report(state, name, candidates):
+    if not re.fullmatch(r"[0-9a-f]{32}\.json", name):
+        raise ValueError("invalid session journal")
+    journal = state.parent / "sessions" / name
+    entry = json.loads(journal.read_text())
+    output = Path(entry.get("report", ""))
+    if not output.is_file():
+        language, _ = session_preferences(state)
+        output = persist_report(state, {
+            "exit_status": 1, "error": "", "language": language, "hotplug": {"status": "unavailable"},
+            "mounts": mount_check(), "session": entry["session"], "journal": str(journal),
+            "snapshot": entry.get("snapshot"), "previous_unresolved": candidates,
+        })
+        entry.update(status="unresolved", report=str(output))
+        write_state(journal, entry)
+    return output
+
+
 def review_previous(state, candidates, preferred):
     for name in reversed(sorted(candidates)):
-        if not re.fullmatch(r"[0-9a-f]{32}\.json", name):
-            continue
         try:
-            journal = state.parent / "sessions" / name
-            entry = json.loads(journal.read_text())
-            output = Path(entry.get("report", ""))
-            if not output.is_file():
-                language, _ = session_preferences(state)
-                output = persist_report(state, {
-                    "exit_status": 1, "error": "", "language": language, "hotplug": {"status": "unavailable"},
-                    "mounts": mount_check(), "session": entry["session"], "journal": str(journal),
-                    "snapshot": entry.get("snapshot"), "previous_unresolved": candidates,
-                })
-                entry.update(status="unresolved", report=str(output))
-                write_state(journal, entry)
+            output = prepare_previous_report(state, name, candidates)
             launch_terminal([sys.executable, "-m", "vigil.session", "--review-report", str(output)],
                             preferred, detached=True)
             return
@@ -187,8 +192,9 @@ def guard(root, session_id):
         time.sleep(0.5)
 
 
-def supervise(arguments):
-    state = default_database()
+def supervise(arguments, *, interface="gui", state=None):
+    state = state or default_database()
+    terminal_workspace = interface == "tui"
     if os.geteuid() == 0:
         print("Lancez Vigil en tant qu’utilisateur ordinaire. / Run Vigil as a regular user.",
               file=sys.stderr)
@@ -224,8 +230,9 @@ def supervise(arguments):
         environment = {**os.environ, "VIGIL_SESSION_ID": identifier, "VIGIL_SESSION_SNAPSHOT": snapshot,
                        "VIGIL_SESSION_GUARD": str(caretaker.pid), "VIGIL_SESSION_CONTEXT": str(context_path),
                        "VIGIL_SESSION_PENDING": json.dumps(pending)}
-        child = subprocess.Popen([sys.executable, "-m", "vigil.desktop", *arguments],
-                                 env=environment, start_new_session=True)
+        module = "vigil.tui" if terminal_workspace else "vigil.desktop"
+        child = subprocess.Popen([sys.executable, "-m", module, *arguments],
+                                 env=environment, start_new_session=not terminal_workspace)
 
         def forward(signum, _frame):
             try:
@@ -244,7 +251,7 @@ def supervise(arguments):
         status, error = 1, str(failure)
     finally:
         if caretaker is not None:
-            if operations and supervisor_record:
+            if operations and supervisor_record and not terminal_workspace:
                 _, preferred = session_preferences(state)
                 try:
                     launch_terminal([sys.executable, "-m", "vigil.session", "--wait-session", str(supervisor_record)],
@@ -261,6 +268,8 @@ def supervise(arguments):
         except (OSError, ValueError):
             pass
     language, preferred = session_preferences(state)
+    if terminal_workspace:
+        language = context.get("language") or language
     hotplug = read_receipt(path)
     try:
         release = version("vigil-dfir")
@@ -285,8 +294,11 @@ def supervise(arguments):
                                             "session": identifier, "report": str(output), "snapshot": snapshot,
                                             "pid": os.getpid(), "owner": owner.name if owner else "", "boot": boot})
     except OSError:
-        show_report(report, None, interactive=sys.stdin.isatty())
+        show_report(report, None, interactive=not terminal_workspace and sys.stdin.isatty())
     else:
+        if terminal_workspace:
+            show_report(report, output, interactive=False)
+            return status if status >= 0 else 128 - status
         try:
             if not waiting_terminal:
                 launch_terminal([sys.executable, "-m", "vigil.session", "--show-report", str(output)],
@@ -372,7 +384,7 @@ def show_report(report, path, *, interactive):
         if report.get(key):
             report_line("INFO", f"{label} · {clean(report[key])}")
     for operation in report.get("operations_at_exit", []):
-        report_line("WAIT", tr("Opération active à la sortie de Qt", "Operation active when Qt exited")
+        report_line("WAIT", tr("Opération active à la fermeture", "Operation active at exit")
                     + f" · {clean(operation)}")
     for previous in report.get("previous_unresolved", []):
         report_line("WARN", tr("Session antérieure à vérifier", "Previous session needs review") + f" · {previous}")

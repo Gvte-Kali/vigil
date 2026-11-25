@@ -43,6 +43,7 @@ class CliLaunchersTest(unittest.TestCase):
         python.chmod(0o755)
         self.wrapper("vigil", "cli", "main")
         self.wrapper("vigil-gui", "session", "main")
+        self.wrapper("vigil-tui", "cli", "tui_main")
         # The tests run the generated wrapper against an interpreter fixture.
         # Real installed entry points are exercised separately in the packaging smoke test.
 
@@ -70,6 +71,7 @@ class CliLaunchersTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((self.local / "vigil").resolve(), self.site_bin / "vigil")
             self.assertFalse((self.local / "vigil2").exists())
+            self.assertEqual((self.local / "vigil-tui").resolve(), self.site_bin / "vigil-tui")
             self.assertEqual((self.local / "vigil-gui").resolve(), self.site / "scripts/post-install/vigil-qt")
             self.assertEqual(self.state.read_bytes(), b"untouched database fixture")
 
@@ -112,6 +114,16 @@ class CliLaunchersTest(unittest.TestCase):
         self.assertIn(str(foreign), result.stderr)
         self.assertEqual(foreign.read_text(), "third-party launcher")
         self.assertFalse(os.path.lexists(self.local / "vigil"))
+
+    def test_foreign_tui_launcher_blocks_publication_without_replacing_existing_links(self):
+        third_party = self.user_bin / "vigil-tui"
+        third_party.write_text("#!/bin/sh\nexit 0\n")
+        third_party.chmod(0o755)
+        result = self.shell()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(str(third_party), result.stderr)
+        self.assertFalse((self.local / "vigil-tui").exists())
+        self.assertEqual(third_party.read_text(), "#!/bin/sh\nexit 0\n")
 
     def test_help_version_and_command_families(self):
         runner = CliRunner()

@@ -1,5 +1,6 @@
 """Shared Vigil 1.0 entity configuration and atomic writes."""
 import json
+import stat
 import os
 import tempfile
 from datetime import UTC, datetime
@@ -41,6 +42,29 @@ def atomic_write(path, content):
             os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
+
+
+def read_logo_png(path):
+    """Validate a bounded organization logo and normalize it to PNG."""
+    import io
+
+    from PIL import Image
+
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+    with os.fdopen(os.open(path, flags), "rb") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 10 * 1024 * 1024:
+            raise ValueError("logo must be a regular image up to 10 MiB")
+        try:
+            with Image.open(stream, formats=("PNG", "JPEG")) as image:
+                width, height = image.size
+                if max(width, height) > 4096 or width * height > 8_000_000:
+                    raise ValueError("invalid or oversized logo dimensions")
+                output = io.BytesIO()
+                image.convert("RGBA").save(output, format="PNG")
+        except Image.DecompressionBombError as error:
+            raise ValueError("invalid or oversized logo dimensions") from error
+    return output.getvalue()
 
 
 def save_entity(data, fields, logo=None):

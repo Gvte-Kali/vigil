@@ -56,7 +56,7 @@ def main():
     write_status(directory, "result.json", {"exit_code": status})
     label = "Exit code" if language == "en" else "Code de sortie"
     print(f"\n{label} : {status}", flush=True)
-    if sys.stdin.isatty() and interrupted is None:
+    if sys.stdin.isatty() and interrupted is None and os.environ.get("VIGIL_EMBEDDED_TERMINAL") != "1":
         try:
             input("Press Enter" if language == "en" else "Appuyez sur Entrée")
         except EOFError:
