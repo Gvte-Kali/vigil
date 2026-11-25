@@ -369,8 +369,9 @@ class CaseManager(QDialog):
         self.delete.setEnabled(bool(row) and not self.loading)
         while self.details.count():
             item = self.details.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+            if (widget := item.widget()) is not None:
+                widget.hide()
+                widget.deleteLater()
         tr = self.tr_pair
         if not row:
             hint = plain_label(tr("Sélectionnez une affaire pour consulter ses informations.",

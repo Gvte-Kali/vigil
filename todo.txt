@@ -25,6 +25,7 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] Ouverture du dossier local de l’affaire et affichage des chemins des copies. Terminaux compatibles à 44 lignes.
 [x] Nom lisible des dossiers d’affaires et migration vérifiée par fixture SQLite. Activation explicite dans le sélecteur.
 [x] Gestionnaire d’affaires Qt avec modèle filtrable, inspecteur, création et suppression contextualisée.
+[x] Le texte d’attente de l’inspecteur disparaît dès la sélection d’une affaire, sans attendre le prochain cycle Qt.
 [ ] Recette native du gestionnaire sous Parrot, X11, Wayland et Hyprland.
 [x] Langue de la GUI transmise aux terminaux et à l’acquisition après sudo. Premiers messages FR/EN.
 [ ] Traduire les messages spécifiques des scripts historiques, les outils de maintenance et les PDF. Recette FR/EN complète.

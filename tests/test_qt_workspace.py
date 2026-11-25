@@ -68,7 +68,11 @@ class WorkspaceTest(unittest.TestCase):
                     time.sleep(0.01)
                 self.assertFalse(dialog.loading)
                 self.assertEqual(dialog.proxy.rowCount(), 2)
+                hint = next(label for label in dialog.findChildren(type(dialog.count))
+                            if label.text() == "Sélectionnez une affaire pour consulter ses informations."
+                            and not label.isHidden())
                 dialog.list.setCurrentIndex(dialog.proxy.index(0, 0))
+                self.assertTrue(hint.isHidden())
                 selected = dialog.selected_id()
                 dialog.sort.setCurrentIndex(1)
                 self.assertEqual(dialog.selected_id(), selected)
