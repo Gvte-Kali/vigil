@@ -318,6 +318,9 @@ class Workspace(QMainWindow):
         self.case_title.setWordWrap(True)
         case_header.addWidget(self.case_title, 1)
         self.button(case_header, "Choisir l’affaire", "Choose case", self.choose_case)
+        self.case_folder_button = self.button(case_header, "Ouvrir le dossier de l’affaire", "Open case folder",
+                                              self.open_case_folder)
+        self.case_folder_button.hide()
         self.button(case_header, "Monter périphérique/image", "Mount device/image",
                     self.request_mount, primary=True)
         self.button(case_header, "Démonter périphérique/image", "Unmount device/image",
@@ -349,10 +352,11 @@ class Workspace(QMainWindow):
 
         evidence = self.case_view("Preuves", "Evidence")
         self.evidence = QTreeWidget()
-        self.evidence.setColumnCount(2)
+        self.evidence.setColumnCount(3)
         self.evidence.setUniformRowHeights(True)
         self.evidence_case_id = None
-        self.bind(lambda name: self.evidence.setHeaderLabels([name, "SHA-256"]), "Fichier", "File")
+        self.bind(lambda name: self.evidence.setHeaderLabels([name, "SHA-256", self.tr_pair("Copie locale", "Local copy")]),
+                  "Fichier", "File")
         self.evidence.setColumnWidth(0, 390)
         self.evidence.itemActivated.connect(self.queue_evidence_preview)
         evidence.addWidget(self.evidence)
@@ -732,6 +736,7 @@ class Workspace(QMainWindow):
         button.clicked.connect(action)
         self.buttons.append(button)
         layout.addWidget(button)
+        return button
 
     def change_language(self, language):
         if language == self.language:
@@ -1020,11 +1025,21 @@ class Workspace(QMainWindow):
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
             return
-        self.explorer.set_files(rows, keep_state=keep_explorer)
+        copies = {}
+        for evidence_id, _, _ in rows:
+            try:
+                copy = storage.evidence_copy_path(self.database_path, self.active_case_id, evidence_id)
+                if not copy.is_symlink() and copy.is_file():
+                    copies[evidence_id] = copy
+            except (OSError, ValueError):
+                continue
+        self.explorer.set_files(rows, copies=copies, keep_state=keep_explorer)
         self.refresh_explorer_mounts()
-        self.update_evidence_tree(rows)
+        self.update_evidence_tree(rows, copies)
 
-    def update_evidence_tree(self, rows):
+    def update_evidence_tree(self, rows, copies=None):
+        copies = copies or {}
+        self.case_folder_button.setVisible(bool(copies))
         expanded = set()
         if self.evidence_case_id == self.active_case_id:
             expanded = {item.text(0) for item in (
@@ -1036,11 +1051,15 @@ class Workspace(QMainWindow):
         groups = {}
         for evidence_id, name, digest in rows:
             path = Path(name)
-            group = str(path.parent)
+            copy = copies.get(evidence_id)
+            group = str(copy.parents[1]) if copy else self.tr_pair("Sans copie locale", "No local copy")
             if group not in groups:
                 groups[group] = QTreeWidgetItem(self.evidence, [group])
                 groups[group].setExpanded(group in expanded)
-            item = QTreeWidgetItem(groups[group], [path.name, digest])
+            relative_copy = str(copy.relative_to(copy.parents[2])) if copy else "—"
+            item = QTreeWidgetItem(groups[group], [path.name, digest, relative_copy])
+            if copy:
+                item.setToolTip(2, str(copy))
             item.setToolTip(0, name)
             item.setToolTip(1, digest)
             item.setData(0, Qt.ItemDataRole.UserRole, evidence_id)
@@ -1155,7 +1174,7 @@ class Workspace(QMainWindow):
                     local = copy if copy.exists() else None
                 if local is not None:
                     snapshot = inspect_file(local, display_name=original.name)
-                    snapshot["local_copy"] = True
+                    snapshot["local_copy"] = str(local)
                     return snapshot
                 if evidence_id is not None or original.is_relative_to("/investigation") or not original.is_file():
                     raise ValueError(self.tr_pair(
@@ -1466,6 +1485,18 @@ class Workspace(QMainWindow):
     def open_saved_preview(self, case_id, evidence_id, name, digest):
         if case_id and case_id == self.active_case_id:
             self.preview_evidence(name, digest, evidence_id=evidence_id)
+
+    def open_case_folder(self):
+        if not self.active_case_id:
+            return
+        try:
+            directory = storage.case_storage_directory(self.database_path, self.active_case_id)
+            if directory.is_dir() and QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
+                return
+        except (OSError, ValueError) as error:
+            self.fail(error)
+            return
+        self.notify("Impossible d’ouvrir le dossier de l’affaire.", "Could not open the case folder.")
 
     def open_evidence_folder(self):
         item = self.selected_evidence_item()

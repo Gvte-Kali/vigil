@@ -22,6 +22,7 @@ class EvidencePanel(QWidget):
         self.has_case = has_case
         self.mounts = {}
         self.registered_files = {}
+        self.local_copies = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.filter = QLineEdit()
@@ -71,7 +72,9 @@ class EvidencePanel(QWidget):
         self.tabs.setTabText(1, tr("Hexadécimal", "Hex"))
         self.tabs.setTabText(2, tr("Chaînes ASCII", "ASCII strings"))
 
-    def set_files(self, rows, *, keep_state=True):
+    def set_files(self, rows, *, copies=None, keep_state=True):
+        copies = copies or {}
+        self.local_copies = {name: copies.get(evidence_id) for evidence_id, name, _ in rows}
         self.registered_files = {name: digest for _, name, digest in rows}
         self.rebuild_tree(keep_state=keep_state)
 
@@ -117,14 +120,15 @@ class EvidencePanel(QWidget):
             if self.registered_source(name)[1] is not None:
                 continue
             path = Path(name)
-            parent = str(path.parent)
+            copy = self.local_copies.get(name)
+            parent = str(copy.parents[1]) if copy else self.tr_pair("Sans copie locale", "No local copy")
             if parent not in groups:
                 groups[parent] = QTreeWidgetItem(self.tree, [parent])
                 groups[parent].setIcon(0, self.icon("folder", "#55C5D2"))
             item = QTreeWidgetItem(groups[parent], [path.name])
             item.setData(0, Qt.ItemDataRole.UserRole, (name, digest))
             item.setIcon(0, self.file_icon(path))
-            item.setToolTip(0, name)
+            item.setToolTip(0, f"{copy}\n{name}" if copy else name)
         for group in groups.values():
             group.setExpanded(self.item_key(group) not in collapsed)
         for root, mount_id in sorted(self.mounts.items()):
@@ -238,10 +242,12 @@ class EvidencePanel(QWidget):
 
     def show_preview(self, path, digest, snapshot):
         tr = self.tr_pair
-        lines = [path]
-        if snapshot.get("local_copy"):
-            lines.append(tr("Source de l’aperçu : copie locale de l’affaire",
-                            "Preview source: local case copy"))
+        if local := snapshot.get("local_copy"):
+            lines = [local, tr("Source de l’aperçu : copie locale de l’affaire",
+                               "Preview source: local case copy"),
+                     f"{tr('Chemin d’origine', 'Original path')}: {path}"]
+        else:
+            lines = [path]
         lines.extend((
             f"{tr('Taille', 'Size')}: {snapshot['size']} B",
             f"{tr('Permissions', 'Permissions')}: {snapshot['mode']}",

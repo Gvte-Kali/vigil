@@ -100,12 +100,17 @@ class WorkspaceTest(unittest.TestCase):
                 window.add_file()
             self.wait_for_task(window)
             self.assertEqual(window.evidence.topLevelItemCount(), 1)
+            self.assertFalse(window.case_folder_button.isHidden())
             source.unlink()
             window.change_language("en")
             group = window.explorer.tree.topLevelItem(0)
             window.explorer.inspect(group.child(0), 0)
             self.wait_for_task(window)
-            self.assertIn("local case copy", window.explorer.views[0].toPlainText())
+            metadata = window.explorer.views[0].toPlainText()
+            self.assertIn("local case copy", metadata)
+            self.assertIn(f"Original path: {source}", metadata)
+            self.assertEqual(Path(metadata.splitlines()[0]).name, "contenu")
+            self.assertEqual(Path(group.text(0)).name, "preuves")
             self.assertEqual(window.explorer.views[2].toPlainText(), "fixture")
             evidence_item = window.evidence.topLevelItem(0).child(0)
             digest = evidence_item.text(1)
@@ -121,6 +126,10 @@ class WorkspaceTest(unittest.TestCase):
             window.evidence.setCurrentItem(evidence_item)
             from vigil.desktop import QDesktopServices
 
+            self.assertTrue(evidence_item.text(2).startswith("preuves/"))
+            with patch.object(QDesktopServices, "openUrl", return_value=True) as open_case_url:
+                window.case_folder_button.click()
+            self.assertEqual(Path(open_case_url.call_args.args[0].toLocalFile()).name, window.active_case_id)
             with patch.object(QDesktopServices, "openUrl", return_value=True) as open_url:
                 window.open_evidence_folder()
             self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()).parent.name, "preuves")
@@ -145,6 +154,7 @@ class WorkspaceTest(unittest.TestCase):
                 window.delete_selected_evidence()
             self.wait_for_task(window)
             self.assertEqual(window.evidence.topLevelItemCount(), 0)
+            self.assertTrue(window.case_folder_button.isHidden())
             self.assertEqual(window.explorer.tree.topLevelItemCount(), 0)
             self.assertTrue(window.active_case_id)
             self.assertTrue(window.isVisible())

@@ -457,3 +457,9 @@ Recette interface et terminaux
     de stockage, une analyse et une acquisition RAW. Vérifier les titres,
     les invites de triage et la fin de terminal dans chaque langue.
     Confirmer que le terminal de protection au démarrage affiche FR et EN.
+
+[ ] Après retrait du support, vérifier que Preuves affiche le chemin relatif
+    dans l’affaire et que l’aperçu indique le chemin local et la provenance.
+    Vérifier que « Ouvrir le dossier de l’affaire » ouvre la racine locale.
+[ ] Vérifier le lancement du terminal à 44 lignes avec Konsole ou un autre
+    émulateur compatible. Vérifier le comportement du gestionnaire de fenêtres.

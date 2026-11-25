@@ -217,12 +217,21 @@ def add_evidence(connection, case_id, path, size, digest, operator, evidence_id)
     return evidence_id
 
 
+def case_storage_directory(state, case_id):
+    if len(case_id) != 32 or any(char not in "0123456789abcdef" for char in case_id):
+        raise ValueError("invalid case ID")
+    path = state.parent / "legacy-custody" / case_id
+    resolved = path.resolve()
+    if resolved != path.absolute() or resolved.is_relative_to("/investigation"):
+        raise ValueError("invalid case storage directory")
+    return path
+
+
 def evidence_copy_path(state, case_id, evidence_id):
-    for identifier in (case_id, evidence_id):
-        if len(identifier) != 32 or any(char not in "0123456789abcdef" for char in identifier):
-            raise ValueError("invalid evidence or case ID")
-    path = state.parent / "legacy-custody" / case_id / "preuves" / evidence_id
-    if path.resolve() != path.absolute() or path.resolve().is_relative_to("/investigation"):
+    if len(evidence_id) != 32 or any(char not in "0123456789abcdef" for char in evidence_id):
+        raise ValueError("invalid evidence ID")
+    path = case_storage_directory(state, case_id) / "preuves" / evidence_id
+    if path.resolve() != path.absolute():
         raise ValueError("invalid evidence storage directory")
     return path / "contenu"
 
