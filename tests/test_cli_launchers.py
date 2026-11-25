@@ -133,10 +133,10 @@ class CliLaunchersTest(unittest.TestCase):
                         cwd=ROOT, env={**self.env, "TERM": "xterm", "NO_COLOR": "1"},
                         stdout=terminal, stderr=terminal, timeout=10,
                     )
-                    output = os.read(master, 4096).decode()
+                    output = os.read(master, 4096)
                 finally:
                     os.close(terminal)
                     os.close(master)
                 self.assertEqual(result.returncode, status)
-                self.assertTrue(output.startswith("Vigil\r\n"), output)
-                self.assertIn("Usage:", output)
+                self.assertTrue(output.startswith(b"\x1b[H\x1b[2JVigil\r\n"), output)
+                self.assertIn(b"Usage:", output)

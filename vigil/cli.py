@@ -1,5 +1,6 @@
 """Vigil 2.0 commands, usable without Qt or a desktop session."""
 import json
+import os
 import sqlite3
 import sys
 from contextlib import contextmanager
@@ -21,7 +22,9 @@ from .terminal import show_logo
 class VigilCLI(typer.Typer):
     def __call__(self, *args, **kwargs):
         # Existing editable installs still launch app() directly.
-        if sys.stderr.isatty():
+        if sys.stderr.isatty() and "_VIGIL_COMPLETE" not in os.environ:
+            if os.environ.get("TERM") not in (None, "dumb"):
+                print("\033[H\033[2J", end="", file=sys.stderr, flush=True)
             show_logo(stream=sys.stderr)
         return super().__call__(*args, **kwargs)
 
