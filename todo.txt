@@ -49,6 +49,8 @@ PHASE 06 — TUI TEXTUAL ET MIGRATION FONCTIONNELLE
 [x] Shell Textual aligné sur la GUI 5644a978 : en-tête, navigation latérale,
     onglets d’affaire, thèmes TCSS et terminal intégré pour les commandes Core.
     Lanceurs supervisés vigil, vigil tui et vigil-tui.
+[x] Thème TUI compact et cartes adaptatives. Progression intégrée par étape.
+    Bilan de restitution accessible depuis l’activation de la protection USB.
 [ ] Recette matérielle et fin de la parité : voir docs/development/tui-parity.md.
 [ ] Migrer Dashboard, Investigation (Affaire en cours, Actions rapides) et
     Système (Entité, Catalogue). Intégrer Sources, Explorateur, Preuves,

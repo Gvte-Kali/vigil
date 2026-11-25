@@ -213,6 +213,12 @@ progress_monitor() {
     local start=$SECONDS
     local bar_width=30 full="" empty=""
     local i line pct filled bar elapsed eta
+    local embedded=0 last_frame=-1
+    [ "${VIGIL_EMBEDDED_TERMINAL:-}" = 1 ] && embedded=1
+    if [ "$embedded" -eq 1 ]; then
+        use_tty=0
+        vigil_progress_frame clamav 0 "0 / $total"
+    fi
 
     for ((i = 0; i < bar_width; i++)); do
         full+="#"
@@ -224,7 +230,13 @@ progress_monitor() {
         case "$line" in
             *": OK")
                 done=$((done + 1))
-                if [ "$use_tty" = "1" ]; then
+                if [ "$embedded" -eq 1 ] && [ "$last_frame" -ne "$SECONDS" ]; then
+                    pct=0
+                    [ "$total" -gt 0 ] && pct=$((done * 100 / total))
+                    [ "$pct" -gt 99 ] && pct=99
+                    vigil_progress_frame clamav "$pct" "$done / $total"
+                    last_frame=$SECONDS
+                elif [ "$use_tty" = "1" ]; then
                     if [ "$total" -gt 0 ]; then
                         pct=$((done * 100 / total))
                         [ "$pct" -gt 99 ] && pct=99
@@ -262,7 +274,9 @@ progress_monitor() {
         esac
     done
 
-    if [ "$use_tty" = "1" ]; then
+    if [ "$embedded" -eq 1 ]; then
+        vigil_progress_frame clamav 100 "$done / $total" true
+    elif [ "$use_tty" = "1" ]; then
         elapsed=$((SECONDS - start))
         printf '\r\033[96m[%s]\033[0m 100%% \033[1m%s\033[0m/%s fichiers | infectés : %s | durée %s            \n' \
             "$full" "$done" "$total" "$infected" "$(fmt_duration "$elapsed")"

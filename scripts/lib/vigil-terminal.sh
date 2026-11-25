@@ -39,3 +39,9 @@ vigil_text() {
         printf '%s' "$1"
     fi
 }
+
+# For internal stage identifiers and numeric/ASCII details only.
+vigil_progress_frame() {
+    printf '\036VIGIL_PROGRESS {"stage":"%s","percent":%d,"detail":"%s","done":%s}\n' \
+        "$1" "$2" "$3" "${4:-false}"
+}

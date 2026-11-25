@@ -1,4 +1,5 @@
 """Terminal presentation for acquisition phases, independent of block I/O."""
+import json
 import os
 import shutil
 import sys
@@ -29,6 +30,15 @@ def interactive(stream):
     return stream.isatty() and os.environ.get("TERM") != "dumb"
 
 
+def embedded_progress():
+    return os.environ.get("VIGIL_EMBEDDED_TERMINAL") == "1"
+
+
+def emit_progress(stream, label, *, percent=None, detail="", done=False):
+    payload = {"stage": label, "percent": percent, "detail": detail, "done": done}
+    print("\x1eVIGIL_PROGRESS " + json.dumps(payload, ensure_ascii=False), file=stream, flush=True)
+
+
 def accent(text):
     return f"\033[96m{text}\033[0m" if "NO_COLOR" not in os.environ else text
 
@@ -56,6 +66,9 @@ class Progress:
         self.stream = sys.stdout
         self.tty = interactive(self.stream)
         self.drawn = False
+        self.embedded = embedded_progress()
+        if self.embedded:
+            emit_progress(self.stream, self.label, percent=0)
 
     def update(self, processed):
         now = time.monotonic()
@@ -65,6 +78,9 @@ class Progress:
         self.last = now
         percent = (processed * 1000 // self.total) / 10
         volume = f"{human_size(processed)} / {human_size(self.total)}"
+        if self.embedded:
+            emit_progress(self.stream, self.label, percent=percent, detail=volume, done=complete)
+            return
         bar = ""
         if self.tty and shutil.get_terminal_size((80, 24)).columns >= 58:
             filled = processed * 10 // self.total
@@ -94,7 +110,10 @@ def indeterminate(label, *, clock=time.monotonic):
     heading = f"{label}…"
     print("\n" + (accent(heading) if interactive(sys.stdout) else heading), flush=True)
     start = clock()
-    if not interactive(sys.stdout):
+    embedded = embedded_progress()
+    if embedded:
+        emit_progress(sys.stdout, label)
+    if not embedded and not interactive(sys.stdout):
         yield
         return
     done = Event()
@@ -103,13 +122,23 @@ def indeterminate(label, *, clock=time.monotonic):
         for frame in cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"):
             if done.wait(0.25):
                 return
-            print(f"\r\033[2K{frame}  Temps écoulé : {duration(clock() - start)}", end="", flush=True)
+            elapsed = duration(clock() - start)
+            if embedded:
+                emit_progress(sys.stdout, label, detail=elapsed)
+            else:
+                print(f"\r\033[2K{frame}  Temps écoulé : {elapsed}", end="", flush=True)
 
     thread = Thread(target=render, daemon=True)
     thread.start()
+    finished = False
     try:
         yield
+        finished = True
     finally:
         done.set()
         thread.join()
-        print(f"\r\033[2KTemps écoulé : {duration(clock() - start)}", flush=True)
+        elapsed = duration(clock() - start)
+        if embedded:
+            emit_progress(sys.stdout, label, detail=elapsed, done=finished)
+        else:
+            print(f"\r\033[2KTemps écoulé : {elapsed}", flush=True)

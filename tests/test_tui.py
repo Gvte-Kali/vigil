@@ -36,7 +36,7 @@ class TerminalWorkspaceTest(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(workspace.active_case)
                 self.assertTrue(await pilot.click("#activate-case"))
                 await pilot.pause()
-                self.assertIn("Alice  ·  Example [bold]", str(workspace.query_one("#session", Static).render()))
+                self.assertIn("Alice\nExample [bold]", str(workspace.query_one("#session", Static).render()))
                 await pilot.click("#--content-tab-evidence")
                 await pilot.pause()
                 workspace.screen.query_one("#evidence-path", Input).value = str(source)
@@ -112,3 +112,77 @@ print('Copied', flush=True)
                 await workspace.workers.wait_for_complete()
                 self.assertEqual(operation.status, 0)
                 self.assertFalse(operation.query_one("#operation-close", Button).disabled)
+
+    async def test_action_cards_reflow_and_header_remains_compact(self):
+        from textual.widgets import Button
+        from vigil.tui_widgets import ActionCard, icon
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Workspace(Path(tmp) / "cases.sqlite", operator="Alice")
+            async with workspace.run_test(size=(120, 32)) as pilot:
+                self.assertTrue(await pilot.click("#nav-quick"))
+                cards = list(workspace.query("#antivirus-group ActionCard"))
+                self.assertEqual(len(cards), 3)
+                self.assertTrue(all(isinstance(card, ActionCard) for card in cards))
+                for width, height, columns in ((120, 32, 3), (80, 24, 2), (46, 20, 1), (120, 32, 3)):
+                    await pilot.resize_terminal(width, height)
+                    await pilot.pause()
+                    self.assertEqual(workspace.query_one("#header").region.height, 2)
+                    self.assertEqual(len({card.region.x for card in cards}), columns)
+                    self.assertTrue(all(0 < card.region.width <= 30 for card in cards))
+                cards[0].focus()
+                await pilot.pause()
+                self.assertIs(workspace.focused, cards[0])
+                self.assertEqual(workspace.query_one("#quick-scan", Button).label.plain, "Scan antivirus")
+                with patch.dict("os.environ", {"VIGIL_ASCII": "1"}):
+                    self.assertTrue(icon("scan").isascii())
+
+    async def test_recovery_rechecks_pending_reports_instead_of_startup_snapshot(self):
+        from unittest.mock import AsyncMock, patch
+        from vigil.tui_screens import Form
+
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Workspace(Path(tmp) / "cases.sqlite", language="en", operator="Alice")
+            async with workspace.run_test(size=(90, 30)) as pilot:
+                with patch.dict("os.environ", {"VIGIL_SESSION_GUARD": "12345", "VIGIL_SESSION_PENDING": '["old"]'}), \
+                        patch("vigil.tui.Path.is_file", return_value=True), \
+                        patch.object(workspace, "pending_protection_reports", AsyncMock(side_effect=[["old"], []])):
+                    await workspace.request_protection()
+                    self.assertIsInstance(workspace.screen, Form)
+                    self.assertEqual(workspace.screen.title_text, "Review a previous session")
+                    await pilot.press("escape")
+                    await workspace.request_protection()
+                    self.assertEqual(workspace.screen.title_text, "Enable USB protection")
+                    await pilot.press("escape")
+
+    async def test_operation_progress_is_separated_by_stage(self):
+        import sys
+
+        from textual.widgets import ProgressBar
+        from vigil.tui_screens import Operation, TerminalLines
+
+        lines = TerminalLines()
+        self.assertEqual(lines.feed("old\r"), [])
+        self.assertEqual(lines.feed("new\r"), [])
+        self.assertEqual(lines.feed("\n"), ["new"])
+        self.assertEqual(lines.feed("prompt"), [])
+        self.assertEqual(lines.pending, "prompt")
+
+        script = """
+import json
+for stage, percent in [('Copie', 50), ('Copie', 100), ('Vérification SHA-256', 40)]:
+    print(chr(30) + 'VIGIL_PROGRESS ' + json.dumps({'stage': stage, 'percent': percent}), flush=True)
+print('résultat conservé')
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Workspace(Path(tmp) / "cases.sqlite", operator="Alice")
+            async with workspace.run_test(size=(80, 24)) as pilot:
+                operation = Operation("Fixture", workspace.tr, [sys.executable, "-c", script], "fr")
+                await workspace.push_screen(operation)
+                await pilot.pause()
+                await workspace.workers.wait_for_complete()
+                self.assertEqual(operation.status, 0)
+                self.assertEqual(list(operation.stages), ["Copie", "Vérification SHA-256"])
+                self.assertEqual([stage.query_one(ProgressBar).progress for stage in operation.stages.values()],
+                                 [100, 40])

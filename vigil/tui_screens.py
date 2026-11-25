@@ -1,6 +1,7 @@
 """Common Textual dialogs and embedded PTY for operator workflows."""
 import asyncio
 import codecs
+import json
 import os
 import re
 import termios
@@ -15,6 +16,43 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, ProgressBar, RichLog, Select, Static
 
 from .runner import TerminalProcess
+
+
+PROGRESS_PREFIX = "\x1eVIGIL_PROGRESS "
+TERMINAL_BREAK = re.compile(r"\r\n|\n|\r(?=.)", re.DOTALL)
+
+
+class TerminalLines:
+    """Keep the unfinished terminal line separate from the committed log."""
+
+    def __init__(self):
+        self.pending = ""
+
+    def feed(self, text):
+        source = self.pending + text
+        records = []
+        start = 0
+        for separator in TERMINAL_BREAK.finditer(source):
+            if separator.group() != "\r":
+                records.append(source[start:separator.start()])
+            start = separator.end()
+        self.pending = source[start:]
+        return records
+
+
+class OperationStage(Horizontal):
+    def __init__(self):
+        super().__init__(classes="operation-stage")
+
+    def compose(self) -> ComposeResult:
+        yield Static()
+        yield ProgressBar(total=None, show_eta=False)
+
+    def update(self, label, percent, detail, done):
+        self.query_one(Static).update(Text(label + (f" · {detail}" if detail else ""),
+                                           no_wrap=True, overflow="ellipsis"))
+        self.query_one(ProgressBar).update(total=100 if percent is not None or done else None,
+                                           progress=100 if done else percent or 0)
 
 
 class Form(ModalScreen):
@@ -34,7 +72,7 @@ class Form(ModalScreen):
             if self.choices:
                 yield Select(self.choices, value=self.choices[0][1], allow_blank=False, id="form-choice")
             for key, label, value in self.fields:
-                yield Static(Text(label))
+                yield Static(Text(label), classes="form-field")
                 yield Input(value, id=f"field-{key}")
             with Horizontal(classes="actions"):
                 yield Button(self.tr("Annuler", "Cancel"), id="cancel")
@@ -68,18 +106,22 @@ class Form(ModalScreen):
 class Operation(ModalScreen):
     """Display an existing console workflow with a controlling terminal."""
 
+    COMPONENT_CLASSES = ModalScreen.COMPONENT_CLASSES | {"operation--error"}
+
     def __init__(self, title, tr, argv, language, tracked=None):
         super().__init__()
         self.title_text, self.tr, self.argv, self.language = title, tr, argv, language
         self.tracked = tracked
         self.terminal = None
         self.status = None
+        self.stages = {}
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(classes="dialog operation"):
             yield Static(Text(self.title_text), id="operation-title", classes="heading")
-            yield ProgressBar(total=None, show_percentage=False, show_eta=False, id="operation-progress")
+            yield VerticalScroll(id="operation-stages")
             yield RichLog(markup=False, highlight=False, wrap=True, max_lines=1500, id="operation-log")
+            yield Static(id="operation-live")
             yield Input(placeholder=self.tr("Réponse puis Entrée", "Type a response and press Enter"), id="operation-input")
             with Horizontal(classes="actions"):
                 yield Button(self.tr("Interrompre", "Interrupt"), id="interrupt")
@@ -101,29 +143,28 @@ class Operation(ModalScreen):
             with TerminalProcess(self.argv, Path.cwd(), dict(os.environ, VIGIL_LANG=self.language, VIGIL_EMBEDDED_TERMINAL="1")) as terminal:
                 self.terminal = terminal
                 self.on_resize()
-                pending = ""
-                # Preserve prompts that do not end with a newline.
+                lines = TerminalLines()
                 while True:
                     readable = await asyncio.to_thread(select.select, [terminal.master], [], [], 0.15)
                     self.update_echo()
                     if not readable[0]:
-                        if pending:
-                            self.write_output(log, pending.replace("\r", "\n"))
-                            pending = ""
                         continue
                     data = terminal.read()
                     if not data:
                         break
-                    pending += decoder.decode(data).replace("\r\n", "\n")
-                    records = pending.replace("\r", "\n").split("\n")
-                    pending = records.pop()
-                    for record in records:
-                        self.write_output(log, record)
-                if pending:
-                    self.write_output(log, pending)
+                    for record in lines.feed(decoder.decode(data)):
+                        await self.write_output(log, record)
+                    pending = lines.pending.rstrip("\r")
+                    self.query_one("#operation-live", Static).update(
+                        Text() if pending.startswith("\x1e") else Text.from_ansi(pending)
+                    )
+                for record in lines.feed(decoder.decode(b"", final=True) + "\n"):
+                    if record:
+                        await self.write_output(log, record)
+                self.query_one("#operation-live", Static).update("")
                 self.status = await asyncio.to_thread(terminal.process.wait)
         except (OSError, ValueError) as error:
-            log.write(Text(str(error), style="bold red"))
+            log.write(Text(str(error), style=self.get_component_rich_style("operation--error")))
             self.status = 1
             if self.tracked and not (self.tracked.directory / "started.json").exists():
                 from .external_operation import write_status
@@ -131,11 +172,17 @@ class Operation(ModalScreen):
                 write_status(self.tracked.directory, "result.json", {"exit_code": self.status})
         finally:
             self.terminal = None
+            for stage in self.stages.values():
+                bar = stage.query_one(ProgressBar)
+                if bar.total is None:
+                    bar.update(total=100, progress=0)
+                    stage.add_class("incomplete")
             self.query_one(Input).disabled = True
             self.query_one("#interrupt", Button).disabled = True
             self.query_one("#operation-close", Button).disabled = False
-            self.query_one(ProgressBar).update(total=1, progress=1)
-            self.query_one("#operation-title", Static).update(Text(
+            title = self.query_one("#operation-title", Static)
+            title.set_class(self.status != 0, "operation-failed")
+            title.update(Text(
                 f"{self.title_text} · {self.tr('Code de sortie', 'Exit code')} : {self.status}"
             ))
             self.query_one("#operation-close", Button).focus()
@@ -147,14 +194,35 @@ class Operation(ModalScreen):
             return
         self.query_one(Input).password = not echo
 
-    def write_output(self, log, record):
-        text = Text.from_ansi(record)
-        log.write(text)
-        if re.search(r"(?i)copie|copy|sha-256|vérification|verifying", text.plain):
-            if match := re.search(r"(?<![\d.])(\d{1,3}(?:[.,]\d+)?)\s*%", text.plain):
-                percent = float(match.group(1).replace(",", "."))
-                if 0 <= percent <= 100:
-                    self.query_one(ProgressBar).update(total=100, progress=percent)
+    async def write_output(self, log, record):
+        if not record.startswith(PROGRESS_PREFIX):
+            log.write(Text.from_ansi(record))
+            return
+        try:
+            event = json.loads(record[len(PROGRESS_PREFIX):])
+            key = event["stage"]
+            percent = event.get("percent")
+            detail = event.get("detail", "")
+            done = event.get("done") is True
+            if not isinstance(key, str) or not 1 <= len(key) <= 160 or not isinstance(detail, str):
+                raise ValueError
+            if percent is not None and (not isinstance(percent, (int, float)) or not 0 <= percent <= 100):
+                raise ValueError
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return
+        labels = {
+            "clamav": self.tr("Scan ClamAV", "ClamAV scan"),
+            "usb": self.tr("Détection USB", "USB detection"),
+            "usb-source": self.tr("Détection USB · source", "USB detection · source"),
+            "usb-destination": self.tr("Détection USB · destination", "USB detection · destination"),
+        }
+        if key not in self.stages:
+            stage = OperationStage()
+            self.stages[key] = stage
+            panel = self.query_one("#operation-stages", VerticalScroll)
+            await panel.mount(stage)
+            panel.scroll_end(animate=False)
+        self.stages[key].update(labels.get(key, key), percent, detail[:160], done)
 
     def on_input_submitted(self, event):
         if self.terminal:

@@ -1,59 +1,110 @@
 $graphite: #101419;
 $surface: #192129;
+$card: #202A36;
 $border: #34434E;
 $foreground: #DCE3EA;
+$secondary: #94A3B3;
 $cyan: #55C5D2;
 $success: #79CDA0;
-$warning: #E4BC72;
 $violet: #B59AF0;
+$info: #82AAFF;
+$warning: #E4BC72;
+$error: #E06C75;
 
 Screen { background: $graphite; color: $foreground; }
-#header { background: $surface; border: solid $border; height: auto; min-height: 3; }
-#brand { width: auto; min-width: 8; height: auto; padding: 0 1; color: $cyan; }
-#session { width: 1fr; height: auto; padding: 0 1; color: $cyan; }
-#header Button { min-width: 5; width: auto; }
+#header { background: $surface; height: 2; }
+#brand { width: auto; min-width: 7; height: 2; padding: 0 1; color: $cyan; }
+#session { width: 1fr; height: 2; padding: 0 1; color: $foreground; }
+#header Button { min-width: 5; width: auto; height: 2; border: none; padding: 0 1; }
 #body { height: 1fr; }
-#sidebar { width: 24; height: 1fr; background: $surface; padding: 0 1; border-right: solid $border; }
+#sidebar { width: 22; height: 1fr; background: $surface; padding: 0 1; }
 #sidebar.compact { display: none; }
 #sidebar Button { width: 100%; margin: 0; text-align: left; height: 2; border: none; }
-#sidebar .selected { background: $border; color: $cyan; }
-.nav-group { color: $cyan; text-style: bold; padding: 1 0 0 0; }
+#sidebar .selected { background: $card; color: $cyan; text-style: bold; }
+#sidebar Button:focus { background: $border; color: $cyan; }
+.nav-group { color: $secondary; text-style: bold; padding: 1 0 0 0; }
 #pages { width: 1fr; height: 1fr; padding: 0 1; }
 ContentSwitcher, TabbedContent, TabPane, VerticalScroll { height: 1fr; }
-#status-bar { height: auto; min-height: 1; background: $surface; padding: 0 1; }
-.heading { text-style: bold; color: $cyan; height: auto; margin-bottom: 1; }
-.panel { background: $surface; border: solid $border; padding: 0 1; height: auto; }
+#status-bar { height: auto; min-height: 1; background: $surface; padding: 0 1; color: $secondary; }
+#status-bar.status-ok { color: $success; }
+#status-bar.status-warning { color: $warning; }
+.heading { text-style: bold; color: $cyan; height: auto; }
+#dashboard > .heading, #quick > .heading, #entity > .heading, #catalogue > .heading { margin: 1 0; }
+.panel { background: $surface; padding: 0 1; height: auto; }
 .master-detail { height: 1fr; }
 .master-detail DataTable, .master-detail Tree { width: 3fr; }
-.master-detail VerticalScroll { width: 2fr; }
+.master-detail VerticalScroll { width: 2fr; border-left: solid $border; }
 DataTable, Tree { height: 1fr; min-height: 3; background: $graphite; }
 DataTable > .datatable--header { background: $surface; color: $cyan; }
-DataTable > .datatable--cursor { background: $border; color: $cyan; }
+DataTable > .datatable--cursor { background: $card; color: $cyan; }
+Tabs .underline--bar { color: $cyan; }
+Tab { color: $secondary; }
+Tab.-active { color: $cyan; }
 .actions { height: auto; layout: grid; grid-size: 2; grid-columns: 1fr 1fr; grid-rows: auto; }
 .actions Button { width: 100%; min-width: 1; }
 .actions Input { width: 100%; }
 #case-tools, #case-tools-modules { height: auto; }
 #case-tools Input, #case-tools-modules Input { width: 1fr; }
 #case-tools Select, #case-tools-modules Select { width: 18; }
-Button { background: $surface; border: solid $border; color: $foreground; }
-Button:hover, Button:focus { border: solid $cyan; color: $cyan; }
+Button { background: $card; border: solid $border; color: $foreground; }
+Button:hover { background: $surface; color: $cyan; }
+Button:focus { border: solid $cyan; color: $cyan; }
+Button.-active { background: $border; }
 Button.-primary { background: $cyan; color: $graphite; border: solid $cyan; }
-Button:disabled { color: $foreground 40%; border: solid $border; }
+Button.-primary:focus { border: solid $foreground; }
+Button:disabled { color: $secondary; background: $surface; border: solid $surface; }
 Input, Select { background: $surface; border: tall $border; }
 Input:focus, Select:focus { border: tall $cyan; }
 #case-detail, #mount-summary, #entity-config, #module-errors { height: auto; padding: 0 1; }
-#workspace-tabs { height: 1fr; }
-.quick-group { height: auto; margin-bottom: 1; padding: 0 1; border: solid $border; background: $surface; }
-.quick-group Button { width: 100%; margin-bottom: 0; height: 3; }
+#resources { color: $foreground; }
+#recent-activity { color: $secondary; }
+#module-errors { color: $error; }
+#workspace-tabs, #case-workspace { height: 1fr; }
+.section-panel { height: auto; margin-bottom: 1; }
+.quick-group .heading { margin-bottom: 1; }
 #storage-group .heading { color: $success; }
 #acquisition-group .heading { color: $violet; }
-.destructive { color: $warning; }
+CardGrid { height: auto; grid-size: 3; grid-columns: 25 25 25; grid-rows: 6; grid-gutter: 1 1; }
+CardGrid.two-columns { grid-size: 2; grid-columns: 24 24; }
+CardGrid.single-column { grid-size: 1; grid-columns: 1fr; }
+ActionCard { width: 100%; max-width: 30; height: 6; min-width: 1; text-align: left; content-align: left middle; padding: 0 1; color: $cyan; border: solid $card; }
+ActionCard > .action-card--description { color: $secondary; }
+#storage-group ActionCard { color: $success; }
+#acquisition-group ActionCard { color: $violet; }
+#quick ActionCard.reports-card { color: $info; }
+#quick ActionCard.destructive, .destructive { color: $error; }
+#quick ActionCard:hover { border: solid $border; background: $surface; }
+#quick ActionCard:focus { border: solid $cyan; }
+#quick ActionCard.-active { background: $border; }
+#quick ActionCard:disabled { color: $secondary 65%; background: $surface; border: solid $surface; }
+#quick ActionCard:disabled > .action-card--description { color: $secondary 65%; }
+#metrics { height: auto; margin: 1 0; }
+.metric-card { width: 1fr; height: 2; background: $card; padding: 0 1; margin-right: 1; }
+.metric-label { color: $secondary; height: 1; }
+ProgressBar Bar > .bar--bar { color: $cyan; }
+ProgressBar Bar > .bar--complete { color: $success; }
+ProgressBar Bar > .bar--indeterminate { color: $info; }
 ModalScreen { align: center middle; background: $graphite 75%; }
-.dialog { width: 75%; max-height: 90%; height: auto; border: solid $cyan; background: $surface; padding: 1; }
-.operation { width: 94%; height: 92%; }
-#operation-log { height: 1fr; background: $graphite; }
-#case-workspace { height: 1fr; }
+.dialog { width: 84%; max-width: 100; max-height: 90%; height: auto; border: solid $border; background: $surface; padding: 0 1; }
+.dialog .heading { padding: 1 0 0 0; }
+.form-field { color: $secondary; height: auto; }
+.operation { width: 96%; max-width: 150; height: 94%; }
+#operation-log { height: 1fr; min-height: 3; background: $graphite; }
+#operation-live { height: auto; max-height: 3; color: $info; }
+#operation-stages { height: auto; max-height: 7; }
+.operation-stage { height: 1; }
+.operation-stage Static { width: 1fr; color: $secondary; }
+.operation-stage ProgressBar { width: 20; }
+.operation-stage.incomplete Static { color: $warning; }
 #disk-tree { height: auto; min-height: 6; max-height: 14; }
 #operator-table { height: 8; }
 #entity-logo-preview { height: auto; }
 #manager-actions { grid-size: 3; grid-columns: 1fr 1fr 1fr; }
+Footer { background: $surface; color: $secondary; }
+FooterKey { background: $surface; color: $secondary; }
+FooterKey > .footer-key--key { color: $cyan; }
+Toast { background: $card; color: $foreground; border: solid $info; }
+Toast.-warning { border: solid $warning; }
+Toast.-error { border: solid $error; }
+Operation > .operation--error { color: $error; text-style: bold; }
+#operation-title.operation-failed, #file-preview.preview-error { color: $error; }

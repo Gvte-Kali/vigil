@@ -458,6 +458,7 @@ def main():
     destination = parser.add_mutually_exclusive_group()
     destination.add_argument("--local-directory")
     destination.add_argument("--external", action="store_true")
+    parser.add_argument("--embedded-terminal", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.language:
         os.environ["VIGIL_LANG"] = args.language
@@ -467,6 +468,9 @@ def main():
         parser.error(tr("Lancez cette action avec sudo dans un espace de montage privé.", "Run this action with sudo in a private mount namespace."))
     if os.readlink("/proc/self/ns/mnt") == os.readlink("/proc/1/ns/mnt"):
         parser.error(tr("Espace de montage privé requis.", "A private mount namespace is required."))
+
+    if args.embedded_terminal:
+        os.environ["VIGIL_EMBEDDED_TERMINAL"] = "1"
 
     def interrupt(*_):
         raise InterruptedError(tr("Acquisition interrompue.", "Acquisition interrupted."))

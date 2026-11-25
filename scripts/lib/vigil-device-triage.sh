@@ -118,11 +118,19 @@ run_usb_triage() {
     # pendant le décompte ne doivent PAS être réutilisées plus tard comme
     # réponse à un prompt (bug des doubles Entrée).
     echo -e "${BLUE}$(vigil_text "Attente de la détection par le noyau (10 s)..." "Waiting for kernel detection (10 s)...")${NC}"
-    local _total=10 _elapsed=0 _fill="" _k
+    local _total=10 _elapsed=0 _fill="" _k _stage=usb
+    case "$role" in
+        [Ss]ource) _stage=usb-source ;;
+        [Dd]estination) _stage=usb-destination ;;
+    esac
     while [ "$_elapsed" -lt "$_total" ]; do
         _fill=""
         for (( _k=0; _k<_elapsed; _k++ )); do _fill="${_fill}#"; done
-        printf "\r  ${BLUE}[%-10s] %d s${NC}" "$_fill" "$_elapsed"
+        if [ "${VIGIL_EMBEDDED_TERMINAL:-}" = 1 ]; then
+            vigil_progress_frame "$_stage" "$((_elapsed * 100 / _total))" "$_elapsed / $_total s"
+        else
+            printf "\r  ${BLUE}[%-10s] %d s${NC}" "$_fill" "$_elapsed"
+        fi
         # Purge du tampon clavier (Entrées anticipées)
         if [ -t 0 ]; then
             while IFS= read -r -t 0.05 < /dev/tty 2>/dev/null; do :; done
@@ -130,7 +138,11 @@ run_usb_triage() {
         sleep 1
         _elapsed=$((_elapsed + 1))
     done
-    printf "\r  ${BLUE}[%-10s] %d s${NC}\n" "##########" "$_total"
+    if [ "${VIGIL_EMBEDDED_TERMINAL:-}" = 1 ]; then
+        vigil_progress_frame "$_stage" 100 "$_total / $_total s" true
+    else
+        printf "\r  ${BLUE}[%-10s] %d s${NC}\n" "##########" "$_total"
+    fi
     usb_snapshot > "$after_file"
     after_count=$(grep -cve '^[[:space:]]*$' "$after_file" 2>/dev/null)
     after_count=${after_count:-0}

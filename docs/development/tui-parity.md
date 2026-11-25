@@ -17,3 +17,19 @@ et les protections sont celles du Core courant de `vigil-2.0`.
 | Entité | Coordonnées, logo PNG/JPEG, opérateur de session | Chargement et sauvegarde via les services d’entité. Aperçu du logo via Chafa |
 | Catalogue | Filtre, disponibilité, inspecteur et création de brouillon | Recette du catalogue communautaire ouverte |
 | Session et lanceurs | Supervision commune, bilan dans le terminal courant, publication de `vigil-tui` | Collision, idempotence et trois entrées testées. Validation de la restitution matérielle ouverte |
+
+## Présentation du terminal intégré
+
+Les actions rapides s’affichent en cartes, sur une à trois colonnes selon la
+largeur. L’en-tête reste sur deux lignes. Les icônes se replient en ASCII sur
+un terminal non UTF-8 ou avec `VIGIL_ASCII=1`.
+
+Le terminal intégré conserve les messages dans le journal et met les étapes
+de détection USB, de scan, de copie, de synchronisation et de vérification
+sur des barres séparées. Les scripts exécutés dans un terminal classique
+gardent leur affichage habituel.
+
+Si la protection USB est bloquée par une session antérieure, ouvrir le bilan
+proposé. Utiliser `R` si le bilan propose la restitution. La TUI réévalue
+l’état à la fermeture du bilan et repropose l’autorisation si la restitution
+est confirmée.

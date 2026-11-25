@@ -30,6 +30,7 @@ from .quick_actions import acquisition_command, legacy_mount_command, storage_co
 from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .shutdown_state import check_shutdown_state
 from .tui_screens import Form, Operation
+from .tui_widgets import ActionCard, CardGrid, MetricCard, NavigationItem, SectionPanel, StatusIndicator, icon, supports_unicode
 from .entity import FIELDS, data_directory, legacy_base, load_entity, save_entity
 from .system_info import cpu_ticks, system_metrics
 
@@ -37,7 +38,7 @@ CORE_ERRORS = (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError)
 
 
 def render_logo(source, size):
-    if source.is_file() and os.geteuid() != 0 and "NO_COLOR" not in os.environ:
+    if source.is_file() and os.geteuid() != 0 and "NO_COLOR" not in os.environ and supports_unicode():
         try:
             result = subprocess.run(["chafa", "--format", "symbols", "--colors", "256",
                                      "--size", size, str(source)], capture_output=True,
@@ -53,7 +54,7 @@ def logo():
     source = legacy_base() / "data/icons/vigil.svg"
     if not source.is_file():
         source = Path(sys.prefix) / "share/vigil/vigil.svg"
-    return render_logo(source, "20x6") or Text("Vigil", style="bold cyan")
+    return render_logo(source, "12x2") or Text("Vigil", style="bold")
 
 
 def organization_logo(data, relative_path):
@@ -90,7 +91,7 @@ class Workspace(App):
             self.release = version("vigil-dfir")
         except PackageNotFoundError:
             self.release = "2.0"
-        self.brand = Text("Vigil", style="bold cyan")
+        self.brand = Text("Vigil", style="bold")
 
     def tr(self, french, english):
         return english if self.language == "en" else french
@@ -116,7 +117,7 @@ class Workspace(App):
         with Horizontal(id="header"):
             yield Static(self.brand, id="brand")
             yield Static(id="session")
-            yield b("sidebar-toggle", "☰", "☰")
+            yield b("sidebar-toggle", icon("menu"), icon("menu"))
             yield b("language", "FR / EN", "EN / FR")
         with Horizontal(id="body"):
             with VerticalScroll(id="sidebar"):
@@ -125,15 +126,14 @@ class Workspace(App):
                         yield Static(t("INVESTIGATION", "INVESTIGATION"), classes="nav-group")
                     if key == "entity":
                         yield Static(t("SYSTÈME", "SYSTEM"), classes="nav-group")
-                    yield Button(label, id=f"nav-{key}")
+                    yield NavigationItem(label, key)
             with ContentSwitcher(initial="dashboard", id="pages"):
                 with VerticalScroll(id="dashboard"):
                     yield Static(t("Tableau de bord", "Dashboard"), classes="heading")
                     yield Static(id="resources", classes="panel")
-                    yield Static("CPU")
-                    yield ProgressBar(total=100, show_eta=False, id="cpu-progress")
-                    yield Static("RAM")
-                    yield ProgressBar(total=100, show_eta=False, id="ram-progress")
+                    with Horizontal(id="metrics"):
+                        yield MetricCard("CPU", "cpu")
+                        yield MetricCard("RAM", "ram")
                     yield Static(id="mount-summary", classes="panel")
                     yield Static(id="recent-activity", classes="panel")
                     yield Static(t("Disques et partitions", "Disks and partitions"), classes="heading")
@@ -213,19 +213,33 @@ class Workspace(App):
                                     yield b("export-audit", "Exporter l’audit", "Export audit")
                 with VerticalScroll(id="quick"):
                     yield Static(t("Actions rapides", "Quick actions"), classes="heading")
-                    with Vertical(id="antivirus-group", classes="quick-group"):
-                        yield Static("Antivirus", classes="heading")
-                        yield b("quick-scan", "Scan antivirus", "Antivirus scan", variant="primary")
-                        yield b("quick-update", "Mettre à jour l’antivirus", "Update antivirus")
-                        yield b("quick-reports", "Rapports antivirus", "Antivirus reports")
-                    with Vertical(id="storage-group", classes="quick-group"):
-                        yield Static(t("Stockage", "Storage"), classes="heading")
-                        yield b("storage-mount", "Monter un stockage", "Mount storage", variant="primary")
-                        yield b("storage-unmount", "Démonter le stockage", "Unmount storage")
-                    with Vertical(id="acquisition-group", classes="quick-group"):
-                        yield Static("Acquisition", classes="heading")
-                        yield b("clone", "Cloner un disque", "Clone a disk", classes="destructive")
-                        yield b("raw", "Créer une image RAW", "Create a RAW image")
+                    yield SectionPanel("Antivirus", CardGrid(
+                        ActionCard(t("Scan antivirus", "Antivirus scan"),
+                                   t("Analyser un support et produire un rapport.", "Scan media and produce a report."),
+                                   "scan", id="quick-scan"),
+                        ActionCard(t("Mettre à jour l’antivirus", "Update antivirus"),
+                                   t("Télécharger les signatures ClamAV.", "Download ClamAV signatures."),
+                                   "update", id="quick-update"),
+                        ActionCard(t("Rapports antivirus", "Antivirus reports"),
+                                   t("Retrouver les rapports de scan.", "Find previous scan reports."),
+                                   "report", id="quick-reports", classes="reports-card"),
+                    ), id="antivirus-group", classes="quick-group")
+                    yield SectionPanel(t("Stockage", "Storage"), CardGrid(
+                        ActionCard(t("Monter un stockage", "Mount storage"),
+                                   t("Connecter un support de travail en RW.", "Connect a work drive read-write."),
+                                   "mount", id="storage-mount"),
+                        ActionCard(t("Démonter le stockage", "Unmount storage"),
+                                   t("Libérer le support de travail.", "Release the work drive."),
+                                   "unmount", id="storage-unmount"),
+                    ), id="storage-group", classes="quick-group")
+                    yield SectionPanel("Acquisition", CardGrid(
+                        ActionCard(t("Cloner un disque", "Clone a disk"),
+                                   t("Copier bit à bit vers un disque cible.", "Copy bit for bit to a target disk."),
+                                   "clone", id="clone", classes="destructive"),
+                        ActionCard(t("Créer une image RAW", "Create a RAW image"),
+                                   t("Enregistrer une image vérifiée.", "Save a verified disk image."),
+                                   "raw", id="raw"),
+                    ), id="acquisition-group", classes="quick-group")
                 with VerticalScroll(id="entity"):
                     yield Static(t("Configuration de l’entité", "Organization settings"), classes="heading")
                     yield Static(id="entity-config", classes="panel")
@@ -248,7 +262,7 @@ class Workspace(App):
                             yield Static(id="module-detail")
                     yield Static(id="module-errors")
                     yield b("create-module", "Créer un module", "Create module")
-        yield Static(id="status-bar")
+        yield StatusIndicator(id="status-bar")
         yield Footer()
 
     async def on_mount(self):
@@ -259,7 +273,7 @@ class Workspace(App):
             if not self.operator:
                 await self.choose_session_operator()
             else:
-                self.offer_protection()
+                await self.offer_protection()
 
     async def choose_session_operator(self):
         _, operators = await asyncio.to_thread(self.case_data)
@@ -272,16 +286,40 @@ class Workspace(App):
                          lambda response: self.submit_form("session-operator", response)
                          if response is not None else self.exit())
 
-    def offer_protection(self):
+    async def pending_protection_reports(self):
+        from .session import pending_sessions
+
+        return await asyncio.to_thread(pending_sessions, self.state.parent / "sessions")
+
+    async def offer_protection(self):
         if Path("/usr/local/sbin/vigil-hotplug").is_file() and not self.protection_active():
-            pending = json.loads(os.environ.get("VIGIL_SESSION_PENDING", "[]"))
-            if pending:
-                self.notify(self.tr("Vérifiez le bilan d’une session précédente.", "Review a previous session report."),
-                            severity="warning")
-            else:
-                self.ask("protect", self.tr("Activer la protection USB", "Enable USB protection"),
-                         message=self.tr("Autoriser la protection en lecture seule des nouveaux disques pour cette session ?",
-                                         "Authorise read-only protection for new disks during this session?"))
+            await self.request_protection()
+
+    async def request_protection(self):
+        t = self.tr
+        if self.protection_active():
+            self.notify(t("Protection USB déjà active.", "USB protection is already active."))
+            return
+        if not os.environ.get("VIGIL_SESSION_GUARD", "").isdecimal():
+            raise ValueError(t("Relancez la TUI avec vigil ou vigil-tui pour ouvrir une session supervisée.",
+                               "Restart with vigil or vigil-tui to open a supervised session."))
+        if not Path("/usr/local/sbin/vigil-hotplug").is_file():
+            raise ValueError(t("L’assistant USB est absent. Installez-le avec scripts/post-install/install-hotplug.sh.",
+                               "The USB helper is missing. Install it with scripts/post-install/install-hotplug.sh."))
+        if pending := await self.pending_protection_reports():
+            self.ask("review-session", t("Vérifier une session précédente", "Review a previous session"),
+                     choices=tuple((name, name) for name in reversed(sorted(pending))),
+                     message=t("La protection exige la restitution de la session précédente. Ouvrez son bilan et utilisez R si la restauration est proposée.",
+                               "Protection requires recovery of the previous session. Open its report and press R if recovery is offered."))
+            return
+        self.ask("protect", t("Activer la protection USB", "Enable USB protection"),
+                 message=t("Autoriser la protection en lecture seule des nouveaux disques pour cette session ?",
+                           "Authorise read-only protection for new disks during this session?"))
+
+    async def finish_session_review(self):
+        await self.action_refresh_workspace()
+        if not await self.pending_protection_reports():
+            await self.offer_protection()
 
     async def initialize_workspace(self):
         t = self.tr
@@ -320,7 +358,9 @@ class Workspace(App):
         t = self.tr
         operator = self.operator or t("Aucun opérateur", "No operator")
         case = self.case_rows.get(self.active_case, {}).get("name") or t("Aucune affaire active", "No active case")
-        self.query_one("#session", Static).update(Text(f"Vigil {self.release}  ·  {operator}  ·  {case}"))
+        self.query_one("#session", Static).update(Text(
+            f"Vigil {self.release}  ·  {operator}\n{case}", no_wrap=True, overflow="ellipsis"
+        ))
         self.query_one("#case-heading", Static).update(Text(case))
         self.write_session_context()
         for key in ("mount-case", "unmount-case", "run-analysis", "query-index", "export-case", "export-audit",
@@ -392,10 +432,10 @@ class Workspace(App):
         count = len(rows)
         protection = self.protection_active()
         state = t("Protection USB active", "USB protection active") if protection else t("Protection USB inactive", "USB protection inactive")
-        style = "#79CDA0" if protection else "#E4BC72"
-        status = Text(state, style=style)
-        status.append(f"  ·  {count} {t('montage(s)', 'mount(s)')}  ·  /investigation RO  ·  /stockage RW")
-        self.query_one("#status-bar", Static).update(status)
+        self.query_one("#status-bar", StatusIndicator).show(
+            state, f"{count} {t('montage(s)', 'mount(s)')}  ·  /investigation RO  ·  /stockage RW",
+            active=protection,
+        )
         return rows
 
     async def action_refresh_workspace(self):
@@ -748,15 +788,18 @@ class Workspace(App):
         if event.control.id != "file-tree" or not event.node.data:
             return
         path, root, mount_id, directory = event.node.data
+        preview = self.query_one("#file-preview", Static)
+        preview.remove_class("preview-error")
         self.explorer_path = None if directory or root is None else path
         if directory:
-            self.query_one("#file-preview", Static).update(Text(str(path)))
+            preview.update(Text(str(path)))
             return
         try:
             result = await asyncio.to_thread(inspect_file, path, mount=(root, mount_id) if root else None)
-            self.query_one("#file-preview", Static).update(self.preview_text(path, result))
+            preview.update(self.preview_text(path, result))
         except CORE_ERRORS as error:
-            self.query_one("#file-preview", Static).update(Text(str(error), style="red"))
+            preview.add_class("preview-error")
+            preview.update(Text(str(error)))
 
     def preview_text(self, path, result):
         return Text(f"{path}\n{result['size']} octets · {result['mode']} · {result['mime_hint'] or '—'}\n\n"
@@ -801,7 +844,7 @@ class Workspace(App):
                     self.operator = name
                     self.query_one("#set-operator", Button).disabled = True
                     await self.refresh_cases()
-                    self.offer_protection()
+                    await self.offer_protection()
                 case "create-case":
                     await asyncio.to_thread(self.create_case, response["name"], response["reference"], response["description"])
                     await self.refresh_cases()
@@ -936,9 +979,7 @@ class Workspace(App):
                     (t("Retirer le logo", "Remove logo"), "remove"),
                 ))
             case "review-session":
-                from .session import pending_sessions
-
-                pending = await asyncio.to_thread(pending_sessions, self.state.parent / "sessions")
+                pending = await self.pending_protection_reports()
                 if not pending:
                     self.info(t("Bilan des sessions", "Session reports"),
                               t("Aucune session à vérifier.", "No session requires review."))
@@ -961,7 +1002,9 @@ class Workspace(App):
                 self.ask(action, t("Cloner un disque", "Clone a disk"),
                          message=t("Les données du disque de destination seront écrasées.",
                                    "Data on the destination disk will be overwritten."))
-            case "quick-scan" | "quick-update" | "storage-mount" | "storage-unmount" | "mount-case" | "unmount-case" | "run-analysis" | "protect" | "export-audit":
+            case "protect":
+                await self.request_protection()
+            case "quick-scan" | "quick-update" | "storage-mount" | "storage-unmount" | "mount-case" | "unmount-case" | "run-analysis" | "export-audit":
                 self.ask(action, str(self.query_one(f"#{action}", Button).label))
             case "diagnose":
                 self.info(t("Diagnostic", "Diagnostics"), json.dumps(await asyncio.to_thread(doctor), ensure_ascii=False, indent=2))
@@ -1005,8 +1048,9 @@ class Workspace(App):
                 argv = acquisition_command("image", external=external,
                                            local_directory=None if external else self.form_path(fields["path"]),
                                            language=self.language)
+                argv.append("--embedded-terminal")
             case "clone":
-                argv = acquisition_command("clone", language=self.language)
+                argv = [*acquisition_command("clone", language=self.language), "--embedded-terminal"]
             case "mount-case" | "unmount-case":
                 mode = "operation"
                 argv = await asyncio.to_thread(legacy_mount_command, action.split("-")[0], self.state, case, name, operator)
@@ -1033,12 +1077,15 @@ class Workspace(App):
                 from .session import prepare_previous_report
 
                 output = await asyncio.to_thread(prepare_previous_report, self.state, fields["choice"], [fields["choice"]])
-                argv = [sys.executable, "-m", "vigil.session", "--review-report", str(output)]
+                argv = ["/usr/bin/env", f"VIGIL_STATE_DIR={self.state.parent}", sys.executable,
+                        "-m", "vigil.session", "--review-report", str(output)]
             case "protect":
-                pid = os.environ.get("VIGIL_SESSION_GUARD")
-                if not pid or json.loads(os.environ.get("VIGIL_SESSION_PENDING", "[]")):
-                    raise ValueError(t("Session supervisée sans incident antérieur requise.",
-                                       "A supervised session without prior incidents is required."))
+                pid = os.environ.get("VIGIL_SESSION_GUARD", "")
+                if not pid.isdecimal() or not Path("/proc", pid).is_dir():
+                    raise ValueError(t("La session supervisée n’est plus disponible.", "The supervised session is no longer available."))
+                if await self.pending_protection_reports():
+                    await self.request_protection()
+                    return
                 argv = ["/usr/bin/sh", str(legacy_base() / "scripts/post-install/activate-hotplug.sh"), pid]
             case _:
                 return
@@ -1046,8 +1093,9 @@ class Workspace(App):
             argv = [sys.executable, "-m", "vigil.device_manager", mode, *argv]
         run, argv = prepare_tracked(argv, self.state.parent / "terminal-runs",
                                    {"operation": action, "language": self.language, "operator": operator, "case_id": case})
+        callback = self.finish_session_review if action == "review-session" else self.action_refresh_workspace
         self.push_screen(Operation(str(self.query_one(f"#{action}", Button).label), t, argv, self.language, run),
-                         lambda _: self.background(self.action_refresh_workspace))
+                         lambda _: self.background(callback))
 
 
 def main():
