@@ -62,7 +62,7 @@ def analysis_command(state, case_id, operator, module_id):
     if script.parent != expected_directory:
         raise ValueError("invalid built-in analysis entrypoint")
     run_id = uuid4().hex
-    custody = storage.evidence_copy_path(state, case_id, "0" * 32).parents[2]
+    custody = storage.case_storage_directory(state, case_id)
     root = custody / "analyses"
     if root.resolve() != root.absolute():
         raise ValueError("invalid analysis output directory")

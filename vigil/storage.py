@@ -2,9 +2,11 @@
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import stat
 import tempfile
+import unicodedata
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,10 +15,14 @@ from uuid import uuid4
 from .inspection import investigation_mounts, list_evidence_directory, open_evidence_path
 
 ANTIVIRUS_CASE_NAME = "Scan antivirus"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 APPLICATION_ID = 0x5649474C
 DELETED_CASES_DDL = """CREATE TABLE deleted_cases (
     case_id TEXT PRIMARY KEY REFERENCES cases(id), deleted_at TEXT NOT NULL
+)"""
+CASE_DIRECTORIES_DDL = """CREATE TABLE case_directories (
+    case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE
 )"""
 SCHEMA = (
     "CREATE TABLE operators (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE)",
@@ -25,6 +31,7 @@ SCHEMA = (
         legacy_info TEXT, created_at TEXT NOT NULL
     )""",
     DELETED_CASES_DDL,
+    CASE_DIRECTORIES_DDL,
     """CREATE TABLE evidence (
         id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES cases(id),
         path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL
@@ -73,11 +80,19 @@ def database(path):
                     connection.execute(statement)
                 connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            elif app_id == APPLICATION_ID and version == 1:
-                connection.execute(DELETED_CASES_DDL)
+            elif app_id == APPLICATION_ID and version in (1, 2):
+                if version == 1:
+                    connection.execute(DELETED_CASES_DDL)
+                connection.execute(CASE_DIRECTORIES_DDL)
+                for case_id, name in connection.execute("SELECT id, name FROM cases ORDER BY created_at, id"):
+                    assign_case_directory(connection, case_id, name)
                 connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             elif app_id != APPLICATION_ID or version != SCHEMA_VERSION:
                 raise ValueError("unsupported Vigil database or schema version")
+            if version != SCHEMA_VERSION:
+                # Persist directory assignments before a caller can rename a legacy folder.
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
             yield connection
     finally:
         connection.close()
@@ -125,6 +140,23 @@ def audit(connection, operator, case_id, action, details):
     )
 
 
+def assign_case_directory(connection, case_id, name):
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^A-Za-z0-9]+", "_", ascii_name).strip("_")[:100] or "Affaire"
+    # A legacy directory name is reserved even when no directory currently exists.
+    if re.fullmatch(r"[0-9a-fA-F]{32}", base):
+        base = f"Affaire_{base}"
+    database_file = connection.execute("PRAGMA database_list").fetchone()[2]
+    root = Path(database_file).parent / "legacy-custody"
+    candidate = base
+    suffix = 2
+    while (os.path.lexists(root / candidate)
+           or connection.execute("SELECT 1 FROM case_directories WHERE name = ?", (candidate,)).fetchone()):
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    connection.execute("INSERT INTO case_directories VALUES (?, ?)", (case_id, candidate))
+
+
 def create_case(connection, name, operator, legacy_path=None, legacy_info=None):
     if not name.strip():
         raise ValueError("case name required")
@@ -140,6 +172,7 @@ def create_case(connection, name, operator, legacy_path=None, legacy_info=None):
         ).fetchone()[0]
         require_active_case(connection, existing)
         return existing
+    assign_case_directory(connection, case_id, name)
     audit(connection, operator, case_id, "case.import" if legacy_path else "case.create",
           {"legacy_path": legacy_path})
     return case_id
@@ -217,20 +250,37 @@ def add_evidence(connection, case_id, path, size, digest, operator, evidence_id)
     return evidence_id
 
 
-def case_storage_directory(state, case_id):
-    if len(case_id) != 32 or any(char not in "0123456789abcdef" for char in case_id):
+def case_storage_directory(state, case_id, *, connection=None):
+    if not re.fullmatch(r"[0-9a-f]{32}", case_id):
         raise ValueError("invalid case ID")
-    path = state.parent / "legacy-custody" / case_id
-    resolved = path.resolve()
-    if resolved != path.absolute() or resolved.is_relative_to("/investigation"):
-        raise ValueError("invalid case storage directory")
+    if connection is None:
+        with database(state) as connection:
+            return case_storage_directory(state, case_id, connection=connection)
+    row = connection.execute("SELECT name FROM case_directories WHERE case_id = ?", (case_id,)).fetchone()
+    if row is None:
+        raise ValueError("unknown case")
+    name = row["name"]
+    if not re.fullmatch(r"[A-Za-z0-9_]+", name):
+        raise ValueError("invalid case directory name")
+    root = state.parent / "legacy-custody"
+    path, previous = root / name, root / case_id
+    for directory in (path, previous):
+        resolved = directory.resolve()
+        if resolved != directory.absolute() or resolved.is_relative_to("/investigation"):
+            raise ValueError("invalid case storage directory")
+        if directory.exists() and not directory.is_dir():
+            raise ValueError("case storage path is not a directory")
+    if previous.is_dir():
+        if path.exists():
+            raise ValueError(f"conflicting case directories: {previous} and {path}")
+        previous.rename(path)
     return path
 
 
-def evidence_copy_path(state, case_id, evidence_id):
+def evidence_copy_path(state, case_id, evidence_id, *, connection=None):
     if len(evidence_id) != 32 or any(char not in "0123456789abcdef" for char in evidence_id):
         raise ValueError("invalid evidence ID")
-    path = case_storage_directory(state, case_id) / "preuves" / evidence_id
+    path = case_storage_directory(state, case_id, connection=connection) / "preuves" / evidence_id
     if path.resolve() != path.absolute():
         raise ValueError("invalid evidence storage directory")
     return path / "contenu"
@@ -306,7 +356,7 @@ def register_file(state, case_id, path, operator, *, mount=None):
                     if not matching:
                         raise ValueError("source no longer matches the recorded evidence fingerprint")
                     for row in matching:
-                        target = evidence_copy_path(state, case_id, row["id"])
+                        target = evidence_copy_path(state, case_id, row["id"], connection=connection)
                         if not target.exists():
                             target.parent.mkdir(mode=0o700, exist_ok=True)
                             os.link(staged, target, follow_symlinks=False)
@@ -316,7 +366,7 @@ def register_file(state, case_id, path, operator, *, mount=None):
                     evidence_id = matching[0]["id"]
                 else:
                     evidence_id = new_id
-                    target = evidence_copy_path(state, case_id, evidence_id)
+                    target = evidence_copy_path(state, case_id, evidence_id, connection=connection)
                     target.parent.mkdir(mode=0o700)
                     os.link(staged, target, follow_symlinks=False)
                     published.append(target)

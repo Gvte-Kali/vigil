@@ -69,13 +69,22 @@ class WorkspaceTest(unittest.TestCase):
                 dialog = window.case_picker
                 self.assertTrue(dialog.isAncestorOf(window.case_search))
                 self.assertTrue(dialog.isAncestorOf(window.cases))
-                window.case_clicked(window.cases.item(0))
+                item = window.cases.item(0)
+                window.cases.setCurrentItem(item)
+                window.cases.itemClicked.emit(item)
+                self.assertFalse(window.active_case_id)
+                if pick_with_button:
+                    window.select_case_button.click()
+                else:
+                    window.cases.itemDoubleClicked.emit(item)
                 return dialog.result()
 
             with patch.object(window, "confirm_case_selection", return_value=True), \
                     patch.object(QDialog, "exec", autospec=True, side_effect=select):
-                window.choose_case()
-            self.assertTrue(window.active_case_id)
+                for pick_with_button in (False, True):
+                    window.active_case_id = ""
+                    window.choose_case()
+                    self.assertTrue(window.active_case_id)
             self.assertIs(window.case_controls.parentWidget(), window)
             self.assertTrue(window.case_controls.isHidden())
             self.close_workspace(window)
@@ -129,7 +138,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertTrue(evidence_item.text(2).startswith("preuves/"))
             with patch.object(QDesktopServices, "openUrl", return_value=True) as open_case_url:
                 window.case_folder_button.click()
-            self.assertEqual(Path(open_case_url.call_args.args[0].toLocalFile()).name, window.active_case_id)
+            self.assertEqual(Path(open_case_url.call_args.args[0].toLocalFile()).name, "Fixture")
             with patch.object(QDesktopServices, "openUrl", return_value=True) as open_url:
                 window.open_evidence_folder()
             self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()).parent.name, "preuves")
@@ -173,7 +182,9 @@ class WorkspaceTest(unittest.TestCase):
             window.create_case()
             with patch.object(window, "confirm_case_selection", return_value=True):
                 window.case_clicked(window.cases.currentItem())
-            custody = root / "legacy-custody" / window.active_case_id / "analyses"
+            from vigil.storage import case_storage_directory
+
+            custody = case_storage_directory(window.database_path, window.active_case_id) / "analyses"
             for module, name, timestamp in (
                 ("archives", "a.pdf", 1767139200),  # 31 December 2025 UTC
                 ("clamav", "b.pdf", 1767312000),    # 2 January 2026 UTC

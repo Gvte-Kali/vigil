@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from .history import case_events
 from .report_copies import sync_report_copies
-from .storage import database, require_active_case, utc_now
+from .storage import case_storage_directory, database, require_active_case, utc_now
 
 
 def case_report(state, case_id):
@@ -62,7 +62,7 @@ def case_pdf_reports(state, case_id, legacy_path=None):
     """List case-scoped PDFs without following symbolic links."""
     if not re.fullmatch(r"[0-9a-f]{32}", case_id):
         raise ValueError("invalid case ID")
-    custody = state.parent / "legacy-custody" / case_id
+    custody = case_storage_directory(state, case_id)
     return sync_report_copies(custody, Path(legacy_path) if legacy_path else None)
 
 

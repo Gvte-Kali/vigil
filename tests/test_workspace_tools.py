@@ -9,18 +9,19 @@ from vigil.core import discover
 from vigil.inspection import PREVIEW_BYTES, inspect_file, list_evidence_directory
 from vigil.module_scaffold import create_module_draft
 from vigil.quick_actions import legacy_mount_command, storage_command, update_command
-from vigil.storage import default_database
+from vigil.storage import create_case, database, default_database
 
 
 class WorkspaceToolsTest(unittest.TestCase):
     def test_historical_mount_uses_case_id_without_modifying_global_selection(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            case = "a" * 32
+            with database(root / "cases.sqlite") as connection:
+                case = create_case(connection, "../case", "Alice")
             for action, script in (("mount", "vigil_usb_mount.sh"), ("unmount", "vigil_usb_umount.sh")):
                 argv = legacy_mount_command(action, root / "cases.sqlite", case, "../case", "Alice")
                 self.assertIn("VIGIL_LEGACY_PROJECT=../case", argv)
-                self.assertIn(f"VIGIL_LEGACY_CASE_DIR={root / 'legacy-custody' / case}", argv)
+                self.assertIn(f"VIGIL_LEGACY_CASE_DIR={root / 'legacy-custody' / 'case'}", argv)
                 self.assertEqual(Path(argv[-1]).name, script)
                 wrapper = argv[argv.index("-c") + 1]
                 self.assertEqual(wrapper.count("VIGIL_CASE_CENSUS=1"), 2 if action == "mount" else 0)
@@ -37,9 +38,10 @@ class WorkspaceToolsTest(unittest.TestCase):
             self.assertIn("VIGIL_LEGACY_PROJECT=(no-project)", mount)
             self.assertIn(f"VIGIL_LEGACY_CASE_DIR={state.parent / 'storage-operations'}", mount)
             self.assertEqual(Path(mount[-1]).name, "vigil_stockage_mount.sh")
-            case_id = "b" * 32
+            with database(state) as connection:
+                case_id = create_case(connection, "Case", "Alice")
             unmount = storage_command("unmount", state, case_id, "Case", "Alice")
-            self.assertIn(f"VIGIL_LEGACY_CASE_DIR={state.parent / 'legacy-custody' / case_id}", unmount)
+            self.assertIn(f"VIGIL_LEGACY_CASE_DIR={state.parent / 'legacy-custody' / 'Case'}", unmount)
             self.assertEqual(Path(unmount[-1]).name, "vigil_stockage_umount.sh")
             self.assertFalse((state.parent / "active_user").exists())
 
@@ -57,7 +59,7 @@ class WorkspaceToolsTest(unittest.TestCase):
             run = "c" * 32
             argv = legacy_mount_command("scan", state, case, "Scan antivirus", "Bob", run_id=run)
             self.assertIn("VIGIL_LEGACY_PROJECT=Scan antivirus", argv)
-            self.assertIn(f"VIGIL_LEGACY_SCAN_DIR={root / 'legacy-custody' / case / ('scan-' + run)}", argv)
+            self.assertIn(f"VIGIL_LEGACY_SCAN_DIR={root / 'legacy-custody' / 'Scan_antivirus' / ('scan-' + run)}", argv)
             self.assertEqual(argv[-4:], ["--user", "Bob", "--log", "--pdf"])
             self.assertFalse(any("VIGIL_CASE_CENSUS" in item for item in argv))
 

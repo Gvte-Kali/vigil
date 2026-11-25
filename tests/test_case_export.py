@@ -82,11 +82,34 @@ class CaseExportTest(unittest.TestCase):
                 case = storage.create_case(connection, "Version one case", "Alice")
             with sqlite3.connect(state) as connection:
                 connection.execute("DROP TABLE deleted_cases")
+                connection.execute("DROP TABLE case_directories")
                 connection.execute("PRAGMA user_version = 1")
             with storage.database(state) as connection:
                 self.assertEqual(storage.require_active_case(connection, case)["name"], "Version one case")
-                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 2)
+                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], 3)
 
+
+    def test_existing_case_directory_is_renamed_without_losing_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "cases.sqlite"
+            with storage.database(state) as connection:
+                first = storage.create_case(connection, "Équipe / 42", "Alice")
+                second = storage.create_case(connection, "Equipe 42", "Alice")
+            with sqlite3.connect(state) as connection:
+                connection.execute("DROP TABLE case_directories")
+                connection.execute("PRAGMA user_version = 2")
+            previous = state.parent / "legacy-custody" / first
+            previous.mkdir(parents=True)
+            original = previous / "fixture"
+            original.write_bytes(b"case contents")
+            original.chmod(0o400)
+            renamed = storage.case_storage_directory(state, first)
+            self.assertEqual(renamed.name, "Equipe_42")
+            self.assertEqual((renamed / "fixture").read_bytes(), b"case contents")
+            self.assertEqual((renamed / "fixture").stat().st_mode & 0o777, 0o400)
+            self.assertFalse(previous.exists())
+            self.assertEqual(storage.case_storage_directory(state, first), renamed)
+            self.assertEqual(storage.case_storage_directory(state, second).name, "Equipe_42_2")
 
     def test_purge_removes_only_selected_local_case_and_reports(self):
         with tempfile.TemporaryDirectory() as tmp:

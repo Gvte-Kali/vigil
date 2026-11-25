@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from .history import case_events
 from .report_copies import sync_report_copies
-from .storage import audit, database, evidence_copy_path, file_identity, require_active_case, utc_now
+from .storage import audit, case_storage_directory, database, evidence_copy_path, file_identity, require_active_case, utc_now
 
 
 @dataclass(frozen=True)
@@ -79,7 +79,7 @@ def export_case(state, case_id, operator, destination):
     destination = destination.resolve(strict=True)
     if not destination.is_dir() or destination.is_relative_to("/investigation"):
         raise ValueError("export destination must be outside /investigation")
-    custody = evidence_copy_path(state, case_id, "0" * 32).parents[2]
+    custody = case_storage_directory(state, case_id)
     with database(state) as connection:
         case = dict(require_active_case(connection, case_id))
         evidence = [dict(row) for row in connection.execute(

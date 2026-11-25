@@ -463,3 +463,10 @@ Recette interface et terminaux
     Vérifier que « Ouvrir le dossier de l’affaire » ouvre la racine locale.
 [ ] Vérifier le lancement du terminal à 44 lignes avec Konsole ou un autre
     émulateur compatible. Vérifier le comportement du gestionnaire de fenêtres.
+
+[ ] Fermer Vigil, sauvegarder data/state, mettre à jour puis ouvrir une
+    affaire existante. Vérifier que son ancien dossier UUID a été renommé,
+    que les preuves locales et rapports s’ouvrent et que l’export fonctionne.
+[ ] Créer « Équipe / 42 » et « Equipe 42 ». Vérifier les dossiers distincts
+    Equipe_42 et Equipe_42_2. Dans le sélecteur, vérifier la surbrillance
+    au clic simple, puis la confirmation au double-clic et via le bouton.

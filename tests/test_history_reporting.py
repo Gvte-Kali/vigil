@@ -29,10 +29,12 @@ class HistoryAndReportingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             state = root / "vigil.sqlite"
-            case, other = "a" * 32, "b" * 32
-            run = root / "legacy-custody" / case / "scan-fixture"
+            with database(state) as connection:
+                case = create_case(connection, "Case", "Alice")
+                create_case(connection, "Other", "Alice")
+            run = root / "legacy-custody" / "Case" / "scan-fixture"
             run.mkdir(parents=True)
-            outside = root / "legacy-custody" / other
+            outside = root / "legacy-custody" / "Other"
             outside.mkdir(parents=True)
             report = run / "scan.pdf"
             report.touch()
@@ -50,8 +52,9 @@ class HistoryAndReportingTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             state = Path(tmp) / "cases.sqlite"
-            case = "a" * 32
-            custody = state.parent / "legacy-custody" / case
+            with database(state) as connection:
+                case = create_case(connection, "Analysis", "Alice")
+            custody = state.parent / "legacy-custody" / "Analysis"
             for module, timestamp in (("archives", 100), ("clamav", 200)):
                 folder = custody / "analyses" / f"vigil.{module}-fixture"
                 folder.mkdir(parents=True)

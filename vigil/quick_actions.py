@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .entity import data_directory, legacy_base
 from .report_copies import SYNC_REPORTS, report_sync_context
+from .storage import case_storage_directory
 
 
 def tool(name):
@@ -84,9 +85,7 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
     script = base / "scripts" / names[operation]
     if not script.is_file():
         raise ValueError(f"legacy script unavailable: {script}")
-    directory = state.parent / "legacy-custody" / case_id
-    if directory.resolve() != directory.absolute() or directory.resolve().is_relative_to("/investigation"):
-        raise ValueError("invalid legacy custody directory")
+    directory = case_storage_directory(state, case_id)
     directory.mkdir(parents=True, mode=0o700, exist_ok=True)
 
     def label(value):
@@ -138,9 +137,8 @@ def storage_command(operation, state, case_id, name, operator):
     script = base / "scripts" / "stockage" / scripts[operation]
     if not script.is_file():
         raise ValueError(f"legacy script unavailable: {script}")
-    directory = state.parent / ("legacy-custody" if case_id else "storage-operations")
-    if case_id:
-        directory /= case_id
+    directory = (case_storage_directory(state, case_id) if case_id
+                 else state.parent / "storage-operations")
     if directory.resolve() != directory.absolute() or directory.resolve().is_relative_to("/investigation"):
         raise ValueError("invalid storage log directory")
     directory.mkdir(parents=True, mode=0o700, exist_ok=True)

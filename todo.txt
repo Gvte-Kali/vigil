@@ -23,6 +23,7 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] En-tête du montage sur une ligne, terminaux plus hauts et aperçu des preuves locales par identifiant.
 [ ] Recette Parrot de la hauteur du terminal et du double-clic hors support.
 [x] Ouverture du dossier local de l’affaire et affichage des chemins des copies. Terminaux compatibles à 44 lignes.
+[x] Nom lisible des dossiers d’affaires et migration vérifiée par fixture SQLite. Activation explicite dans le sélecteur.
 [x] Langue de la GUI transmise aux terminaux et à l’acquisition après sudo. Premiers messages FR/EN.
 [ ] Traduire les messages spécifiques des scripts historiques, les outils de maintenance et les PDF. Recette FR/EN complète.
 [x] Accueil, explorateur, catalogue, entité et actions rapides remaniés.

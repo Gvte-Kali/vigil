@@ -5,12 +5,12 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from .storage import ANTIVIRUS_CASE_NAME, database, evidence_copy_path, require_active_case
+from .storage import ANTIVIRUS_CASE_NAME, case_storage_directory, database, require_active_case
 from .system_info import decode_mount
 
 
-def case_directories(state, case_id):
-    custody = evidence_copy_path(state, case_id, "0" * 32).parents[2]
+def case_directories(state, case_id, connection):
+    custody = case_storage_directory(state, case_id, connection=connection)
     if custody.exists():
         yield custody
     reports = state.parent / "reports"
@@ -43,7 +43,7 @@ def purge_case(state, case_id):
             with Path("/proc/self/mountinfo").open(encoding="utf-8", errors="surrogateescape") as stream:
                 mounts = [Path(decode_mount(line.split(" - ", 1)[0].split()[4])) for line in stream]
             legacy = Path(case["legacy_path"]).resolve() if case["legacy_path"] else None
-            for path in case_directories(state, case_id):
+            for path in case_directories(state, case_id, connection):
                 absolute = path.absolute()
                 if (not path.is_dir() or path.resolve() != absolute
                         or any(target.is_relative_to(absolute) for target in mounts)

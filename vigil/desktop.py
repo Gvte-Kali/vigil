@@ -10,7 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSettings, QThread, QTimer, QTranslator, QUrl, Qt, Signal, Slot
-from PySide6.QtGui import QDesktopServices, QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtGui import QDesktopServices, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QBoxLayout, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPlainTextEdit, QSplitter,
@@ -286,11 +286,13 @@ class Workspace(QMainWindow):
         cases.addWidget(self.case_search)
         self.cases = QListWidget()
         cases.addWidget(self.cases)
-        self.cases.itemClicked.connect(self.case_clicked)
-        for key in ("Return", "Enter"):
-            shortcut = QShortcut(QKeySequence(key), self.cases)
-            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
-            shortcut.activated.connect(lambda: self.case_clicked(self.cases.currentItem()))
+        self.cases.itemDoubleClicked.connect(self.case_clicked)
+        choose = QHBoxLayout()
+        cases.addLayout(choose)
+        self.select_case_button = self.button(
+            choose, "Sélectionner l’affaire", "Select case",
+            lambda: self.case_clicked(self.cases.currentItem()), primary=True,
+        )
         self.case_name = QLineEdit()
         self.bind(self.case_name.setPlaceholderText, "Nom de l’affaire", "Case name")
         case_actions = QHBoxLayout()
@@ -1636,7 +1638,7 @@ class Workspace(QMainWindow):
             self.notify("Choisissez d’abord une affaire.", "Choose a case first.")
             return
         try:
-            root = storage.evidence_copy_path(self.database_path, case_id, "0" * 32).parents[2] / "analyses"
+            root = storage.case_storage_directory(self.database_path, case_id) / "analyses"
             if root.is_dir() and root.resolve() == root.absolute() and QDesktopServices.openUrl(
                     QUrl.fromLocalFile(str(root))):
                 return
