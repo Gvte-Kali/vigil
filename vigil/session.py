@@ -10,10 +10,13 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version
+from uuid import uuid4
 
 from .entity import legacy_base
-from .external_terminal import launch_terminal
-from .shutdown_state import ShutdownBlocked, check_shutdown_state
+from .external_terminal import TERMINALS, ExternalRun, launch_terminal
+from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
 from .storage import default_database
 
 REPORTS = Path("/run/vigil-hotplug/reports")
@@ -25,7 +28,8 @@ def session_preferences(state):
     try:
         parser.read(state.parent / "preferences" / f"{os.getuid()}.ini", encoding="utf-8")
         values = parser["General"]
-        return values.get("language", "fr"), values.get("external_terminal", "")
+        preferred = values.get("external_terminal", "")
+        return values.get("language", "fr"), preferred if preferred in TERMINALS else ""
     except (OSError, KeyError, ValueError, configparser.Error):
         return "fr", ""
 
@@ -54,7 +58,7 @@ def read_receipt(path, *, wait=12):
                 return receipt
         except FileNotFoundError:
             # No activation was recorded, or the installed helper predates receipts.
-            return {"status": "unavailable"}
+            return {"status": "not_activated" if REPORTS.is_dir() else "unavailable"}
         except (OSError, ValueError, KeyError):
             return {"status": "unavailable"}
         if time.monotonic() >= deadline:
@@ -88,18 +92,139 @@ def persist_report(state, report):
     return Path(stream.name)
 
 
+def session_record(state, identifier):
+    if not re.fullmatch(r"[0-9a-f]{32}", identifier):
+        raise ValueError("invalid session identifier")
+    folder = state.parent / "sessions"
+    if folder.resolve() != folder.absolute() or folder.resolve().is_relative_to("/investigation"):
+        raise ValueError("unsafe session directory")
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return folder / f"{identifier}.json"
+
+
+def write_state(path, data):
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".session-", delete=False,
+                                     mode="w", encoding="utf-8") as stream:
+        temporary = Path(stream.name)
+        try:
+            json.dump(data, stream, ensure_ascii=False, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def boot_identity():
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        return None
+
+
+def pending_sessions(folder):
+    unresolved = []
+    boot = boot_identity()
+    for path in folder.glob("*.json"):
+        try:
+            record = json.loads(path.read_text())
+            if record["status"] == "closed":
+                continue
+            owner = receipt_path(record["pid"])
+            if owner and owner.name == record.get("owner") and record.get("boot", boot) == boot:
+                continue
+            unresolved.append(path.name)
+        except (OSError, ValueError, KeyError, TypeError):
+            unresolved.append(path.name)
+    return unresolved
+
+
+def review_previous(state, candidates, preferred):
+    for name in reversed(sorted(candidates)):
+        if not re.fullmatch(r"[0-9a-f]{32}\.json", name):
+            continue
+        try:
+            journal = state.parent / "sessions" / name
+            entry = json.loads(journal.read_text())
+            output = Path(entry.get("report", ""))
+            if not output.is_file():
+                language, _ = session_preferences(state)
+                output = persist_report(state, {
+                    "exit_status": 1, "error": "", "language": language, "hotplug": {"status": "unavailable"},
+                    "mounts": mount_check(), "session": entry["session"], "journal": str(journal),
+                    "snapshot": entry.get("snapshot"), "previous_unresolved": candidates,
+                })
+                entry.update(status="unresolved", report=str(output))
+                write_state(journal, entry)
+            launch_terminal([sys.executable, "-m", "vigil.session", "--review-report", str(output)],
+                            preferred, detached=True)
+            return
+        except (OSError, ValueError, KeyError) as error:
+            print(error, file=sys.stderr)
+
+
+def active_runs(root, session_id):
+    active = []
+    for context in root.glob("*/context.json"):
+        try:
+            entry = json.loads(context.read_text())
+            if entry.get("vigil_session") != session_id:
+                continue
+            age = max(0, time.time() - context.stat().st_mtime)
+            if ExternalRun(context.parent, time.monotonic() - age).status() is None:
+                active.append(str(entry.get("operation", context.parent.name)))
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return active
+
+
+def guard(root, session_id):
+    # Keep the authorized PID alive while the supervisor lives. On supervisor death,
+    # EOF releases the pipe, but any independently tracked writer must still finish.
+    sys.stdin.buffer.read()
+    while active_runs(root, session_id):
+        time.sleep(0.5)
+
+
 def supervise(arguments):
     state = default_database()
     if os.geteuid() == 0:
         print("Lancez Vigil en tant qu’utilisateur ordinaire. / Run Vigil as a regular user.",
               file=sys.stderr)
         return 1
-    path = None
+    identifier = uuid4().hex
+    started = time.monotonic()
+    boot = boot_identity()
+    path = supervisor_record = owner = context_path = None
+    pending = []
+    snapshot = ""
+    operations = []
     error = ""
+    caretaker = None
+    waiting_terminal = False
     try:
+        supervisor_record = session_record(state, identifier)
+        pending = pending_sessions(supervisor_record.parent)
+        if pending:
+            print("Vigil · Sessions précédentes à vérifier / Previous sessions need review: "
+                  + ", ".join(pending), file=sys.stderr)
+        context_path = supervisor_record.with_suffix(".context")
+        _, captured = capture_startup_state(state)
+        snapshot = str(captured)
+        owner = receipt_path(os.getpid())
+        write_state(supervisor_record, {"status": "open", "pid": os.getpid(), "session": identifier,
+                                        "owner": owner.name if owner else "", "boot": boot, "snapshot": snapshot})
+        runs = state.parent / "terminal-runs"
+        caretaker = subprocess.Popen(
+            [sys.executable, "-m", "vigil.session", "--guard", str(runs), identifier],
+            stdin=subprocess.PIPE, start_new_session=True,
+        )
+        path = receipt_path(caretaker.pid)
+        environment = {**os.environ, "VIGIL_SESSION_ID": identifier, "VIGIL_SESSION_SNAPSHOT": snapshot,
+                       "VIGIL_SESSION_GUARD": str(caretaker.pid), "VIGIL_SESSION_CONTEXT": str(context_path),
+                       "VIGIL_SESSION_PENDING": json.dumps(pending)}
         child = subprocess.Popen([sys.executable, "-m", "vigil.desktop", *arguments],
-                                 start_new_session=True)
-        path = receipt_path(child.pid)
+                                 env=environment, start_new_session=True)
 
         def forward(signum, _frame):
             try:
@@ -110,21 +235,61 @@ def supervise(arguments):
         handlers = {sig: signal.signal(sig, forward) for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
         try:
             status = child.wait()
+            operations = active_runs(runs, identifier)
         finally:
             for sig, previous in handlers.items():
                 signal.signal(sig, previous)
-    except OSError as failure:
+    except (OSError, ValueError) as failure:
         status, error = 1, str(failure)
+    finally:
+        if caretaker is not None:
+            if operations and supervisor_record:
+                _, preferred = session_preferences(state)
+                try:
+                    launch_terminal([sys.executable, "-m", "vigil.session", "--wait-session", str(supervisor_record)],
+                                    preferred, detached=True)
+                    waiting_terminal = True
+                except (OSError, ValueError):
+                    pass
+            caretaker.stdin.close()
+            caretaker.wait()
+    context = {}
+    if context_path:
+        try:
+            context = json.loads(context_path.read_text())
+        except (OSError, ValueError):
+            pass
     language, preferred = session_preferences(state)
-    report = {"exit_status": status, "error": error, "language": language,
-              "hotplug": read_receipt(path), "mounts": mount_check()}
+    hotplug = read_receipt(path)
+    try:
+        release = version("vigil-dfir")
+    except PackageNotFoundError:
+        release = "2.0"
+    report = {"exit_status": status, "error": error, "language": language, "hotplug": hotplug,
+              "mounts": mount_check(), "session": identifier, "snapshot": snapshot,
+              "operator": context.get("operator"), "case": context.get("case"),
+              "receipt": str(path) if path else None, "journal": str(supervisor_record) if supervisor_record else None,
+              "version": release, "closed_at": datetime.now(timezone.utc).astimezone().isoformat(),
+              "duration": round(time.monotonic() - started, 1),
+              "operations_at_exit": operations, "previous_unresolved": pending}
     try:
         output = persist_report(state, report)
+        if supervisor_record:
+            unresolved = (
+                hotplug["status"] in {"pending", "error"}
+                or (path is not None and status != 0 and hotplug["status"] == "unavailable")
+                or any(row.get("state") in {"error", "unverified"} for row in hotplug.get("devices", []))
+            )
+            write_state(supervisor_record, {"status": "unresolved" if unresolved else "closed",
+                                            "session": identifier, "report": str(output), "snapshot": snapshot,
+                                            "pid": os.getpid(), "owner": owner.name if owner else "", "boot": boot})
     except OSError:
         show_report(report, None, interactive=sys.stdin.isatty())
     else:
         try:
-            launch_terminal([sys.executable, "-m", "vigil.session", "--show-report", str(output)], preferred)
+            if not waiting_terminal:
+                launch_terminal([sys.executable, "-m", "vigil.session", "--show-report", str(output)],
+                            preferred, detached=True)
         except (OSError, ValueError):
             show_report(report, output, interactive=sys.stdin.isatty())
     return status if status >= 0 else 128 - status
@@ -165,6 +330,7 @@ def show_hotplug(report, tr):
         return False
     if status != "complete":
         messages = {
+            "not_activated": tr("Protection non activée pour cette session.", "Protection was not activated for this session."),
             "not_installed": tr("Assistant de protection absent.", "Protection helper is not installed."),
             "unavailable": tr("Aucun reçu de restauration vérifiable.", "No verifiable recovery receipt."),
             "pending": tr("Restauration encore en cours.", "Recovery still in progress."),
@@ -194,10 +360,16 @@ def show_hotplug(report, tr):
         else:
             text, color = tr("Restauration non confirmée.", "Recovery not confirmed."), "91"
             failed = True
-        print(terminal_style(f"{device} · {text}", color))
+        report_line({"92": "OK", "93": "SKIP", "91": "FAIL"}[color], f"{device} · {text}")
         if row.get("detail"):
             print("  " + clean(row["detail"]))
     return failed
+
+
+def report_line(status, text):
+    colors = {"OK": "92", "INFO": "96", "WARN": "93", "FAIL": "91",
+              "SKIP": "90", "RUN": "95", "WAIT": "93"}
+    print(terminal_style(f"[ {status:^4} ]", colors[status]) + " " + text)
 
 
 def show_report(report, path, *, interactive):
@@ -205,14 +377,27 @@ def show_report(report, path, *, interactive):
         return en if report["language"] == "en" else fr
 
     show_logo()
-    print(terminal_style("━" * 52 + "\n" + tr("  Vigil · Vérification à la fermeture",
-                                                "  Vigil · Shutdown checks") + "\n" + "━" * 52, "1;96"))
+    print(terminal_style("━" * 52 + "\n" + tr("  Vigil · Nettoyage et restauration système",
+                                                "  Vigil · Session Cleanup & System Recovery") + "\n" + "━" * 52, "1;96"))
+    for key, label in (
+        ("session", tr("Session", "Session")), ("version", tr("Version", "Version")),
+        ("closed_at", tr("Fermeture", "Closed")), ("operator", tr("Opérateur", "Operator")),
+        ("case", tr("Affaire", "Case")), ("snapshot", tr("Instantané initial", "Initial snapshot")),
+        ("journal", tr("Journal de session", "Session journal")),
+    ):
+        if report.get(key):
+            report_line("INFO", f"{label} · {clean(report[key])}")
+    for operation in report.get("operations_at_exit", []):
+        report_line("WAIT", tr("Opération active à la sortie de Qt", "Operation active when Qt exited")
+                    + f" · {clean(operation)}")
+    for previous in report.get("previous_unresolved", []):
+        report_line("WARN", tr("Session antérieure à vérifier", "Previous session needs review") + f" · {previous}")
     status = report["exit_status"]
     if status == 0:
-        print(terminal_style(tr("Session terminée (code 0).", "Session ended (status 0)."), "92"))
+        report_line("OK", tr("Session terminée (code 0).", "Session ended (status 0)."))
     else:
         reason = f"signal {-status}" if status < 0 else tr(f"code {status}", f"status {status}")
-        print(terminal_style(tr(f"Arrêt inattendu ({reason}).", f"Unexpected exit ({reason})."), "91"))
+        report_line("FAIL", tr(f"Arrêt inattendu ({reason}).", f"Unexpected exit ({reason})."))
     if report["error"]:
         print("  " + clean(report["error"]))
     mounts = report["mounts"]
@@ -224,7 +409,21 @@ def show_report(report, path, *, interactive):
         for line in mounts.get("detail", "").splitlines():
             print("  " + clean(line))
     print("\n" + terminal_style(tr("Gestion des périphériques", "Device management"), "1;96"))
-    retry = show_hotplug(report["hotplug"], tr)
+    hotplug = report["hotplug"]
+    if hotplug["status"] == "pending" and report.get("receipt"):
+        hotplug = read_receipt(Path(report["receipt"]), wait=0)
+    retry = show_hotplug(hotplug, tr)
+    states = [row.get("state") for row in hotplug.get("devices", [])]
+    print("\n" + terminal_style(tr("Résumé", "Summary"), "1;96"))
+    counts = (states.count("restored"), states.count("absent"),
+              states.count("error") + states.count("unverified"))
+    report_line("INFO", tr(f"Vérifiés : {counts[0]} · Ignorés : {counts[1]} · Non confirmés : {counts[2]}",
+                          f"Verified: {counts[0]} · Skipped: {counts[1]} · Unconfirmed: {counts[2]}"))
+    if "duration" in report:
+        report_line("INFO", tr(f"Durée de session : {report['duration']} s",
+                              f"Session duration: {report['duration']} s"))
+    if mounts["status"] != "clear" or retry or hotplug["status"] in {"pending", "unavailable", "error"}:
+        report_line("WARN", tr("Restauration incomplète ou non vérifiable.", "Recovery incomplete or unverifiable."))
     print(tr("Le contrôle couvre les modes et exclusions enregistrés par Vigil.",
              "This check covers the modes and exclusions recorded by Vigil."))
     print(tr("Les règles propres à l’OS restent en vigueur.", "The host operating system rules remain in effect."))
@@ -236,7 +435,7 @@ def show_report(report, path, *, interactive):
         return
     try:
         can_retry = HELPER.is_file() and mounts["status"] == "clear" and (
-            retry or (status != 0 and report["hotplug"]["status"] == "unavailable")
+            retry or hotplug["status"] == "pending" or (status != 0 and hotplug["status"] == "unavailable")
         )
         if can_retry:
             answer = input(tr("Entrée pour fermer, R pour retenter la restauration Vigil : ",
@@ -244,18 +443,32 @@ def show_report(report, path, *, interactive):
             if answer.strip().lower() != "r":
                 return
             recover(report, path, tr)
-        input(tr("Appuyez sur Entrée pour fermer… ", "Press Enter to close… "))
+        input(tr("Appuyez sur ENTRÉE pour fermer ce terminal… ", "Press Enter to close this terminal… "))
     except (EOFError, KeyboardInterrupt):
         pass
 
 
 def recover(report, path, tr):
+    if mount_check()["status"] != "clear":
+        report_line("WARN", tr("Des montages Vigil bloquent la restitution.", "Vigil mounts block recovery."))
+        return
+    report_line("RUN", tr("Vérification et restitution ciblées…", "Checking and restoring recorded changes…"))
     try:
         result = subprocess.run(["/usr/bin/sudo", "--", str(HELPER), "recover"], stdout=subprocess.PIPE,
                                 text=True, check=True)
         recovery = json.loads(result.stdout)
         show_hotplug(recovery, tr)
         report["recovery_retry"] = recovery
+        if report.get("journal") and recovery["status"] == "complete" and all(
+            row.get("state") in {"restored", "absent"} for row in recovery.get("devices", [])
+        ):
+            journal = Path(report["journal"])
+            state = default_database()
+            if journal == session_record(state, report["session"]):
+                entry = json.loads(journal.read_text())
+                if entry.get("status") == "unresolved":
+                    entry["status"] = "closed"
+                    write_state(journal, entry)
         if path is not None:
             with path.open("w", encoding="utf-8") as stream:
                 json.dump(report, stream, ensure_ascii=False, indent=2)
@@ -263,11 +476,51 @@ def recover(report, path, tr):
         print(terminal_style(tr("Nouvelle tentative non confirmée.", "Recovery retry not confirmed."), "91"))
 
 
+def wait_session(journal):
+    language, _ = session_preferences(default_database())
+    message = ("Waiting for tracked operations to finish…" if language == "en"
+               else "Attente de la fin des opérations suivies…")
+    report_line("WAIT", message)
+    while True:
+        try:
+            entry = json.loads(journal.read_text())
+            if entry.get("report"):
+                path = Path(entry["report"])
+                return show_report_file(path)
+            owner = receipt_path(entry["pid"])
+            if not owner or owner.name != entry["owner"]:
+                break
+        except (OSError, ValueError, KeyError):
+            break
+        time.sleep(0.5)
+    report_line("WARN", "Vigil · Supervisor unavailable / Superviseur indisponible")
+    if sys.stdin.isatty():
+        try:
+            input("Entrée / Press Enter ")
+        except (EOFError, KeyboardInterrupt):
+            pass
+    return 1
+
+
+def show_report_file(path, *, review=False):
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if review:
+        report.setdefault("mounts_at_exit", report["mounts"])
+        report["mounts"] = mount_check()
+    show_report(report, path, interactive=sys.stdin.isatty())
+    hotplug = report.get("recovery_retry", report["hotplug"])
+    return int(report["mounts"]["status"] != "clear" or hotplug["status"] in {"pending", "error", "unavailable"}
+               or any(row.get("state") in {"error", "unverified"} for row in hotplug.get("devices", [])))
+
+
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--show-report":
-        path = Path(sys.argv[2])
-        show_report(json.loads(path.read_text(encoding="utf-8")), path, interactive=sys.stdin.isatty())
+    if len(sys.argv) == 4 and sys.argv[1] == "--guard":
+        guard(Path(sys.argv[2]), sys.argv[3])
         return 0
+    if len(sys.argv) == 3 and sys.argv[1] == "--wait-session":
+        return wait_session(Path(sys.argv[2]))
+    if len(sys.argv) == 3 and sys.argv[1] in {"--show-report", "--review-report"}:
+        return show_report_file(Path(sys.argv[2]), review=sys.argv[1] == "--review-report")
     return supervise(sys.argv[1:])
 
 

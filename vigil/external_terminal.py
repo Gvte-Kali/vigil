@@ -22,7 +22,7 @@ TERMINALS = {
 MISSING_TERMINAL = "Aucun terminal compatible trouvé / No compatible external terminal found."
 
 
-def terminal_command(arguments, preferred=""):
+def terminal_commands(arguments, preferred=""):
     if not arguments or any(not isinstance(arg, str) or "\0" in arg for arg in arguments):
         raise ValueError("invalid terminal arguments")
     if preferred and preferred not in TERMINALS:
@@ -35,12 +35,36 @@ def terminal_command(arguments, preferred=""):
             continue
         executable = shutil.which(name)
         if executable:
-            return [executable, *TERMINALS[name], *arguments]
+            yield [executable, *TERMINALS[name], *arguments]
+
+
+def terminal_command(arguments, preferred=""):
+    command = next(terminal_commands(arguments, preferred), None)
+    if command is None:
+        raise FileNotFoundError(MISSING_TERMINAL)
+    return command
+
+
+def launch_terminal(arguments, preferred="", *, detached=False):
+    if not detached:
+        return subprocess.Popen(terminal_command(arguments, preferred))
+    # A failed desktop emulator should not prevent the remaining candidates from being tried.
+    failures = []
+    for command in terminal_commands(arguments, preferred):
+        try:
+            terminal = subprocess.Popen(command, start_new_session=True)
+            try:
+                status = terminal.wait(timeout=0.25)
+            except subprocess.TimeoutExpired:
+                return terminal
+            if status == 0:  # Some frontends delegate to an existing terminal process.
+                return terminal
+            failures.append(f"{command[0]} ({status})")
+        except OSError as error:
+            failures.append(str(error))
+    if failures:
+        raise OSError(MISSING_TERMINAL + " " + "; ".join(failures))
     raise FileNotFoundError(MISSING_TERMINAL)
-
-
-def launch_terminal(arguments, preferred=""):
-    return subprocess.Popen(terminal_command(arguments, preferred))
 
 
 @dataclass(frozen=True)
@@ -59,11 +83,14 @@ class ExternalRun:
             started = json.loads((self.directory / "started.json").read_text())
         except FileNotFoundError:
             return None if time.monotonic() - self.requested_at < 30 else "unknown"
-        try:
-            if process_start(started["pid"]) == started["start"]:
-                return None
-        except (OSError, ValueError, IndexError):
-            pass
+        for process in (started, started.get("child")):
+            if process is None:
+                continue
+            try:
+                if process_start(process["pid"]) == process["start"]:
+                    return None
+            except (OSError, ValueError, IndexError):
+                pass
         return "unknown"
 
 
@@ -74,7 +101,8 @@ def launch_tracked(arguments, root, context, preferred=""):
     directory = root / run_id
     directory.mkdir(mode=0o700, parents=True)
     (directory / "context.json").write_text(
-        json.dumps({**context, "run_id": run_id, "arguments": arguments}, ensure_ascii=False),
+        json.dumps({**context, "run_id": run_id, "arguments": arguments,
+                    "vigil_session": os.environ.get("VIGIL_SESSION_ID")}, ensure_ascii=False),
         encoding="utf-8",
     )
     runner = Path(__file__).resolve().with_name("external_operation.py")

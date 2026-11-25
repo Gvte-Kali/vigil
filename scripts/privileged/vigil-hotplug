@@ -193,6 +193,23 @@ def mode(fd):
     return struct.unpack("i", fcntl.ioctl(fd, BLOCK_RO_GET, bytes(4)))[0]
 
 
+def write_mutation(path, record):
+    with tempfile.NamedTemporaryFile(dir=path.parent, mode="w", delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            json.dump(record, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+            temporary.replace(path)
+            fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
 def protect(device, major, minor):
     with state_lock():
         if not active():
@@ -205,16 +222,31 @@ def protect(device, major, minor):
             try:
                 sequence = device_identity(fd, major, minor)
                 record = ledger() / f"{major}:{minor}"
-                if not record.exists() or json.loads(record.read_text())["sequence"] != sequence:
-                    record.write_text(json.dumps({
+                previous = json.loads(record.read_text()) if record.exists() else None
+                if previous is None or previous["sequence"] != sequence:
+                    previous = {
                         "device": device, "sequence": sequence, "mode": mode(fd),
                         "major": major, "minor": minor, "node": str(node),
                         "partition": (node / "partition").exists(),
-                    }))
-                if mode(fd) != 1:
-                    fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 1))
-                if mode(fd) != 1:
-                    raise ValueError("kernel did not confirm RO")
+                        "sessions": [token.name + "-" + token.read_text().split()[1]
+                                     for token in SESSIONS.iterdir() if PID.fullmatch(token.name)],
+                        "udisks_ignore_before": os.environ.get("UDISKS_IGNORE"),
+                        "requested_mode": 1, "created_at": time.time(),
+                    }
+                previous.update(status="pending", observed_mode=None)
+                write_mutation(record, previous)
+                try:
+                    if mode(fd) != 1:
+                        fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 1))
+                    observed = mode(fd)
+                    if observed != 1:
+                        raise ValueError("kernel did not confirm RO")
+                except (OSError, ValueError) as error:
+                    previous.update(status="error", diagnostic=str(error))
+                    write_mutation(record, previous)
+                    raise
+                previous.update(status="applied", observed_mode=observed)
+                write_mutation(record, previous)
                 print("VIGIL_HOTPLUG_RO=1")
             finally:
                 os.close(fd)
@@ -249,6 +281,7 @@ def restore_devices():
     # Restore whole disks first, so inherited RO does not hide a partition's mode.
     for path, record in sorted(records, key=lambda entry: entry[1]["partition"]):
         row = {"device": record["device"], "node": record.get("node"), "mode": record.get("mode"),
+               "observed_mode": record.get("observed_mode"), "mutation_status": record.get("status"),
                "_path": path, "_record": record}
         try:
             row["state"] = restore_device(record)
@@ -258,6 +291,8 @@ def restore_devices():
         else:
             if row["state"] == "absent":
                 path.unlink()
+            elif row["state"] == "restored":
+                row["final_mode"] = record["mode"]
         results.append(row)
     return results
 

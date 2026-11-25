@@ -26,7 +26,8 @@ def main():
     context = json.loads((directory / "context.json").read_text(encoding="utf-8"))
     language = "en" if context.get("language") == "en" else "fr"
     environment = {**os.environ, "VIGIL_LANG": language}
-    write_status(directory, "started.json", {"pid": os.getpid(), "start": process_start(os.getpid())})
+    started = {"pid": os.getpid(), "start": process_start(os.getpid())}
+    write_status(directory, "started.json", started)
     operation = None
     interrupted = None
 
@@ -40,6 +41,11 @@ def main():
         signal.signal(sig, interrupt)
     try:
         operation = subprocess.Popen(args, env=environment)
+        try:
+            started["child"] = {"pid": operation.pid, "start": process_start(operation.pid)}
+            write_status(directory, "started.json", started)
+        except (OSError, ValueError, IndexError):
+            pass
         if interrupted is not None and operation.poll() is None:
             operation.send_signal(interrupted)
         result = operation.wait()
