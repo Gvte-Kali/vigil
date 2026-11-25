@@ -60,6 +60,10 @@ def check_disk(row, sequence):
     if (current["type"] != "disk" or current["maj:min"] != row["maj:min"]
             or current["size"] != row["size"] or disk_sequence(current) != sequence):
         raise ValueError(f"Identité du disque modifiée : {row['name']}")
+    if row.get("tran") == "usb":
+        identity = usb_identity(current)
+        if identity != row["usb_identity"]:
+            raise ValueError(f"Identité USB modifiée : {row['name']}")
     if not idle(current):
         raise ValueError(f"Disque ou partition en cours d’utilisation : {row['name']}")
 
@@ -355,18 +359,77 @@ def create_image(source, size, directory, filename, owner=None, timings=None):
         os.close(folder)
 
 
-def target_disks(source, sequence):
-    section("Branchement du support de destination")
-    print("Branchez un autre support USB. Démontez-le si un montage existe déjà.")
-    answer = input(terminal_style("Entrée pour détecter la cible, ou q pour annuler : ", "1;93")).strip()
-    if answer.lower() == "q":
+def usb_identity(row):
+    """Reject missing, unauthorized or composite HID USB mass-storage devices."""
+    location = (Path("/sys/dev/block") / row["maj:min"]).resolve(strict=True)
+    for parent in location.parents:
+        if (parent / "idVendor").is_file() and (parent / "idProduct").is_file():
+            return inspect_usb(parent)
+    raise ValueError(f"Parent USB introuvable : {row['name']}")
+
+
+def inspect_usb(device):
+    identity = (device.name, (device / "busnum").read_text().strip(),
+                (device / "devnum").read_text().strip())
+    interfaces = list(device.glob(f"{device.name}:*/bInterfaceClass"))
+    if (device / "authorized").read_text().strip() != "1" or not interfaces:
+        raise ValueError(f"Interfaces USB non vérifiables sur le port {device.name}.")
+    if any(interface.read_text().strip().lower() == "03" for interface in interfaces):
+        raise ValueError(f"Interface USB HID détectée sur le port {device.name}. Débranchez ce support.")
+    return identity
+
+
+def usb_snapshot():
+    snapshot = {}
+    for device in Path("/sys/bus/usb/devices").iterdir():
+        if not (device / "idVendor").is_file():
+            continue
+        identity = (device.name, (device / "busnum").read_text().strip(),
+                    (device / "devnum").read_text().strip())
+        snapshot[identity] = device
+    return snapshot
+
+
+def triage_usb(role, *, allow_internal=False):
+    section(f"Triage USB HID · {role}")
+    print("Débranchez le support USB qui sera utilisé. Laissez les autres périphériques en place.")
+    options = " · i : source interne" if allow_internal else ""
+    answer = input(f"Entrée : relever l’état initial · q : annuler{options} : ").strip().lower()
+    if answer == "i" and allow_internal:
+        return set()
+    if answer == "q":
         raise InterruptedError("Acquisition annulée.")
-    udevadm = shutil.which("udevadm")
-    if udevadm:
-        command(udevadm, "settle", "--timeout=5")
+    before = usb_snapshot()
+    if input("Branchez le support USB, puis Entrée · q : annuler : ").strip().lower() == "q":
+        raise InterruptedError("Acquisition annulée.")
+    command("/usr/bin/udevadm", "settle", "--timeout=10")
+    after = usb_snapshot()
+    new = after.keys() - before.keys()
+    if not new:
+        raise ValueError("Aucun nouveau support USB détecté. Relancez et suivez les étapes de branchement.")
+    for identity in sorted(new):
+        if inspect_usb(after[identity]) != identity:
+            raise ValueError("L’identité USB a changé pendant le triage.")
+    print(terminal_style(f"Triage terminé : {len(new)} nouveau(x) périphérique(s), aucune interface HID détectée.", "92"))
+    return new
+
+
+def triaged_disk(row, approved):
+    try:
+        identity = usb_identity(row)
+        if identity in approved:
+            row["usb_identity"] = identity
+            return True
+        return False
+    except (OSError, ValueError):
+        return False
+
+
+def target_disks(source, sequence):
+    approved = triage_usb("destination")
     check_disk(source, sequence)
     return [row for row in devices() if row["type"] == "disk" and row["tran"] == "usb"
-            and row["maj:min"] != source["maj:min"] and idle(row)]
+            and row["maj:min"] != source["maj:min"] and triaged_disk(row, approved) and idle(row)]
 
 
 @contextmanager
@@ -404,7 +467,10 @@ def writable_target(disk, sequence, partition=None):
 
 
 def run(operation, local_default, *, local_directory=None, external=False):
-    disks = [row for row in devices() if row["type"] == "disk" and row["size"] > 0 and idle(row)]
+    approved = triage_usb("source", allow_internal=True)
+    disks = [row for row in devices() if row["type"] == "disk" and row["size"] > 0
+             and (triaged_disk(row, approved) if approved else row["tran"] not in {"usb", None})
+             and idle(row)]
     source = choose(disks, "Disque source entier, démonté")
     sequence = disk_sequence(source)
     size = source["size"]
@@ -505,8 +571,9 @@ def main():
     signal.signal(signal.SIGHUP, interrupt)
     print(flush=True)
     terminal_library = Path(__file__).resolve().parents[1] / "lib/vigil-terminal.sh"
-    subprocess.run(("/bin/sh", "-c", '. "$1"; vigil_logo', "vigil", str(terminal_library)),
-                   check=False)
+    logo = terminal_library.parents[2] / "data/icons/vigil.svg"
+    subprocess.run(("/bin/sh", "-c", '. "$1"; vigil_logo "$2"', "vigil",
+                    str(terminal_library), str(logo)), check=False)
     section("Vigil - Clonage bit à bit" if args.operation == "clone" else "Vigil - Acquisition d’une image RAW")
     try:
         run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external)

@@ -436,3 +436,11 @@ Recette interface et terminaux
     tester « chafa --format symbols --colors 256 --size 40x20 /opt/vigil/data/icons/vigil.svg ».
     Comparer le rendu avec les terminaux Vigil et vérifier qu’avec NO_COLOR=1
     ou une sortie redirigée, la bannière reste en texte simple.
+
+[ ] En VM, ouvrir l’acquisition RAW locale, RAW externe et le clonage.
+    Vérifier la bannière Chafa après sudo. Tester le branchement guidé de
+    la source USB puis, si nécessaire, de la destination. Vérifier le
+    refus d’un support composite HID et d’un support déjà branché avant
+    le relevé initial. Vérifier le mode bloc RO de la source et le SHA-256.
+[ ] En VM, vérifier le triage HID existant du montage de stockage rapide
+    et le refus d’un support composite avant le passage en RW. Tester le démontage depuis les actions rapides.

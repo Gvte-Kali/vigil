@@ -126,6 +126,7 @@ class AcquisitionTest(unittest.TestCase):
         with patch.dict(run.__globals__, {
             "devices": lambda: [source], "idle": lambda _: True, "disk_sequence": lambda _: "42",
             "choose": lambda rows, _: rows[0], "target_disks": lambda *_: [],
+            "triage_usb": lambda *_, **__: {"fixture"}, "triaged_disk": lambda *_: True,
         }), patch.dict("os.environ", {"SUDO_UID": "1000", "SUDO_GID": "1000"}), redirect_stdout(io.StringIO()):
             with self.assertRaisesRegex(ValueError, "disque source /dev/sdb"):
                 run("image", "/tmp", external=True)
@@ -139,9 +140,27 @@ class AcquisitionTest(unittest.TestCase):
         target = {"name": "/dev/sdc", "maj:min": "8:32", "type": "disk", "tran": "usb"}
         with patch.dict(target_disks.__globals__, {
             "devices": lambda: [source, target], "idle": lambda _: True,
-            "check_disk": lambda *_: None,
-        }), patch("shutil.which", return_value=None), patch("builtins.input", return_value=""), redirect_stdout(io.StringIO()):
+            "check_disk": lambda *_: None, "triage_usb": lambda _: {"fixture"},
+            "triaged_disk": lambda row, _: row is target,
+        }), redirect_stdout(io.StringIO()):
             self.assertEqual(target_disks(source, "42"), [target])
+
+
+    def test_usb_triage_refuses_a_composite_device(self):
+        inspect_usb = acquisition["inspect_usb"]
+        with tempfile.TemporaryDirectory() as tmp:
+            device = Path(tmp) / "1-2"
+            interface = device / "1-2:1.0"
+            interface.mkdir(parents=True)
+            for name, value in {"authorized": "1", "busnum": "1", "devnum": "3"}.items():
+                (device / name).write_text(value)
+            (interface / "bInterfaceClass").write_text("08")
+            self.assertEqual(inspect_usb(device), ("1-2", "1", "3"))
+            hid = device / "1-2:1.1"
+            hid.mkdir()
+            (hid / "bInterfaceClass").write_text("03")
+            with self.assertRaisesRegex(ValueError, "HID détectée"):
+                inspect_usb(device)
 
 
     def test_tty_progress_redraws_and_non_tty_has_no_control_sequences(self):

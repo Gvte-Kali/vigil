@@ -699,6 +699,30 @@ _is_encrypted() {
     return 1
 }
 
+# Contrôler aussi le support choisi : le triage initial ne liste que les nouveaux USB.
+verify_storage_usb() {
+    local path iface class vid pid serial
+    local interfaces=0
+    path=$(realpath -e -- "/sys/class/block/${1##*/}") || return 1
+    while [ "$path" != / ] && [ ! -f "$path/idVendor" ]; do
+        path=$(dirname -- "$path")
+    done
+    [ "$path" != / ] && [ "$(cat "$path/authorized")" = 1 ] || return 1
+    vid=$(cat "$path/idVendor") && pid=$(cat "$path/idProduct") || return 1
+    serial=$(cat "$path/serial" 2>/dev/null || true)
+    if grep -qxF "$vid:$pid" "$USB_BLACKLIST_FILE" ||
+       { [ -n "$serial" ] && grep -qxF "$serial" "$USB_BLACKLIST_FILE"; }; then
+        return 1
+    fi
+    for iface in "$path"/"${path##*/}":*/bInterfaceClass; do
+        [ -f "$iface" ] || continue
+        class=$(cat "$iface") || return 1
+        [ "$class" != 03 ] || return 1
+        interfaces=$((interfaces + 1))
+    done
+    [ "$interfaces" -gt 0 ]
+}
+
 # --- Helper : montage RW d'un device dans un point de montage ---
 _mount_single_rw() {
     local dev="$1" mnt="$2"
@@ -1026,6 +1050,8 @@ if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
         fail "$disk n’est pas un disque USB confirmé."
     mounts=$(lsblk -nr -o MOUNTPOINTS -- "$disk") || fail "Montages non vérifiables pour $disk."
     [[ "$mounts" =~ [^[:space:]] ]] && fail "$disk contient déjà un montage. Aucun passage en écriture."
+    verify_storage_usb "$disk" ||
+        fail "Triage USB refusé pour $disk : interface HID, support bloqué ou interfaces non vérifiables."
     disk_ro=$(sudo blockdev --getro "$disk") || fail "État bloc non vérifiable pour $disk."
     case "$disk_ro" in
         0) ;;

@@ -17,6 +17,9 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] Palette partagée, logo intact, onglets horizontaux et zones défilantes.
 [x] Bannière des scripts avec Chafa et le SVG original. Paquet déclaré au post-install.
 [ ] Recette visuelle de la bannière Chafa sur Parrot après installation.
+[x] Acquisition RAW et clonage : triage USB HID avant sélection et contrôle de l’identité USB avant accès bloc.
+[x] Stockage rapide : contrôle HID et blacklist du support sélectionné avant le passage RW.
+[ ] Recette VM du triage d’acquisition et de stockage, y compris support composite et rendu Chafa après sudo.
 [x] Accueil, explorateur, catalogue, entité et actions rapides remaniés.
 [ ] Recette manuelle des terminaux sous Parrot, Hyprland, Wayland et X11.
 [ ] Recette opérateur non destructive des montages et de l’acquisition.
