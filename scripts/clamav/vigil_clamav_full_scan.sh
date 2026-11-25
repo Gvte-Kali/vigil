@@ -25,6 +25,8 @@ BOLD='\e[1m'
 NC='\e[0m'
 
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
 
 print_banner() {
     vigil_logo

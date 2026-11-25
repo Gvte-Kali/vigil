@@ -11,7 +11,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from . import storage
+from . import device_manager, storage
 from .case_export import export_case
 from .case_import import import_archive, verify_archive
 from .core import BUILTIN_MODULES, discover, doctor
@@ -33,9 +33,11 @@ app = VigilCLI(name="vigil", no_args_is_help=True)
 modules = typer.Typer(no_args_is_help=True)
 cases = typer.Typer(no_args_is_help=True)
 evidence = typer.Typer(no_args_is_help=True)
+devices = typer.Typer(no_args_is_help=True, help="Manage devices / Gérer les périphériques.")
 app.add_typer(modules, name="modules")
 app.add_typer(cases, name="cases")
 app.add_typer(evidence, name="evidence")
+app.add_typer(devices, name="devices")
 DatabaseOption = Annotated[Optional[Path], typer.Option("--db")]
 
 
@@ -69,6 +71,68 @@ def command():
 
 def emit(result):
     typer.echo(json.dumps(result, ensure_ascii=False))
+
+
+@contextmanager
+def device_command():
+    try:
+        yield
+    except (OSError, ValueError) as error:
+        emit({"success": False, "error": str(error)})
+        raise typer.Exit(1) from error
+
+
+@devices.command("list")
+def list_devices():
+    """List block devices / Lister les périphériques bloc."""
+    with device_command():
+        emit({"devices": device_manager.inventory()})
+
+
+@devices.command("triage")
+def triage_device(device: Optional[str] = None, zone: str = "investigation"):
+    """Select and validate a device / Sélectionner et valider un périphérique."""
+    with device_command():
+        emit(device_manager.triage(zone, device))
+
+
+@devices.command("mount")
+def mount_device(device: Optional[str] = None, zone: str = "investigation",
+                 confirm_write: bool = typer.Option(False, "--confirm-write")):
+    """Mount a device in a Vigil zone / Monter un périphérique dans une zone Vigil."""
+    with device_command():
+        result = device_manager.operate("mount", zone, device=device, confirm_write=confirm_write)
+        emit(result)
+        if not result["success"]:
+            raise typer.Exit(1)
+
+
+@devices.command("unmount")
+def unmount_device(target: Optional[str] = None, zone: str = "investigation"):
+    """Unmount a Vigil resource / Démonter une ressource Vigil."""
+    with device_command():
+        result = device_manager.operate("unmount", zone, target=target)
+        emit(result)
+        if not result["success"]:
+            raise typer.Exit(1)
+
+
+@devices.command("status")
+def device_status():
+    """Show mounted resources / Afficher les ressources montées."""
+    with device_command():
+        emit({"mounts": device_manager.status()})
+
+
+@devices.command("verify")
+def verify_devices(target: Optional[str] = None):
+    """Verify mount identity and protections / Vérifier l’identité et les protections."""
+    with device_command():
+        resources = [row for row in device_manager.status() if target is None or row["mountpoint"] == target]
+        verified = all(row["verified"] for row in resources) and (target is None or bool(resources))
+        emit({"verified": verified, "mounts": resources})
+        if not verified:
+            raise typer.Exit(1)
 
 
 @app.command("doctor")

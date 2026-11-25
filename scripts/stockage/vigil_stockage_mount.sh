@@ -12,16 +12,10 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 # (montage en lecture/ecriture). Pour analyser un peripherique, utilisez plutot
 # le menu "Analyse USB / Disque Dur / CD" (vigil_usb_mount.sh) qui monte en RO.
 
-# --- Couleurs ---
-RED='\e[91m'
-GREEN='\e[92m'
-YELLOW='\e[93m'
-BLUE='\e[96m'
-GREY='\e[90m'
-BOLD='\e[1m'
-NC='\e[0m'
-
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-triage.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
 
 print_banner() {
     vigil_logo
@@ -126,15 +120,7 @@ mkdir -p "$PROJECT_LOG_DIR" 2>/dev/null || true
 # Les montages multi-partitions sont imbriqués (/stockage/<disk>/<part>).
 # /proc/mounts est la source de vérité du noyau ; fallback lsblk (lit /sys).
 list_mounts_under_stockage() {
-    local mounts
-    mounts="$(awk '$2 ~ "^/stockage/" {print $2}' /proc/mounts 2>/dev/null)"
-    if [ -z "$mounts" ] && command -v lsblk >/dev/null 2>&1; then
-        mounts="$(lsblk -J -o MOUNTPOINTS 2>/dev/null \
-            | grep -oE '"/stockage/[^"]*"' | tr -d '"')"
-    fi
-    printf '%s\n' "$mounts" \
-        | awk -v base="/stockage/" 'index($0, base) == 1' \
-        | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
+    vigil_mounts_in_zone /stockage
 }
 
 # --- Verifications des privileges et dependances ---
@@ -227,53 +213,15 @@ echo ""
 echo -e "${YELLOW}⚠️  ATTENTION : montage en lecture/écriture.${NC}"
 echo ""
 
-# --- 0. Demontage automatique des peripheriques existants dans /stockage ---
-if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
-    if [ ! -e "$STOCKAGE_DIR" ] && [ ! -L "$STOCKAGE_DIR" ]; then
-        sudo mkdir -m 0755 -- "$STOCKAGE_DIR" || fail "Impossible de créer $STOCKAGE_DIR."
-    fi
-    if mountpoint -q -- "$STOCKAGE_DIR" || [ -n "$(list_mounts_under_stockage)" ]; then
-        fail "Un montage existe sous /stockage. Utilisez d’abord Démonter le stockage."
-    fi
-    if [ ! -d "$STOCKAGE_DIR" ] || [ "$(realpath -e -- "$STOCKAGE_DIR")" != "$STOCKAGE_DIR" ] ||
-       [ "$(stat -c '%u:%a' -- "$STOCKAGE_DIR")" != "0:755" ]; then
-        echo "État constaté : $(stat -c '%F, propriétaire %U:%G, mode %a' -- "$STOCKAGE_DIR" 2>/dev/null || echo 'indisponible')"
-        fail "Préparez /stockage avec sh $VIGIL_BASE/scripts/post-install/prepare-storage.sh."
-    fi
-else
-echo -e "${YELLOW}Nettoyage des montages existants dans $STOCKAGE_DIR...${NC}"
-sudo mkdir -p "$STOCKAGE_DIR" 2>/dev/null || true
-while IFS= read -r dir; do
-    [ -z "$dir" ] && continue
-    echo -e "${YELLOW}Démontage de $dir...${NC}"
-    sudo umount "$dir" 2>/dev/null && sudo rmdir "$dir" 2>/dev/null && {
-        echo -e "${GREEN}✅ $dir démonté et nettoyé.${NC}"
-        log_action "auto_umount_stockage" "" "$dir" "success" "Démontage automatique avant nouveau montage"
-    }
-done < <(list_mounts_under_stockage)
-
-# Vérifier qu'aucun peripherique n'est plus monté
-REMAINING_MOUNTS=0
-while IFS= read -r dir; do
-    [ -n "$dir" ] && {
-        REMAINING_MOUNTS=$((REMAINING_MOUNTS + 1))
-        echo -e "${YELLOW}⚠️  $dir est toujours monté.${NC}"
-    }
-done < <(list_mounts_under_stockage)
-if [ "$REMAINING_MOUNTS" -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  Certains périphériques sont encore montés. Nouvelle tentative (lazy umount)...${NC}"
-    while IFS= read -r dir; do
-        [ -n "$dir" ] && sudo umount -l "$dir" 2>/dev/null || true
-    done < <(list_mounts_under_stockage)
-    log_action "auto_umount_all_stockage" "" "$STOCKAGE_DIR" "warning" "Démontage lazy appliqué sur restes"
+# Refuse an occupied storage zone instead of implicitly unmounting it.
+if [ ! -e "$STOCKAGE_DIR" ] && [ ! -L "$STOCKAGE_DIR" ]; then
+    sudo mkdir -m 0755 -- "$STOCKAGE_DIR" || fail "Impossible de créer $STOCKAGE_DIR."
 fi
-
-# Nettoyage des dossiers vides residuels
-while IFS= read -r -d '' dir; do
-    [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ] && sudo rmdir "$dir" 2>/dev/null
-done < <(find "$STOCKAGE_DIR" -mindepth 1 -depth -type d -print0 2>/dev/null)
-echo -e "${GREEN}✅ $(vigil_text "Nettoyage initial terminé." "Initial cleanup complete.")${NC}"
-
+existing_mounts=$(list_mounts_under_stockage) || fail "État de /stockage non vérifiable."
+[ -z "$existing_mounts" ] || fail "Un montage existe sous /stockage. Démontez le support d’abord."
+if [ ! -d "$STOCKAGE_DIR" ] || [ "$(realpath -e -- "$STOCKAGE_DIR")" != "$STOCKAGE_DIR" ] ||
+   [ "$(stat -c '%u:%a' -- "$STOCKAGE_DIR")" != "0:755" ]; then
+    fail "Préparez /stockage avec sh $VIGIL_BASE/scripts/post-install/prepare-storage.sh."
 fi
 
 # --- 0.4. Triage USB anti-Rubber Ducky (baseline + blocage HID par défaut) ---
@@ -289,395 +237,14 @@ USB_BLACKLIST_FILE="$USB_LISTS_DIR/blacklist.txt"
 mkdir -p "$USB_LISTS_DIR" 2>/dev/null || true
 touch "$USB_WHITELIST_FILE" "$USB_BLACKLIST_FILE" 2>/dev/null || true
 
-usb_snapshot() {
-    # Format : busnum:devnum|port|vid|pid|manufacturer|product|serial
-    # "port" = chemin sysfs (ex. 1-2, 2-1.3) : STABLE au rebranchement sur
-    # le meme port physique — utilisé pour ne jamais bloquer un périphérique
-    # de travail (clavier, souris) déjà présent à la baseline.
-    local dir busnum devnum vid pid mfr prod ser
-    for dir in /sys/bus/usb/devices/*; do
-        [ -d "$dir" ] || continue
-        case "${dir##*/}" in *:*) continue ;; esac
-        busnum=$(cat "$dir/busnum" 2>/dev/null)
-        devnum=$(cat "$dir/devnum" 2>/dev/null)
-        [ -z "$busnum" ] && continue
-        vid=$(cat "$dir/idVendor" 2>/dev/null || echo "?")
-        pid=$(cat "$dir/idProduct" 2>/dev/null || echo "?")
-        mfr=$(cat "$dir/manufacturer" 2>/dev/null || echo "")
-        prod=$(cat "$dir/product" 2>/dev/null || echo "")
-        ser=$(cat "$dir/serial" 2>/dev/null || echo "")
-        echo "${busnum}:${devnum}|${dir##*/}|${vid}|${pid}|${mfr}|${prod}|${ser}"
-    done
-}
-
-# Interfaces HID clavier du périphérique : chemins d'interface
-# bInterfaceClass=03 (HID) bInterfaceSubClass=01 (clavier).
-usb_hid_keyboard_ifaces() {
-    local devdir="$1" iface cls sub
-    for iface in "$devdir"/*/; do
-        [ -d "$iface" ] || continue
-        case "${iface%/}" in
-            *:*) ;;
-            *) continue ;;
-        esac
-        cls=$(cat "$iface/bInterfaceClass" 2>/dev/null)
-        sub=$(cat "$iface/bInterfaceSubClass" 2>/dev/null)
-        if [ "${cls:-}" = "03" ] && [ "${sub:-}" = "01" ]; then
-            printf '%s\n' "$iface"
-        fi
-    done
-}
-
-TRIAGE_DIR=$(mktemp -d -t "vigil_triage_stockage_XXXXXXXX")
-HID_LISTING=()
-HID_NEW_COUNT=0
-HID_ALERT_COUNT=0
-HID_PROTECTED_COUNT=0
+TRIAGE_DIR=$(mktemp -d -t "vigil_triage_stockage_XXXXXXXX") || exit 1
+trap 'rm -rf -- "$TRIAGE_DIR"' EXIT
 HID_BLOCKED_PORTS=()
-BL_COUNT=0
-
-run_usb_triage() {
-    local base_file after_file new_file hid_file prot_file
-    local line busdev port vid pid mfr prod ser devdir b d
-    local baseline_count after_count new_count blocked unblockable protected
-    base_file="$TRIAGE_DIR/usb_baseline.txt"
-    after_file="$TRIAGE_DIR/usb_after.txt"
-    new_file="$TRIAGE_DIR/usb_new.txt"
-    hid_file="$TRIAGE_DIR/usb_hid.txt"
-    prot_file="$TRIAGE_DIR/usb_protected.txt"
-
-    echo ""
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  $(vigil_text "Triage USB (détection Rubber Ducky)" "USB triage (Rubber Ducky detection)")${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "${YELLOW}⚠️  $(vigil_text "Pour sécuriser le montage, DÉBRANCHEZ tous les périphériques USB" "For safe mounting, DISCONNECT all USB devices")${NC}"
-    echo -e "${YELLOW}    $(vigil_text "à brancher (clé, disque...) avant de continuer." "you plan to use (flash drive, disk, etc.) before continuing.")${NC}"
-    echo ""
-    echo -ne "${BOLD}${YELLOW}$(vigil_text "Débranchez les périphériques USB, puis appuyez sur Entrée..." "Disconnect the USB devices, then press Enter...")${NC}"
-    read -r
-
-    usb_snapshot > "$base_file"
-    baseline_count=$(grep -cve '^[[:space:]]*$' "$base_file" 2>/dev/null)
-    baseline_count=${baseline_count:-0}
-    echo -e "${GREEN}✅ $(vigil_text "Baseline USB enregistrée :" "USB baseline recorded:") $baseline_count $(vigil_text "périphérique(s) présents." "device(s) present.")${NC}"
-    log_action "usb_triage_stockage" "" "$base_file" "success" "Baseline USB : $baseline_count périphérique(s)"
-
-    echo ""
-    echo -e "${YELLOW}$(vigil_text "BRANCHEZ maintenant les périphériques USB à monter." "Connect the USB devices to mount now.")${NC}"
-    echo ""
-    echo -ne "${BOLD}${YELLOW}$(vigil_text "Branchez tous les périphériques à monter, puis appuyez sur Entrée..." "Connect the devices to mount and press Enter...")${NC}"
-    read -r
-
-    # Attente de la détection noyau : 10 s avec barre de progression.
-    # Le tampon clavier est purgé pendant l'attente : des Entrées tapées
-    # pendant le décompte ne doivent PAS être réutilisées plus tard comme
-    # réponse à un prompt (bug des doubles Entrée).
-    echo -e "${BLUE}$(vigil_text "Attente de la détection par le noyau (10 s)..." "Waiting for kernel detection (10 s)...")${NC}"
-    local _total=10 _elapsed=0 _fill=""
-    while [ "$_elapsed" -lt "$_total" ]; do
-        _fill=""
-        for (( _k=0; _k<_elapsed; _k++ )); do _fill="${_fill}#"; done
-        printf "\r  ${BLUE}[%-10s] %d s${NC}" "$_fill" "$_elapsed"
-        # Purge du tampon clavier (Entrées anticipées)
-        while IFS= read -r -t 0.05 < /dev/tty 2>/dev/null; do :; done
-        sleep 1
-        _elapsed=$((_elapsed + 1))
-    done
-    printf "\r  ${BLUE}[%-10s] %d s${NC}\n" "##########" "$_total"
-
-    usb_snapshot > "$after_file"
-    after_count=$(grep -cve '^[[:space:]]*$' "$after_file" 2>/dev/null)
-    after_count=${after_count:-0}
-
-    clear
-    print_banner
-    echo -e "${GREEN}✅ $after_count $(vigil_text "périphérique(s) USB détecté(s) au total." "USB device(s) detected in total.")${NC}"
-
-    : > "$new_file"
-    # Whitelist de sécurité : un périphérique DÉJÀ VU à la baseline (même port
-    # physique ou même numéro de série) n'est JAMAIS bloqué, même s'il expose
-    # une interface clavier. Objectif : ne jamais bloquer le clavier et la
-    # souris de travail du poste, même s'ils sont rebranchés pendant le triage.
-    awk -F'|' 'NR > 0 { print $2 }' "$base_file" | sort -u > "$TRIAGE_DIR/base_ports.txt"
-    awk -F'|' 'NR > 0 && $7 != "" { print $7 }' "$base_file" | sort -u > "$TRIAGE_DIR/base_serials.txt"
-    while IFS='|' read -r busdev port vid pid mfr prod ser; do
-        [ -z "$busdev" ] && continue
-        if grep -qxF "$port" "$TRIAGE_DIR/base_ports.txt" 2>/dev/null; then
-            continue
-        fi
-        if [ -n "$ser" ] && grep -qxF "$ser" "$TRIAGE_DIR/base_serials.txt" 2>/dev/null; then
-            continue
-        fi
-        echo "${busdev}|${port}|${vid}|${pid}|${mfr}|${prod}|${ser}" >> "$new_file"
-    done < "$after_file"
-
-    new_count=$(grep -cve '^[[:space:]]*$' "$new_file" 2>/dev/null)
-    new_count=${new_count:-0}
-    HID_NEW_COUNT=$new_count
-    HID_ALERT_COUNT=0
-    HID_PROTECTED_COUNT=0
-    HID_BLOCKED_PORTS=()
-    HID_LISTING=()
-    : > "$hid_file"
-
-    # Détection HID clavier des nouveaux périphériques NON whitelistés
-    # + blocage des frappes. BLOCAGE PAR DÉFAUT : tout clavier HID apparu au
-    # branchement est bloqué sans confirmation. Le clavier/souris de travail
-    # restés branchés à la baseline sont whitelistés ; un clavier
-    # débranché/rebranché doit être ajouté à la whitelist via la GUI USB
-    # (Accueil > Configuration > Périphériques USB).
-    blocked=0
-    unblockable=0
-    protected=0
-    BL_COUNT=0
-    : > "$prot_file"
-    while IFS='|' read -r busdev port vid pid mfr prod ser; do
-        [ -z "$busdev" ] && continue
-        devdir="/sys/bus/usb/devices/$port"
-        [ -d "$devdir" ] || continue
-        _vidpid="$vid:$pid"
-        if grep -qxF "$_vidpid" "$USB_BLACKLIST_FILE" 2>/dev/null \
-           || { [ -n "$ser" ] && grep -qxF "$ser" "$USB_BLACKLIST_FILE" 2>/dev/null; }; then
-            # Blacklist : blocage total, quel que soit le type du périphérique.
-            while IFS= read -r iface; do
-                [ -z "$iface" ] && continue
-                ifname="${iface%/}"
-                ifname="${ifname##*/}"
-                echo "$ifname" | sudo tee "/sys/bus/usb/drivers/usbhid/unbind" >/dev/null 2>&1 || true
-            done < <(usb_hid_keyboard_ifaces "$devdir")
-            if echo 0 | sudo tee "$devdir/authorized" >/dev/null 2>&1; then
-                echo -e "${RED}🚨 $(vigil_text "Périphérique blacklisté bloqué :" "Blocked denylisted device:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— non montable (blacklist)${NC}"
-            else
-                echo -e "${RED}🚨 $(vigil_text "Périphérique blacklisté détecté :" "Denylisted device detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}$(vigil_text "— ÉCHEC du blocage, DÉBRANCHEZ-LE" "— blocking FAILED, DISCONNECT IT")${NC}"
-            fi
-            log_action "usb_triage_hid_stockage" "" "$devdir" "alert" "Périphérique blacklisté : ${mfr:-?} ${prod:-?} ($vid:$pid) — blocage appliqué"
-            HID_BLOCKED_PORTS+=("$port")
-            echo "${busdev}|${vid}|${pid}|${mfr}|${prod}|${ser}" >> "$hid_file"
-            BL_COUNT=$((BL_COUNT + 1))
-            continue
-        fi
-        if [ -n "$(usb_hid_keyboard_ifaces "$devdir")" ]; then
-            if grep -qxF "$_vidpid" "$USB_WHITELIST_FILE" 2>/dev/null \
-               || { [ -n "$ser" ] && grep -qxF "$ser" "$USB_WHITELIST_FILE" 2>/dev/null; }; then
-                protected=$((protected + 1))
-                echo "$busdev" >> "$prot_file"
-                echo -e "${GREEN}  ✅ $(vigil_text "Clavier HID whitelisté :" "Allowlisted HID keyboard:") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — frappes actives (whitelist).${NC}"
-                log_action "usb_triage_hid_stockage" "" "$devdir" "warning" "Clavier HID whitelisté (non bloqué) : ${mfr:-?} ${prod:-?} ($vid:$pid)"
-                continue
-            fi
-            local _bar="" _i
-            for (( _i=0; _i<66; _i++ )); do _bar="${_bar}━"; done
-            echo ""
-            echo -e "${RED}┏${_bar}┓${NC}"
-            echo -e "${RED}┃  ⚠ PÉRIPHÉRIQUE SUSPECT DÉTECTÉ${NC}"
-            echo -e "${RED}┗${_bar}┛${NC}"
-            echo ""
-            echo -e "  ${BOLD}$(vigil_text "Périphérique détecté :" "Device detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid)${NC}"
-            echo -e "  ${GREY}Un périphérique de stockage ne se présente jamais comme un clavier :${NC}"
-            echo -e "  ${GREY}par sécurité ses frappes sont BLOQUÉES automatiquement et il ne peut${NC}"
-            echo -e "  ${GREY}pas être monté. Pour whitelister un clavier/souris de travail, utilisez${NC}"
-            echo -e "  ${GREY}la GUI USB (Accueil > Configuration > Périphériques USB).${NC}"
-            echo ""
-            HID_ALERT_COUNT=$((HID_ALERT_COUNT + 1))
-            echo "${busdev}|${vid}|${pid}|${mfr}|${prod}|${ser}" >> "$hid_file"
-            HID_LISTING+=("${mfr:-?} ${prod:-?}|${vid}:${pid}|${ser:-}")
-            HID_BLOCKED_PORTS+=("$port")
-            # Blocage : délier le driver usbhid de chaque interface clavier
-            local one_blocked=0
-            while IFS= read -r iface; do
-                [ -z "$iface" ] && continue
-                ifname="${iface%/}"
-                ifname="${ifname##*/}"
-                if echo "$ifname" | sudo tee "/sys/bus/usb/drivers/usbhid/unbind" >/dev/null 2>&1; then
-                    one_blocked=1
-                fi
-            done < <(usb_hid_keyboard_ifaces "$devdir")
-            if [ "$one_blocked" -gt 0 ]; then
-                blocked=$((blocked + 1))
-                echo -e "${RED}🚨 $(vigil_text "Clavier HID détecté :" "HID keyboard detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}$(vigil_text "— frappes bloquées, non montable" "— keystrokes blocked, device cannot be mounted")${NC}"
-                log_action "usb_triage_hid_stockage" "" "$devdir" "alert" "Clavier HID détecté et bloqué : ${mfr:-?} ${prod:-?} ($vid:$pid, série $ser)"
-            else
-                unblockable=$((unblockable + 1))
-                echo -e "${RED}🚨 $(vigil_text "Clavier HID détecté :" "HID keyboard detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}$(vigil_text "— ÉCHEC du blocage, DÉBRANCHEZ-LE" "— blocking FAILED, DISCONNECT IT")${NC}"
-                log_action "usb_triage_hid_stockage" "" "$devdir" "alert" "Clavier HID détecté, ÉCHEC du blocage : ${mfr:-?} ${prod:-?} ($vid:$pid)"
-            fi
-        fi
-    done < "$new_file"
-    HID_PROTECTED_COUNT=$protected
-
-    # Rapport PDF de triage (toujours généré : trace de la procédure)
-    USBHID_JSON="$TRIAGE_DIR/usbhid.json"
-    DATE_ANALYSIS=$(date +"%d/%m/%Y à %H:%M:%S")
-    {
-        printf '{"date": "%s", "baseline_count": %s, "after_count": %s, "new_count": %s, "hid_count": %s, "protected_count": %s, "blocked_count": %s, "block_fail_count": %s, "blacklisted_count": %s, "devices": [' \
-            "$DATE_ANALYSIS" "$baseline_count" "$after_count" "$new_count" "$HID_ALERT_COUNT" "$protected" "$blocked" "$unblockable" "$BL_COUNT"
-        first=1
-        while IFS='|' read -r busdev port vid pid mfr prod ser; do
-            [ -z "$busdev" ] && continue
-            [ $first -eq 0 ] && printf ','
-            first=0
-            hidflag=false
-            protflag=false
-            blflag=false
-            grep -q "^${busdev}|" "$hid_file" 2>/dev/null && hidflag=true
-            grep -qxF "$busdev" "$prot_file" 2>/dev/null && protflag=true
-            grep -qxF "${vid}:${pid}" "$USB_BLACKLIST_FILE" 2>/dev/null && blflag=true
-            { [ -n "$ser" ] && grep -qxF "$ser" "$USB_BLACKLIST_FILE" 2>/dev/null; } && blflag=true
-            printf '{"bus_dev": "%s", "vid": "%s", "pid": "%s", "manufacturer": "%s", "product": "%s", "serial": "%s", "hid": %s, "protected": %s, "blacklisted": %s}' \
-                "$busdev" "$vid" "$pid" "$mfr" "$prod" "$ser" "$hidflag" "$protflag" "$blflag"
-        done < "$new_file"
-        printf ']}'
-    } > "$USBHID_JSON"
-    PDF_SCRIPT="$VIGIL_BASE/scripts/pdf/vigil_pdf.py"
-    if [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 2>&1; then
-        PDF_OUT=$(python3 "$PDF_SCRIPT" --kind usbhid --json "$USBHID_JSON" \
-            --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" \
-            --dir "$VIGIL_BASE/rapports" --config-dir "$VIGIL_DATA_DIR" 2>&1)
-        if [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-            echo -e "${GREEN}✅ Rapport de triage USB généré : $PDF_OUT${NC}"
-            log_action "usb_triage_pdf_stockage" "" "$PDF_OUT" "success" "Rapport de triage USB généré (stockage)"
-            if [ "$ACTIVE_PROJECT" != "(no-project)" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
-                cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null || true
-            fi
-        else
-            echo -e "${YELLOW}⚠️  Échec de la génération du rapport de triage PDF.${NC}"
-            log_action "usb_triage_pdf_stockage" "" "" "warning" "Échec de la génération du PDF de triage (stockage)"
-        fi
-    fi
-    if [ "$HID_ALERT_COUNT" -eq 0 ]; then
-        echo ""
-        echo -e "${GREEN}✅ Aucun clavier HID détecté parmi les $new_count nouveau(x) périphérique(s).${NC}"
-    fi
-    log_action "usb_triage_stockage" "" "$after_file" "success" "Triage terminé : $new_count nouveau(x), $HID_ALERT_COUNT HID clavier, $protected protégé(s), $blocked bloqué(s)"
-
-    # Si le SEUL périphérique apparu est un clavier suspect bloqué ou un
-    # périphérique blacklisté, il n'y a rien à monter : le rapport PDF de
-    # triage vient d'être généré, on termine proprement le script.
-    _usb_storage_count=0
-    while IFS= read -r _dsk; do
-        [ -z "$_dsk" ] && continue
-        _syslink=$(readlink -f "/sys/block/${_dsk}" 2>/dev/null || echo "")
-        _skip=0
-        for _bport in ${HID_BLOCKED_PORTS[@]+"${HID_BLOCKED_PORTS[@]}"}; do
-            case "$_syslink" in
-                */"$_bport"/*|*/"$_bport")
-                    _skip=1
-                    break
-                    ;;
-            esac
-        done
-        [ "$_skip" -eq 1 ] && continue
-        _usb_storage_count=$((_usb_storage_count + 1))
-    done < <(lsblk -rpn -o NAME,TYPE,TRAN,RM 2>/dev/null \
-        | awk '$2=="disk" && ($3=="usb" || $4=="1") {print $1}')
-    _usb_storage_count=${_usb_storage_count:-0}
-    if [ "$HID_ALERT_COUNT" -gt 0 ] \
-       && [ "$new_count" -eq "$HID_ALERT_COUNT" ] \
-       && [ "$blocked" -gt 0 ] \
-       && [ "$unblockable" -eq 0 ] \
-       && [ "$_usb_storage_count" -eq 0 ]; then
-        echo ""
-        echo -e "${RED}${BOLD}🚨 Le seul périphérique détecté est un clavier suspect (bloqué).${NC}"
-        echo -e "${RED}Il ne peut pas être monté ni analysé : débranchez-le et jugez ${NC}"
-        echo -e "${RED}s'il s'agit d'un clavier de travail (relancez alors le script).${NC}"
-        echo -e "${GREEN}Le rapport PDF de triage a été généré (rapport_usbhid_*).${NC}"
-        log_action "usb_triage_end_stockage" "" "$after_file" "alert" "Fin du montage stockage : seul périphérique détecté = clavier suspect bloqué"
-        END_AFTER_TRIAGE=1
-        return 0
-    fi
-    if [ "$BL_COUNT" -gt 0 ] \
-       && [ "$new_count" -eq "$BL_COUNT" ] \
-       && [ "$_usb_storage_count" -eq 0 ]; then
-        echo ""
-        echo -e "${RED}${BOLD}🚨 Le seul périphérique détecté est BLACKLISTÉ (bloqué).${NC}"
-        echo -e "${RED}Il ne peut pas être monté ni analysé. Pour l'autoriser à nouveau,${NC}"
-        echo -e "${RED}retirez-le de la blacklist (Accueil > Configuration > Périphériques USB).${NC}"
-        echo -e "${GREEN}Le rapport PDF de triage a été généré (rapport_usbhid_*).${NC}"
-        log_action "usb_triage_end_stockage" "" "$after_file" "alert" "Fin du montage stockage : seul périphérique détecté = blacklisté bloqué"
-        END_AFTER_TRIAGE=1
-        return 0
-    fi
-}
-
-END_AFTER_TRIAGE=0
-run_usb_triage
-if [ "$END_AFTER_TRIAGE" -eq 1 ]; then
-    final_pause
-    exit 0
+HID_LISTING=()
+HID_ALERT_COUNT=0
+if [ -z "${VIGIL_DEVICE_SELECTION:-}" ]; then
+    run_usb_triage "$(vigil_text "Destination" "Destination")" || exit 0
 fi
-
-# --- 0.5. Autorisation des peripheriques USB bloques (authorized=0) ---
-authorize_blocked_usb() {
-    if [ ! -d /sys/bus/usb/devices ]; then
-        return 0
-    fi
-    local found=0
-    local authfile devpath state prod mfr _port _skip _vid _pid2 _ser2
-    for authfile in /sys/bus/usb/devices/*/authorized; do
-        [ -f "$authfile" ] || continue
-        devpath="${authfile%/authorized}"
-        _port="${devpath##*/}"
-        # Ne JAMAIS ré-autoriser un périphérique bloqué au triage (ducky ou
-        # blacklisté) : le blocage authorized=0 doit survivre au retry.
-        _skip=0
-        for _bport in ${HID_BLOCKED_PORTS[@]+"${HID_BLOCKED_PORTS[@]}"}; do
-            [ "$_bport" = "$_port" ] && { _skip=1; break; }
-        done
-        if [ "$_skip" -eq 0 ]; then
-            # Idem pour la blacklist persistante : un périphérique blacklisté
-            # (même bloqué lors d'un montage précédent) reste bloqué.
-            _vid=$(cat "$devpath/idVendor" 2>/dev/null || echo "")
-            _pid2=$(cat "$devpath/idProduct" 2>/dev/null || echo "")
-            _ser2=$(cat "$devpath/serial" 2>/dev/null || echo "")
-            if grep -qxF "${_vid}:${_pid2}" "$USB_BLACKLIST_FILE" 2>/dev/null \
-               || { [ -n "$_ser2" ] && grep -qxF "$_ser2" "$USB_BLACKLIST_FILE" 2>/dev/null; }; then
-                _skip=1
-            fi
-        fi
-        [ "$_skip" -eq 1 ] && continue
-        state=$(cat "$authfile" 2>/dev/null || echo "")
-        if [ "$state" = "0" ]; then
-            if [ "$found" -eq 0 ]; then
-                echo -e "${YELLOW}Réparation des périphériques USB bloqués (authorized=0)...${NC}"
-            fi
-            found=1
-            devpath="${authfile%/authorized}"
-            prod=$(cat "$devpath/product" 2>/dev/null || echo "?")
-            mfr=$(cat "$devpath/manufacturer" 2>/dev/null || echo "?")
-            if echo 1 | sudo tee "$authfile" >/dev/null 2>&1; then
-                echo -e "  ${GREEN}✅ Autorisé :${NC} ${GREY}${mfr} / ${prod}${NC}"
-            else
-                echo -e "  ${RED}❌ Échec d'autorisation :${NC} ${GREY}${mfr} / ${prod}${NC}"
-            fi
-        fi
-    done
-    if [ "$found" -eq 1 ]; then
-        echo -e "${YELLOW}    Attente de la reconnaissance par le noyau...${NC}"
-        udevadm settle --timeout=10 2>/dev/null || sleep 2
-        sleep 1
-    fi
-    return $found
-}
-
-# --- Helper : FSTYPE|LABEL|PARTTYPENAME ---
-_fs_label_parttype() {
-    local dev="$1"
-    local fs lbl pt
-    fs=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -n1 | tr -d '[:space:]')
-    if [ -z "$fs" ] && command -v blkid >/dev/null 2>&1; then
-        fs=$(blkid -o value -s TYPE "$dev" 2>/dev/null | head -n1 | tr -d '[:space:]')
-    fi
-    lbl=$(lsblk -no LABEL "$dev" 2>/dev/null | head -n1)
-    if [ -z "$lbl" ] && command -v blkid >/dev/null 2>&1; then
-        lbl=$(blkid -o value -s LABEL "$dev" 2>/dev/null | head -n1)
-    fi
-    pt=$(lsblk -no PARTTYPENAME "$dev" 2>/dev/null | head -n1)
-    fs=${fs:-}
-    lbl=${lbl# }; lbl=${lbl% }
-    pt=${pt# }; pt=${pt% }
-    echo "$fs|$lbl|$pt"
-}
 
 # --- Helper : détection chiffrement LUKS/BitLocker ---
 _is_encrypted() {
@@ -697,30 +264,6 @@ _is_encrypted() {
     done
     echo ""
     return 1
-}
-
-# Contrôler aussi le support choisi : le triage initial ne liste que les nouveaux USB.
-verify_storage_usb() {
-    local path iface class vid pid serial
-    local interfaces=0
-    path=$(realpath -e -- "/sys/class/block/${1##*/}") || return 1
-    while [ "$path" != / ] && [ ! -f "$path/idVendor" ]; do
-        path=$(dirname -- "$path")
-    done
-    [ "$path" != / ] && [ "$(cat "$path/authorized")" = 1 ] || return 1
-    vid=$(cat "$path/idVendor") && pid=$(cat "$path/idProduct") || return 1
-    serial=$(cat "$path/serial" 2>/dev/null || true)
-    if grep -qxF "$vid:$pid" "$USB_BLACKLIST_FILE" ||
-       { [ -n "$serial" ] && grep -qxF "$serial" "$USB_BLACKLIST_FILE"; }; then
-        return 1
-    fi
-    for iface in "$path"/"${path##*/}":*/bInterfaceClass; do
-        [ -f "$iface" ] || continue
-        class=$(cat "$iface") || return 1
-        [ "$class" != 03 ] || return 1
-        interfaces=$((interfaces + 1))
-    done
-    [ "$interfaces" -gt 0 ]
 }
 
 # --- Helper : montage RW d'un device dans un point de montage ---
@@ -765,15 +308,9 @@ _mount_single_rw() {
         mount_opts="$mount_opts,noexec"
     fi
     mount_status=0
-    if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
-        sudo mount $mount_opts "$dev" "$mnt" || mount_status=$?
-    else
-        sudo mount $mount_opts "$dev" "$mnt" 2>/dev/null || mount_status=$?
-    fi
+    vigil_mount_volume /stockage "$dev" "$mnt" $mount_opts || mount_status=$?
     if [ "$mount_status" -ne 0 ]; then
-        # Only the historical standalone script retries for diagnostics.
         echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
-        [ "${VIGIL_QT_STORAGE:-}" != "1" ] && sudo mount $mount_opts "$dev" "$mnt" 2>&1 || true
         log_action "mount_stockage" "$dev" "$mnt" "failed" "Échec du montage"
         sudo rmdir "$mnt" 2>/dev/null || true
         return 1
@@ -801,264 +338,50 @@ _mount_single_rw() {
 }
 
 # --- 1. Detection des peripheriques USB/Disques ---
-detect_usb_devices() {
-    declare -gA USB_DEVICES
-    declare -gA PARENT_TRAN
-    declare -gA PARENT_MODEL
-    declare -gA PARENT_SIZE
-    declare -gA DISK_PARTS
-    declare -gA DISK_PARTCOUNT
-    DEVICE_NUM=0
-    USB_DEVICES=()
-    PARENT_TRAN=()
-    PARENT_MODEL=()
-    PARENT_SIZE=()
-    DISK_PARTS=()
-    DISK_PARTCOUNT=()
-    MOUNTED_NUM=0
-    MOUNTED_USB=()
-
-    local LSBLK_OUT line NAME TYPE PKNAME MOUNTPOINT TRAN RM SIZE MODEL PT FSTYPE LABEL PARTTYPE
-    LSBLK_OUT=$(lsblk -P -o NAME,TYPE,PKNAME,MOUNTPOINT,TRAN,RM,SIZE,MODEL 2>/dev/null || true)
-
-    while IFS= read -r line; do
-        eval "$line"
-        if [ "$TYPE" = "disk" ]; then
-            PARENT_TRAN["$NAME"]="$TRAN"
-            PARENT_MODEL["$NAME"]="$MODEL"
-            PARENT_SIZE["$NAME"]="$SIZE"
-        fi
-    done <<< "$LSBLK_OUT"
-
-    while IFS= read -r line; do
-        eval "$line"
-        if [ "$TYPE" = "part" ] && [ -n "$PKNAME" ]; then
-            PT=${PARENT_TRAN["$PKNAME"]:-}
-            MODEL=${PARENT_MODEL["$PKNAME"]:-}
-            if [ "$PT" = "usb" ] || [ "$RM" = "1" ]; then
-                if [ -z "$MOUNTPOINT" ]; then
-                    IFS='|' read -r FSTYPE LABEL PARTTYPE <<< "$(_fs_label_parttype "/dev/$NAME")"
-                    if [ -n "$FSTYPE" ]; then
-                        USB_DEVICES[$DEVICE_NUM]="part|$NAME|$SIZE|$MODEL|$FSTYPE|$LABEL|$PARTTYPE|$PKNAME"
-                        DEVICE_NUM=$((DEVICE_NUM + 1))
-                        DISK_PARTS["$PKNAME"]="${DISK_PARTS["$PKNAME"]:-}$NAME "
-                        DISK_PARTCOUNT["$PKNAME"]=$((${DISK_PARTCOUNT["$PKNAME"]:-0} + 1))
-                    fi
-                else
-                    MOUNTED_USB[$MOUNTED_NUM]="$NAME|$MOUNTPOINT|$SIZE|$MODEL"
-                    MOUNTED_NUM=$((MOUNTED_NUM + 1))
-                fi
-            fi
-        fi
-    done <<< "$LSBLK_OUT"
-
-    # Insertion « Monter tout le disque » pour chaque disque USB >= 2 partitions
-    if [ "${#DISK_PARTS[@]}" -gt 0 ]; then
-        local _new_list=()
-        for i in "${!USB_DEVICES[@]}"; do _new_list+=("${USB_DEVICES[$i]}"); done
-        local _inserted=()
-        for disk in "${!DISK_PARTS[@]}"; do
-            local cnt=${DISK_PARTCOUNT["$disk"]:-0}
-            if [ "$cnt" -ge 2 ]; then
-                local dsize=${PARENT_SIZE["$disk"]:-?}
-                local dmodel=${PARENT_MODEL["$disk"]:-?}
-                _inserted+=("whole|$disk|$dsize|$dmodel|$cnt|")
-            fi
-        done
-        USB_DEVICES=()
-        DEVICE_NUM=0
-        for e in "${_inserted[@]}"; do
-            USB_DEVICES[$DEVICE_NUM]="$e"
-            DEVICE_NUM=$((DEVICE_NUM + 1))
-        done
-        for e in "${_new_list[@]}"; do
-            USB_DEVICES[$DEVICE_NUM]="$e"
-            DEVICE_NUM=$((DEVICE_NUM + 1))
-        done
-    fi
-
-    # Disques USB sans partition (filesystem direct)
-    while IFS= read -r line; do
-        eval "$line"
-        if [ "$TYPE" = "disk" ] && [ -z "$MOUNTPOINT" ]; then
-            if [ "$TRAN" = "usb" ] || [ "$RM" = "1" ]; then
-                if ! echo "$LSBLK_OUT" | grep -q "PKNAME=\"$NAME\"" 2>/dev/null; then
-                    IFS='|' read -r FSTYPE LABEL PARTTYPE <<< "$(_fs_label_parttype "/dev/$NAME")"
-                    USB_DEVICES[$DEVICE_NUM]="rawdisk|$NAME|$SIZE|$MODEL|$FSTYPE|$LABEL||"
-                    DEVICE_NUM=$((DEVICE_NUM + 1))
-                fi
-            fi
-        fi
-    done <<< "$LSBLK_OUT"
-}
-
-echo ""
-echo -e "${BLUE}=== Détection des périphériques ===${NC}"
-echo -e "${YELLOW}Recherche des périphériques USB/Disques...${NC}"
-
-ATTEMPT=0
-MAX_ATTEMPTS=3
-while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
-    ATTEMPT=$((ATTEMPT + 1))
-    detect_usb_devices
-    if [ "$DEVICE_NUM" -gt 0 ]; then
-        break
-    fi
-    if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
-        echo -e "${GREY}    (tentative $ATTEMPT/$MAX_ATTEMPTS : aucun périphérique, vérification des USB bloqués...)${NC}"
-        authorize_blocked_usb
-    fi
-done
-
-if [ "$DEVICE_NUM" -eq 0 ]; then
-    echo -e "${RED}❌ Aucun périphérique USB/Disque non monté détecté.${NC}"
-    if [ "$MOUNTED_NUM" -gt 0 ] && [ "${VIGIL_QT_STORAGE:-}" != "1" ]; then
-        echo ""
-        echo -e "${YELLOW}⚠️  ${MOUNTED_NUM} périphérique(s) USB déjà monté(s) :${NC}"
-        for i in "${!MOUNTED_USB[@]}"; do
-            IFS='|' read -r m_name m_mount m_size m_model <<< "${MOUNTED_USB[$i]}"
-            echo -e "  ${BOLD}/dev/$m_name${NC}  ${GREY}• Monté dans :${NC} ${BOLD}$m_mount${NC}  ${GREY}• Taille :${NC} ${BOLD}$m_size${NC}"
-        done
-        echo ""
-        echo -ne "${BOLD}${YELLOW}$(vigil_text "Démonter ces périphériques et relancer la détection ? (o/n, q pour quitter) :" "Unmount these devices and rescan? (o=yes, n=no, q=quit):") ${NC}"
-        read -r UM_ANSWER
-        if [ "$UM_ANSWER" = "q" ] || [ "$UM_ANSWER" = "Q" ]; then
-            echo -e "${YELLOW}Quitter.${NC}"
-            final_pause
-            exit 0
-            fi
-        if [ "$UM_ANSWER" = "o" ] || [ "$UM_ANSWER" = "O" ] || [ "$UM_ANSWER" = "y" ] || [ "$UM_ANSWER" = "Y" ]; then
-            for i in "${!MOUNTED_USB[@]}"; do
-                IFS='|' read -r m_name m_mount m_size m_model <<< "${MOUNTED_USB[$i]}"
-                echo -e "${YELLOW}Démontage de /dev/$m_name ($m_mount)...${NC}"
-                if sudo umount "$m_mount" 2>/dev/null; then
-                    echo -e "  ${GREEN}✅ /dev/$m_name démonté.${NC}"
-                    log_action "umount_for_stockage" "/dev/$m_name" "$m_mount" "success" "Démonté pour stockage RW"
-                else
-                    echo -e "  ${RED}❌ Échec du démontage de /dev/$m_name.${NC}"
-                fi
-            done
-            sleep 1
-            detect_usb_devices
-        fi
-    fi
-    if [ "$DEVICE_NUM" -eq 0 ]; then
-        echo ""
-        echo -e "${YELLOW}Diagnostic : si votre clé USB est branchée mais invisible dans lsblk :${NC}"
-        echo -e "${GREY}  • Vérifiez : lsblk (la clé doit apparaître, ex. /dev/sdb)${NC}"
-        echo -e "${GREY}  • Vérifiez : sudo dmesg | tail -20 (cherchez 'authorized' ou 'not authorized')${NC}"
-        echo -e "${GREY}  • Vérifiez : systemctl is-enabled usbguard (doit être disabled/masked)${NC}"
-        echo -e "${GREY}  • Débranchez puis rebranchez physiquement la clé${NC}"
-        log_action "mount_attempt_stockage" "" "$STOCKAGE_DIR" "failed" "Aucun périphérique détecté"
-        final_pause
-        exit 1
-    fi
-fi
-
-# --- 2. Affichage des peripheriques (regroupé par disque) ---
-echo ""
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}  Périphériques disponibles                  ${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-declare -A _DISK_ORDER=()
-_DISK_SEQ=()
-for i in "${!USB_DEVICES[@]}"; do
-    IFS='|' read -r KIND DEVICE_NAME DEVICE_SIZE DEVICE_MODEL FSTYPE LABEL PARTTYPE PKNAME <<< "${USB_DEVICES[$i]}"
-    if [ "$KIND" = "part" ]; then
-        _disk_key="$PKNAME"
-    else
-        _disk_key="$DEVICE_NAME"
-    fi
-    if [ -z "${_DISK_ORDER[$_disk_key]:-}" ]; then
-        _DISK_ORDER[$_disk_key]="${#_DISK_SEQ[@]}"
-        _DISK_SEQ+=("$_disk_key")
-    fi
-done
-for _disk_key in ${_DISK_SEQ[@]+"${_DISK_SEQ[@]}"}; do
-    _dsize=${PARENT_SIZE["$_disk_key"]:-?}
-    _dmodel=${PARENT_MODEL["$_disk_key"]:-?}
-    echo -e "  ${BOLD}${BLUE} Disque /dev/$_disk_key${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Modèle:${NC} ${BOLD}$_dmodel${NC}"
-    for i in "${!USB_DEVICES[@]}"; do
-        IFS='|' read -r KIND DEVICE_NAME DEVICE_SIZE DEVICE_MODEL FSTYPE LABEL PARTTYPE PKNAME <<< "${USB_DEVICES[$i]}"
-        if [ "$KIND" = "part" ]; then _key="$PKNAME"; else _key="$DEVICE_NAME"; fi
-        [ "$_key" != "$_disk_key" ] && continue
-        if [ "$KIND" = "whole" ]; then
-            echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD} Monter tout le disque${NC}  ${GREY}(${FSTYPE} partition(s))${NC}"
-        elif [ "$KIND" = "rawdisk" ]; then
-            echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD}/dev/$DEVICE_NAME${NC}  ${GREY}• FS:${NC} ${BOLD}${FSTYPE:-?}${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$DEVICE_SIZE${NC}"
-        else
-            _partinfo="${BOLD}/dev/$DEVICE_NAME${NC}"
-            [ -n "$PARTTYPE" ] && [ "$PARTTYPE" != "Linux filesystem" ] && _partinfo="$_partinfo  ${GREY}[$PARTTYPE]${NC}"
-            [ -n "$LABEL" ] && _partinfo="$_partinfo  ${GREY}• Vol:${NC} ${BOLD}$LABEL${NC}"
-            _partinfo="$_partinfo  ${GREY}• FS:${NC} ${BOLD}${FSTYPE:-?}${NC}  ${GREY}• Taille:${NC} ${BOLD}$DEVICE_SIZE${NC}"
-            echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  $_partinfo"
-        fi
+detect_usb_devices || fail "Impossible de relever les périphériques de stockage."
+if [ -n "${VIGIL_DEVICE_SELECTION:-}" ]; then
+    select_device_path "$VIGIL_DEVICE_SELECTION" || fail "Périphérique sélectionné indisponible."
+else
+    while true; do
+        display_usb_devices
+        select_usb_device "à monter" && break
+        case $? in
+            2) detect_usb_devices || fail "Impossible de relever les périphériques de stockage." ;;
+            *) exit 0 ;;
+        esac
     done
-    echo ""
-done
-
-# Périphériques HID détectés au triage (non montables)
-if [ "$HID_ALERT_COUNT" -gt 0 ]; then
-    echo ""
-    echo -e "${RED}${BOLD}🚨 PÉRIPHÉRIQUE(S) SUSPECT(S) — interdits de montage :${NC}"
-    _hid=""
-    for _hid in ${HID_LISTING[@]+"${HID_LISTING[@]}"}; do
-        IFS='|' read -r _name _vidpid _ser <<< "$_hid"
-        echo -e "  ${RED}${BOLD}• ${_name}${NC}  ${GREY}(réf. ${_vidpid}, n° série ${_ser:-absent})${NC}"
-    done
-    echo -e "${RED}    Ces périphériques se font passer pour des claviers : leurs frappes${NC}"
-    echo -e "${RED}    sont bloquées et ils ne peuvent PAS être montés. Ils sont décrits${NC}"
-    echo -e "${RED}    dans le rapport PDF de triage (rapport_usbhid_*).${NC}"
 fi
+IFS='|' read -r SELECTED_KIND SELECTED_DEVICE SELECTED_SIZE SELECTED_MODEL SELECTED_FSTYPE SELECTED_LABEL SELECTED_PARTTYPE SELECTED_PKNAME <<< "${USB_DEVICES[$SELECTED_INDEX]}"
+VIGIL_DEVICE_IDENTITY=$(vigil_device_check capture /stockage "/dev/$SELECTED_DEVICE") || exit 1
+export VIGIL_DEVICE_IDENTITY
 
-# --- 3. Selection du peripherique ---
-while true; do
-    echo -ne "${BOLD}${YELLOW}Entrez le numéro du périphérique à monter (ou \"q\" pour quitter) : ${NC}"
-    read -r SELECTED_NUM
-    if [ "$SELECTED_NUM" = "q" ]; then
-        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
-        log_action "mount_cancelled_stockage" "" "$STOCKAGE_DIR" "success" "Montage annulé par l'utilisateur"
-        final_pause
-        exit 0
-    fi
-    if ! [[ "$SELECTED_NUM" =~ ^[0-9]+$ ]] || [ "$SELECTED_NUM" -lt 1 ] || [ "$SELECTED_NUM" -gt "$DEVICE_NUM" ]; then
-        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $DEVICE_NUM.${NC}"
-        continue
-    fi
-    SELECTED_INDEX=$((SELECTED_NUM-1))
-    IFS='|' read -r SELECTED_KIND SELECTED_DEVICE SELECTED_SIZE SELECTED_MODEL SELECTED_FSTYPE SELECTED_LABEL SELECTED_PARTTYPE SELECTED_PKNAME <<< "${USB_DEVICES[$SELECTED_INDEX]}"
-    break
-done
-
-if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
-    echo "Montage en lecture-écriture de /dev/$SELECTED_DEVICE."
-    echo "$(vigil_text "Saisissez OUI (ou YES) si ce périphérique est bien un support de travail." "Type YES (or OUI) if this is a confirmed work drive.")"
-    read -r confirmation
+echo "Montage en lecture-écriture de /dev/$SELECTED_DEVICE."
+echo "$(vigil_text "Saisissez OUI (ou YES) si ce périphérique est bien un support de travail." "Type YES (or OUI) if this is a confirmed work drive.")"
+if [ "${VIGIL_DEVICE_NONINTERACTIVE:-}" != 1 ]; then
+    read -r confirmation || exit 0
     case "$confirmation" in OUI|YES) ;; *) exit 0 ;; esac
-
-    selected="/dev/$SELECTED_DEVICE"
-    disk="$selected"
-    if [ "$SELECTED_KIND" = "part" ]; then
-        parent=$(lsblk -dnro PKNAME -- "$selected") || fail "Disque parent inaccessible."
-        [ -n "$parent" ] && [ "$parent" = "$SELECTED_PKNAME" ] ||
-            fail "Impossible de confirmer le disque parent de $selected."
-        disk="/dev/$parent"
-    fi
-    disk_info=$(lsblk -dnro TYPE,TRAN,RM -- "$disk") || fail "Disque inaccessible : $disk."
-    [[ "$disk_info" =~ ^disk[[:space:]]+usb[[:space:]]+[01]$ ]] ||
-        fail "$disk n’est pas un disque USB confirmé."
-    mounts=$(lsblk -nr -o MOUNTPOINTS -- "$disk") || fail "Montages non vérifiables pour $disk."
-    [[ "$mounts" =~ [^[:space:]] ]] && fail "$disk contient déjà un montage. Aucun passage en écriture."
-    verify_storage_usb "$disk" ||
-        fail "Triage USB refusé pour $disk : interface HID, support bloqué ou interfaces non vérifiables."
-    disk_ro=$(sudo blockdev --getro "$disk") || fail "État bloc non vérifiable pour $disk."
-    case "$disk_ro" in
-        0) ;;
-        1) sudo blockdev --setrw "$disk" || fail "Impossible de rendre $disk inscriptible." ;;
-        *) fail "État bloc inconnu pour $disk." ;;
-    esac
 fi
+
+selected="/dev/$SELECTED_DEVICE"
+disk="$selected"
+if [ "$SELECTED_KIND" = "part" ]; then
+    parent=$(lsblk -dnro PKNAME -- "$selected") || fail "Disque parent inaccessible."
+    [ -n "$parent" ] && [ "$parent" = "$SELECTED_PKNAME" ] ||
+        fail "Impossible de confirmer le disque parent de $selected."
+    disk="/dev/$parent"
+fi
+disk_info=$(lsblk -dnro TYPE,TRAN,RM -- "$disk") || fail "Disque inaccessible : $disk."
+[[ "$disk_info" =~ ^disk[[:space:]]+usb[[:space:]]+[01]$ ]] ||
+    fail "$disk n’est pas un disque USB confirmé."
+mounts=$(lsblk -nr -o MOUNTPOINTS -- "$disk") || fail "Montages non vérifiables pour $disk."
+[[ "$mounts" =~ [^[:space:]] ]] && fail "$disk contient déjà un montage. Aucun passage en écriture."
+vigil_device_check mount /stockage "$selected" || exit 1
+disk_ro=$(sudo blockdev --getro "$disk") || fail "État bloc non vérifiable pour $disk."
+case "$disk_ro" in
+    0) ;;
+    1) sudo blockdev --setrw "$disk" || fail "Impossible de rendre $disk inscriptible." ;;
+    *) fail "État bloc inconnu pour $disk." ;;
+esac
 
 # --- 4. Montage selon le kind d'entrée sélectionnée ---
 echo -e "\n${YELLOW}$(vigil_text "Montage en lecture/écriture..." "Mounting read/write...")${NC}"

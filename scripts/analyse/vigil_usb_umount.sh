@@ -11,6 +11,8 @@ BLUE='\e[96m'
 NC='\e[0m'
 
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
 
 print_banner() {
     vigil_logo
@@ -134,14 +136,12 @@ log_action() {
 # /sys) si /proc/mounts est vide pour une raison inattendue.
 list_mounts_under_investigation() {
     local mounts
-    mounts="$(awk '$2 ~ "^/investigation/" {print $2}' /proc/mounts 2>/dev/null)"
-    if [ -z "$mounts" ] && command -v lsblk >/dev/null 2>&1; then
-        mounts="$(lsblk -J -o MOUNTPOINTS 2>/dev/null \
-            | grep -oE '"/investigation/[^"]*"' | tr -d '"')"
+    mounts=$(vigil_mounts_in_zone /investigation) || return 1
+    if [ -n "${VIGIL_DEVICE_TARGET:-}" ]; then
+        printf '%s\n' "$mounts" | grep -Fx -- "$VIGIL_DEVICE_TARGET" || true
+    else
+        printf '%s\n' "$mounts"
     fi
-    printf '%s\n' "$mounts" \
-        | awk -v base="/investigation/" 'index($0, base) == 1' \
-        | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
 }
 
 # --- Pause finale : ne jamais fermer sans que l'utilisateur ait vu ---
@@ -192,7 +192,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     [ "$CLEANED" -gt 0 ] && log_action "cleanup" "" "/investigation" "success" "$CLEANED dossiers vides supprimés"
 
     # Rien n'est monté : le contexte actif est incohérent -> nettoyage.
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    if [ "${VIGIL_DEVICE_MANAGED:-}" != 1 ] && [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ]; then rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE"; fi 2>/dev/null || true
     log_action "clear_active" "" "/investigation" "success" "Contexte actif efface (rien monte)"
     final_pause
     exit 0
@@ -209,7 +209,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo -e "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}"
 
     # --- 2.1. Récupérer le périphérique associé ---
-    DEVICE=$(mount | grep " ${MOUNT_POINT} " | awk '{print $1}' | head -n 1 || true)
+    DEVICE=$(findmnt --noheadings --output SOURCE --mountpoint "$MOUNT_POINT" || true)
 
     if [ -z "$DEVICE" ]; then
         echo -e "${YELLOW}⚠️  Impossible de déterminer le périphérique monté sur $MOUNT_POINT.${NC}"
@@ -259,38 +259,18 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo -e "${YELLOW}Démontage de $MOUNT_POINT...${NC}"
     UMOUNT_OK=0
 
-    if sudo umount "$MOUNT_POINT" 2>/dev/null; then
+    if vigil_unmount_target /investigation "$MOUNT_POINT"; then
         UMOUNT_OK=1
     else
-        echo -e "${YELLOW}⚠️  Démontage normal échoué (périphérique occupé ?). Tentative de synchronisation...${NC}"
-        sync 2>/dev/null || true
-        # Retenter après sync
-        if sudo umount "$MOUNT_POINT" 2>/dev/null; then
-            UMOUNT_OK=1
-        else
-            echo -e "${YELLOW}⚠️  Toujours occupé. Démontage forcé (lazy umount)...${NC}"
-            if sudo umount -l "$MOUNT_POINT" 2>/dev/null; then
-                echo -e "${YELLOW}⚠️  Démontage lazy appliqué. Le périphérique sera libéré quand plus aucun fichier ne sera utilisé.${NC}"
-                log_action "umount_lazy" "$DEVICE" "$MOUNT_POINT" "warning" "Démontage forcé (lazy)"
-                UMOUNT_OK=1
-            else
-                echo -e "${RED}❌ Échec du démontage de $MOUNT_POINT.${NC}"
-                log_action "umount" "$DEVICE" "$MOUNT_POINT" "failed" "Échec du démontage"
-                ERRORS=$((ERRORS + 1))
-            fi
-        fi
+        log_action "umount" "$DEVICE" "$MOUNT_POINT" "failed" "Démontage refusé / Unmount refused"
+        ERRORS=$((ERRORS + 1))
     fi
 
     if [ "$UMOUNT_OK" -eq 1 ]; then
         echo -e "${GREEN}✅ Périphérique $DEVICE démonté avec succès.${NC}"
         log_action "umount" "$DEVICE" "$MOUNT_POINT" "success" "Périphérique démonté"
 
-        # --- 2.4. Remettre le block device en read-write s'il avait été forcé en RO ---
-        if [ -n "$DEVICE" ] && [ -b "$DEVICE" ]; then
-            sudo blockdev --setrw "$DEVICE" 2>/dev/null && \
-                echo -e "${GREEN}✅ Block device $DEVICE remis en lecture/écriture.${NC}" || true
-            log_action "set_rw" "$DEVICE" "" "success" "Block device remis en RW" 2>/dev/null || true
-        fi
+
     fi
 
     # --- 2.5. Nettoyage du répertoire vide (toujours, même si umount a échoué en lazy) ---
@@ -349,7 +329,7 @@ done < <(find /investigation -mindepth 1 -depth -type d -print0 2>/dev/null)
 # projet actifs pour éviter qu'une action suivante ne s'exécute par erreur
 # avec un contexte devenu incohérent.
 if [ ${#REMAINING_MOUNTS[@]} -eq 0 ]; then
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    if [ "${VIGIL_DEVICE_MANAGED:-}" != 1 ] && [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ]; then rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE"; fi 2>/dev/null || true
     log_action "clear_active" "" "/investigation" "success" "Contexte actif (utilisateur/projet) effacé après démontage"
 fi
 

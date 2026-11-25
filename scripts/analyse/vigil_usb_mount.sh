@@ -5,6 +5,8 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-triage.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
 
 print_banner() {
     vigil_logo
@@ -147,15 +149,7 @@ log_action() {
 # parents (sinon umount renvoie "target busy"). Fallback lsblk (qui lit
 # /sys) si /proc/mounts est vide pour une raison inattendue.
 list_mounts_under_investigation() {
-    local mounts
-    mounts="$(awk '$2 ~ "^/investigation/" {print $2}' /proc/mounts 2>/dev/null)"
-    if [ -z "$mounts" ] && command -v lsblk >/dev/null 2>&1; then
-        mounts="$(lsblk -J -o MOUNTPOINTS 2>/dev/null \
-            | grep -oE '"/investigation/[^"]*"' | tr -d '"')"
-    fi
-    printf '%s\n' "$mounts" \
-        | awk -v base="/investigation/" 'index($0, base) == 1' \
-        | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
+    vigil_mounts_in_zone /investigation
 }
 
 # Créer les dossiers de logs et d'investigation s'ils n'existent pas
@@ -166,8 +160,12 @@ mkdir -p "$PROJECT_LOG_DIR" 2>/dev/null || {
     final_pause
     exit 1
 }
-sudo mkdir -p /investigation 2>/dev/null || true
-sudo chmod 755 /investigation 2>/dev/null || true
+if [ ! -e /investigation ] && [ ! -L /investigation ]; then
+    sudo mkdir -m 0755 -- /investigation || fail "Impossible de créer /investigation."
+fi
+[ "$(realpath -e -- /investigation)" = /investigation ] &&
+    [ "$(stat -c '%u:%a' -- /investigation)" = 0:755 ] ||
+    fail "/investigation doit être un répertoire réel root:root 0755."
 
 # --- Vérifications des privilèges et dépendances ---
 if [ "$(id -u)" -ne 0 ] && ! sudo -n true 2>/dev/null; then
@@ -203,33 +201,9 @@ ACTIVE_USER="${VIGIL_ACTIVE_USER:-$ACTIVE_USER}"
 printf '%b%s%b\n' "$BLUE" "$(vigil_text "Projet :" "Project:") $ACTIVE_PROJECT | $(vigil_text "Entité :" "Entity:") $ACTIVE_ENTITY | $(vigil_text "Utilisateur :" "Operator:") $ACTIVE_USER" "$NC"
 echo ""
 
-# --- 0. Démontage automatique des périphériques existants dans /investigation ---
-echo -e "${YELLOW}$(vigil_text "Démontage automatique des périphériques existants dans /investigation..." "Automatically unmounting existing devices under /investigation...")${NC}"
-while IFS= read -r dir; do
-    [ -z "$dir" ] && continue
-    echo -e "${YELLOW}Démontage de $dir...${NC}"
-    sudo umount "$dir" 2>/dev/null && sudo rmdir "$dir" 2>/dev/null && {
-        echo -e "${GREEN}✅ $dir démonté et nettoyé.${NC}"
-        log_action "auto_umount" "" "$dir" "success" "Démontage automatique avant nouveau montage"
-    }
-done < <(list_mounts_under_investigation)
-
-# Vérifier qu'aucun périphérique n'est plus monté
-REMAINING_MOUNTS=0
-while IFS= read -r dir; do
-    [ -n "$dir" ] && {
-        REMAINING_MOUNTS=$((REMAINING_MOUNTS + 1))
-        echo -e "${YELLOW}⚠️  $dir est toujours monté.${NC}"
-    }
-done < <(list_mounts_under_investigation)
-
-if [ "$REMAINING_MOUNTS" -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  Certains périphériques sont encore montés. Nouvelle tentative (lazy umount)...${NC}"
-    while IFS= read -r dir; do
-        [ -n "$dir" ] && sudo umount -l "$dir" 2>/dev/null || true
-    done < <(list_mounts_under_investigation)
-    log_action "auto_umount_all" "" "/investigation" "warning" "Démontage lazy appliqué sur restes"
-fi
+# Never replace a mounted resource implicitly.
+existing_mounts=$(list_mounts_under_investigation) || fail "État de /investigation non vérifiable."
+[ -z "$existing_mounts" ] || fail "Démontez d’abord les supports déjà présents dans /investigation."
 
 # Nettoyage des dossiers vides résiduels
 while IFS= read -r -d '' dir; do
@@ -240,65 +214,6 @@ echo -e "${GREEN}✅ $(vigil_text "Nettoyage initial terminé." "Initial cleanup
 # --- Triage USB commun ---
 TRIAGE_DIR=$(mktemp -d -t "vigil_triage_XXXXXXXX") || exit 1
 trap 'rm -rf -- "$TRIAGE_DIR"' EXIT
-report_usb_triage() {
-    local new_file="$1" hid_file="$2" prot_file="$3" baseline_count="$4"
-    local after_count="$5" new_count="$6" protected="$7" blocked="$8" unblockable="$9"
-    local USBHID_JSON DATE_ANALYSIS PDF_SCRIPT PDF_OUT
-    local busdev port vid pid mfr prod ser first hidflag protflag blflag
-    # Rapport PDF de triage (toujours généré : trace de la procedure)
-    USBHID_JSON="$TRIAGE_DIR/usbhid.json"
-    DATE_ANALYSIS=$(date +"%d/%m/%Y à %H:%M:%S")
-    {
-        printf '{"date": "%s", "baseline_count": %s, "after_count": %s, "new_count": %s, "hid_count": %s, "protected_count": %s, "blocked_count": %s, "block_fail_count": %s, "blacklisted_count": %s, "devices": [' \
-            "$DATE_ANALYSIS" "$baseline_count" "$after_count" "$new_count" "$HID_ALERT_COUNT" "$protected" "$blocked" "$unblockable" "$BL_COUNT"
-        first=1
-        while IFS='|' read -r busdev port vid pid mfr prod ser; do
-            [ -z "$busdev" ] && continue
-            [ $first -eq 0 ] && printf ','
-            first=0
-            hidflag=false
-            protflag=false
-            blflag=false
-            grep -q "^${busdev}|" "$hid_file" 2>/dev/null && hidflag=true
-            grep -qxF "$busdev" "$prot_file" 2>/dev/null && protflag=true
-            grep -qxF "${vid}:${pid}" "$USB_BLACKLIST_FILE" 2>/dev/null && blflag=true
-            { [ -n "$ser" ] && grep -qxF "$ser" "$USB_BLACKLIST_FILE" 2>/dev/null; } && blflag=true
-            printf '{"bus_dev": "%s", "vid": "%s", "pid": "%s", "manufacturer": "%s", "product": "%s", "serial": "%s", "hid": %s, "protected": %s, "blacklisted": %s}' \
-                "$busdev" "$vid" "$pid" "$mfr" "$prod" "$ser" "$hidflag" "$protflag" "$blflag"
-        done < "$new_file"
-        printf ']}'
-    } > "$USBHID_JSON"
-    # Recherche de menaces uniquement : si VIGIL_MOUNT_TRIAGE_JSON_OUT est
-    # defini (chemin de collecte de vigil_malware_hunt.sh), le triage est
-    # consolide dans le rapport final UNIQUE (pas de PDF usbhid autonome) :
-    # le JSON est copie vers le chemin demande pour etre assemble plus tard.
-    if [ -n "${VIGIL_MOUNT_TRIAGE_JSON_OUT:-}" ]; then
-        if cp -f "$USBHID_JSON" "$VIGIL_MOUNT_TRIAGE_JSON_OUT" 2>/dev/null; then
-            echo -e "${GREEN}✅ Triage USB consolidé dans le rapport final (pas de PDF séparé).${NC}"
-            log_action "usb_triage_json" "" "$VIGIL_MOUNT_TRIAGE_JSON_OUT" "success" "Triage USB exporté vers le rapport consolidé"
-        else
-            echo -e "${YELLOW}⚠️  Échec de l'export du triage USB vers le rapport consolidé.${NC}"
-            log_action "usb_triage_json" "" "" "warning" "Échec de l'export du JSON de triage"
-        fi
-    fi
-    PDF_SCRIPT="$VIGIL_BASE/scripts/pdf/vigil_pdf.py"
-    if [ -z "${VIGIL_MOUNT_TRIAGE_JSON_OUT:-}" ] \
-       && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 2>&1; then
-        PDF_OUT=$(python3 "$PDF_SCRIPT" --kind usbhid --json "$USBHID_JSON" \
-            --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" \
-            --dir "$VIGIL_BASE/rapports" --config-dir "$VIGIL_DATA_DIR" 2>&1)
-        if [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-            echo -e "${GREEN}✅ Rapport de triage USB généré : $PDF_OUT${NC}"
-            log_action "usb_triage_pdf" "" "$PDF_OUT" "success" "Rapport de triage USB généré"
-            if [ "$ACTIVE_PROJECT" != "(no-project)" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
-                cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null || true
-            fi
-        else
-            echo -e "${YELLOW}⚠️  Échec de la génération du rapport de triage PDF.${NC}"
-            log_action "usb_triage_pdf" "" "" "warning" "Échec de la génération du PDF de triage"
-        fi
-    fi
-}
 
 finish_mount_triage() {
     local new_count=$TRIAGE_NEW_COUNT blocked=$TRIAGE_BLOCKED unblockable=$TRIAGE_UNBLOCKABLE
@@ -359,6 +274,13 @@ finish_mount_triage() {
 }
 
 END_AFTER_TRIAGE=0
+if [ -n "${VIGIL_DEVICE_SELECTION:-}" ]; then
+    HID_BLOCKED_PORTS=()
+    HID_LISTING=()
+    HID_ALERT_COUNT=0
+    HID_PROTECTED_COUNT=0
+    DEVICE_MODE=usb_storage
+else
 if ! run_usb_triage; then
     echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
     exit 0
@@ -434,44 +356,13 @@ else
     echo ""
 fi
 
+fi
+
 # --- 1.5. Autorisation des périphériques USB bloqués (authorized=0) ---
 # usbguard a été purgé du système mais les périphériques branchés pendant
 # qu'il tournait (ou juste branchés) restent bloqués au niveau noyau
 # (authorized=0), invisibles dans lsblk. Cette fonction autorise tous les
 # périphériques USB bloqués et attend que le noyau les enregistre.
-authorize_blocked_usb() {
-    if [ ! -d /sys/bus/usb/devices ]; then
-        return 0
-    fi
-    local found=0
-    local authfile devpath state prod mfr
-    for authfile in /sys/bus/usb/devices/*/authorized; do
-        [ -f "$authfile" ] || continue
-        state=$(cat "$authfile" 2>/dev/null || echo "")
-        if [ "$state" = "0" ]; then
-            devpath="${authfile%/authorized}"
-            triage_port_blocked "${devpath##*/}" && continue
-            usb_is_listed "$devpath" "$USB_BLACKLIST_FILE" && continue
-            if [ "$found" -eq 0 ]; then
-                echo -e "${YELLOW}Réparation des périphériques USB bloqués (authorized=0)...${NC}"
-            fi
-            found=1
-            prod=$(cat "$devpath/product" 2>/dev/null || echo "?")
-            mfr=$(cat "$devpath/manufacturer" 2>/dev/null || echo "?")
-            if echo 1 | sudo tee "$authfile" >/dev/null 2>&1; then
-                echo -e "  ${GREEN}✅ Autorisé :${NC} ${GREY}${mfr} / ${prod}${NC}"
-            else
-                echo -e "  ${RED}❌ Échec d'autorisation :${NC} ${GREY}${mfr} / ${prod}${NC}"
-            fi
-        fi
-    done
-    if [ "$found" -eq 1 ]; then
-        echo -e "${YELLOW}    Attente de la reconnaissance par le noyau...${NC}"
-        udevadm settle --timeout=10 2>/dev/null || sleep 2
-        sleep 1
-    fi
-    return $found
-}
 
 # --- 2. Détection des périphériques selon le mode sélectionné ---
 
@@ -530,78 +421,6 @@ fi
 # n'est trouvé on autorise les périphériques USB bloqués (authorized=0) puis
 # on réessaie, jusqu'à 3 passes. On détecte les partitions ET les disques USB
 # sans partition (filesystem direct sur le disque, ex. /dev/sdb sans table).
-detect_usb_devices() {
-    declare -gA USB_DEVICES=() PARENT_MODEL=() PARENT_SIZE=() DEVICE_ACCESS=()
-    declare -gA DISK_PARTS=() DISK_PARTCOUNT=()
-    local -a raw_disks=()
-    DEVICE_NUM=0
-    MOUNTED_NUM=0
-    MOUNTED_USB=()
-
-    local record kind name size model fs label parttype parent inventory i disk e
-    inventory=$(/usr/bin/python3 -I "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil_block_inventory.py") || return 1
-    while IFS= read -r record; do
-        IFS='|' read -r kind name size model fs label parttype parent <<< "$record"
-        case "$kind" in
-            parent)
-                PARENT_SIZE["$name"]="$size"
-                PARENT_MODEL["$name"]="$model"
-                DEVICE_ACCESS["$name"]="$fs"
-                ;;
-            access) DEVICE_ACCESS["$name"]="$size" ;;
-            mounted)
-                MOUNTED_USB[$MOUNTED_NUM]="${record#*|}"
-                MOUNTED_NUM=$((MOUNTED_NUM + 1))
-                ;;
-            part)
-                triage_disk_blocked "$parent" && continue
-                USB_DEVICES[$DEVICE_NUM]="$record"
-                DEVICE_NUM=$((DEVICE_NUM + 1))
-                DISK_PARTS["$parent"]="${DISK_PARTS["$parent"]:-}$name "
-                DISK_PARTCOUNT["$parent"]=$((${DISK_PARTCOUNT["$parent"]:-0} + 1))
-                ;;
-            rawdisk)
-                triage_disk_blocked "$name" || raw_disks+=("$record")
-                ;;
-        esac
-    done <<< "$inventory"
-
-    # 2bis. Insertion d'une entrée « Monter tout le disque » pour chaque disque
-    # USB possédant au moins 2 partitions montables. L'entrée est préfixée
-    # « whole » et porte le nom du disque parent ; le montage itérera sur ses
-    # partitions (DISK_PARTS). On insère ces entrées EN TÊTE de la liste afin
-    # qu'elles apparaissent avant les partitions individuelles à l'affichage.
-    if [ "${#DISK_PARTS[@]}" -gt 0 ]; then
-        local _new_list=()
-        for i in "${!USB_DEVICES[@]}"; do _new_list+=("${USB_DEVICES[$i]}"); done
-        local _inserted=()
-        for disk in "${!DISK_PARTS[@]}"; do
-            local cnt=${DISK_PARTCOUNT["$disk"]:-0}
-            if [ "$cnt" -ge 2 ]; then
-                local dsize=${PARENT_SIZE["$disk"]:-?}
-                local dmodel=${PARENT_MODEL["$disk"]:-?}
-                _inserted+=("whole|$disk|$dsize|$dmodel|$cnt|")
-            fi
-        done
-        # Reconstruire USB_DEVICES : entrées whole d'abord, puis partitions
-        USB_DEVICES=()
-        DEVICE_NUM=0
-        for e in "${_inserted[@]}"; do
-            USB_DEVICES[$DEVICE_NUM]="$e"
-            DEVICE_NUM=$((DEVICE_NUM + 1))
-        done
-        for e in "${_new_list[@]}"; do
-            USB_DEVICES[$DEVICE_NUM]="$e"
-            DEVICE_NUM=$((DEVICE_NUM + 1))
-        done
-    fi
-
-    for record in "${raw_disks[@]}"; do
-        USB_DEVICES[$DEVICE_NUM]="$record"
-        DEVICE_NUM=$((DEVICE_NUM + 1))
-    done
-}
-
 if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
     echo -e "${YELLOW}Recherche des périphériques USB/Disques...${NC}"
 
@@ -615,6 +434,7 @@ if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
         if [ "$DEVICE_NUM" -gt 0 ]; then
             break
         fi
+        [ -z "${VIGIL_DEVICE_SELECTION:-}" ] || break
         if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
             echo -e "${GREY}    (tentative $ATTEMPT/$MAX_ATTEMPTS : aucun périphérique, vérification des USB bloqués...)${NC}"
             authorize_blocked_usb
@@ -626,7 +446,7 @@ if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
         # Cas fréquent : un périphérique USB est déjà monté ailleurs
         # (ex. dans /stockage via le montage de stockage). On le signale et
         # on propose de le démonter pour pouvoir l'analyser en lecture seule.
-        if [ "$MOUNTED_NUM" -gt 0 ] && [ "${VIGIL_CASE_CENSUS:-0}" != "1" ]; then
+        if [ "$MOUNTED_NUM" -gt 0 ] && [ "${VIGIL_CASE_CENSUS:-0}" != "1" ] && [ -z "${VIGIL_DEVICE_SELECTION:-}" ]; then
             echo ""
             echo -e "${YELLOW}⚠️  ${MOUNTED_NUM} périphérique(s) USB déjà monté(s) :${NC}"
             for i in "${!MOUNTED_USB[@]}"; do
@@ -708,6 +528,7 @@ fi
         local dev="$1" mnt="$2"
         local fstype mount_opts ro_check
 
+        [ ! -e "$mnt" ] && [ ! -L "$mnt" ] || return 1
         sudo mkdir -p "$mnt" 2>/dev/null || {
             echo -e "${RED}❌ Impossible de créer le point de montage $mnt.${NC}"
             log_action "mkdir_mountpoint" "$dev" "$mnt" "failed" "Échec de la création du répertoire"
@@ -734,16 +555,9 @@ fi
         esac
 
         local mount_rc=0
-        if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ]; then
-            sudo mount $mount_opts "$dev" "$mnt" || mount_rc=$?
-        else
-            sudo mount $mount_opts "$dev" "$mnt" 2>/dev/null || mount_rc=$?
-        fi
+        vigil_mount_volume /investigation "$dev" "$mnt" $mount_opts || mount_rc=$?
         if [ "$mount_rc" -ne 0 ]; then
             echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
-            if [ "${VIGIL_CASE_CENSUS:-0}" != "1" ]; then
-                sudo mount $mount_opts "$dev" "$mnt" 2>&1 || true
-            fi
             log_action "mount" "$dev" "$mnt" "failed" "Échec du montage"
             sudo rmdir "$mnt" 2>/dev/null || true
             return 1
@@ -816,6 +630,9 @@ fi
     if [ "$DEVICE_NUM" -gt 0 ]; then
     # --- Affichage des peripheriques (regroupe par disque, reutilise par 'r') ---
         # Le montage utilise le même menu et sait relancer sa détection.
+        if [ -n "${VIGIL_DEVICE_SELECTION:-}" ]; then
+            select_device_path "$VIGIL_DEVICE_SELECTION" || fail "Périphérique sélectionné indisponible."
+        else
         while true; do
             echo -e "${GREEN}✅ $DEVICE_NUM périphérique(s) détecté(s) :${NC}"
             display_usb_devices
@@ -835,11 +652,15 @@ fi
                     ;;
             esac
         done
+        fi
         IFS='|' read -r SELECTED_KIND SELECTED_DEVICE SELECTED_SIZE SELECTED_MODEL SELECTED_FSTYPE SELECTED_LABEL SELECTED_PARTTYPE SELECTED_PKNAME <<< "${USB_DEVICES[$SELECTED_INDEX]}"
 
         if triage_disk_blocked "${SELECTED_PKNAME:-$SELECTED_DEVICE}"; then
             fail "Montage refusé : périphérique exclu du triage."
         fi
+
+        VIGIL_DEVICE_IDENTITY=$(vigil_device_check capture /investigation "/dev/$SELECTED_DEVICE") || exit 1
+        export VIGIL_DEVICE_IDENTITY
 
         # --- 5/6. Montage selon le kind d'entrée sélectionnée ---
         echo -e "\n${YELLOW}Montage en lecture seule...${NC}"

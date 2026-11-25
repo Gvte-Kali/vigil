@@ -18,8 +18,13 @@ from pathlib import Path
 
 # The launcher uses isolated Python. Load the companion module from this script's directory.
 SCRIPT_DIR = Path(__file__).resolve().parent
-sys.path[:0] = [str(SCRIPT_DIR), str(SCRIPT_DIR.parent / "lib")]
-from vigil_block_inventory import block_access, command, devices, external_storage, fields, filesystem
+sys.path[:0] = [str(SCRIPT_DIR), str(SCRIPT_DIR.parents[1])]
+from vigil.block_inventory import (
+    block_context,
+    block_access, check_disk, command, devices, disk_sequence, external_storage,
+    fields, filesystem, idle, inspect_usb, usb_identity,
+)
+from vigil.device_manager import device_lease
 from vigil_progress import Progress, sync_notice, duration, human_size, indeterminate, tr
 
 BLOCK_RO_SET = 0x125D
@@ -27,29 +32,6 @@ BLOCK_RO_GET = 0x125E
 CHUNK_SIZE = 4 * 1024 * 1024
 FILESYSTEMS = {"ext4", "exfat", "vfat", "ntfs"}
 TRIAGE = SCRIPT_DIR / "vigil_acquire_triage.sh"
-
-
-def disk_sequence(row):
-    return (Path("/sys/dev/block") / row["maj:min"] / "diskseq").read_text().strip()
-
-
-def idle(node):
-    holders = Path("/sys/dev/block") / node["maj:min"] / "holders"
-    return (not any(node.get("mountpoints") or ()) and not any(holders.iterdir())
-            and all(idle(child) for child in node.get("children", ())))
-
-
-def check_disk(row, sequence):
-    current, = devices("--", row["name"])
-    if (current["type"] != "disk" or current["maj:min"] != row["maj:min"]
-            or current["size"] != row["size"] or disk_sequence(current) != sequence):
-        raise ValueError(f"Identité du disque modifiée : {row['name']}")
-    if "usb_identity" in row:
-        identity = usb_identity(current)
-        if identity != row["usb_identity"]:
-            raise ValueError(f"Identité USB modifiée : {row['name']}")
-    if not idle(current):
-        raise ValueError(f"Disque ou partition en cours d’utilisation : {row['name']}")
 
 
 def menu_text(value):
@@ -125,6 +107,9 @@ def block_device(row, sequence, *, source):
     with os.fdopen(fd, "rb" if source else "r+b", buffering=0) as stream:
         validate_fd(fd, row)
         check_disk(row, sequence)
+        context = block_context(row["name"], row["maj:min"], role="source" if source else "destination")
+        if context["disk_sequence"] != sequence or context["capacity"] != row["size"]:
+            raise ValueError(f"Contexte du disque modifié / Disk context changed: {row['name']}")
         original = block_mode(fd)
         changed = source and original == 0
         if changed:
@@ -294,26 +279,6 @@ def create_image(source, size, directory, filename, owner=None, timings=None):
         raise
     finally:
         os.close(folder)
-
-
-def usb_identity(row):
-    """Reject missing, unauthorized or composite HID USB mass-storage devices."""
-    location = (Path("/sys/dev/block") / row["maj:min"]).resolve(strict=True)
-    for parent in location.parents:
-        if (parent / "idVendor").is_file() and (parent / "idProduct").is_file():
-            return inspect_usb(parent)
-    raise ValueError(f"Parent USB introuvable : {row['name']}")
-
-
-def inspect_usb(device):
-    identity = (device.name, (device / "busnum").read_text().strip(),
-                (device / "devnum").read_text().strip())
-    interfaces = list(device.glob(f"{device.name}:*/bInterfaceClass"))
-    if (device / "authorized").read_text().strip() != "1" or not interfaces:
-        raise ValueError(f"Interfaces USB non vérifiables sur le port {device.name}.")
-    if any(interface.read_text().strip().lower() == "03" for interface in interfaces):
-        raise ValueError(f"Interface USB HID détectée sur le port {device.name}. Débranchez ce support.")
-    return identity
 
 
 def triage_usb(role, directory, data_directory, *, allow_internal=False):
@@ -515,8 +480,9 @@ def main():
                     str(terminal_library), str(logo)), check=False)
     section(tr("Vigil - Clonage bit à bit", "Vigil - Bit-for-bit cloning") if args.operation == "clone" else tr("Vigil - Acquisition d’une image RAW", "Vigil - RAW image acquisition"))
     try:
-        run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external,
-            data_directory=args.data_directory)
+        with device_lease():
+            run(args.operation, args.local_default, local_directory=args.local_directory, external=args.external,
+                data_directory=args.data_directory)
         return 0
     except (OSError, ValueError, KeyError, subprocess.SubprocessError, KeyboardInterrupt, EOFError) as error:
         diagnostic = getattr(error, "stderr", None) or str(error)

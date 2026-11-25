@@ -13,6 +13,8 @@ BLUE='\e[96m'
 NC='\e[0m'
 
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
 
 print_banner() {
     vigil_logo
@@ -101,14 +103,12 @@ log_action() {
 # Tri du plus profond au moins profond (demontage enfants avant parents).
 list_mounts_under_stockage() {
     local mounts
-    mounts="$(awk '$2 == "/stockage" || $2 ~ "^/stockage/" {print $2}' /proc/mounts 2>/dev/null)"
-    if [ -z "$mounts" ] && command -v lsblk >/dev/null 2>&1; then
-        mounts="$(lsblk -J -o MOUNTPOINTS 2>/dev/null \
-            | grep -oE '"/stockage/[^"]*"' | tr -d '"')"
+    mounts=$(vigil_mounts_in_zone /stockage) || return 1
+    if [ -n "${VIGIL_DEVICE_TARGET:-}" ]; then
+        printf '%s\n' "$mounts" | grep -Fx -- "$VIGIL_DEVICE_TARGET" || true
+    else
+        printf '%s\n' "$mounts"
     fi
-    printf '%s\n' "$mounts" \
-        | awk -v base="/stockage/" '$0 == "/stockage" || index($0, base) == 1' \
-        | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
 }
 
 
@@ -180,7 +180,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo ""
     echo -e "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}"
 
-    DEVICE=$(mount | grep " ${MOUNT_POINT} " | awk '{print $1}' | head -n 1 || true)
+    DEVICE=$(findmnt --noheadings --output SOURCE --mountpoint "$MOUNT_POINT" || true)
 
     if [ -z "$DEVICE" ]; then
         echo -e "${YELLOW}\u26a0\ufe0f  Impossible de determiner le peripherique monte sur $MOUNT_POINT.${NC}"
@@ -190,46 +190,18 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo -e "${YELLOW}Demontage de $MOUNT_POINT...${NC}"
     UMOUNT_OK=0
 
-    if sudo umount "$MOUNT_POINT" 2>/dev/null; then
+    if vigil_unmount_target /stockage "$MOUNT_POINT"; then
         UMOUNT_OK=1
     else
-        echo -e "${YELLOW}\u26a0\ufe0f  Demontage normal echoue (peripherique occupe ?). Synchronisation...${NC}"
-        sync 2>/dev/null || true
-        if sudo umount "$MOUNT_POINT" 2>/dev/null; then
-            UMOUNT_OK=1
-        elif [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
-            echo "Le stockage est occupé. Fermez les fichiers ouverts puis réessayez : $MOUNT_POINT"
-            ERRORS=$((ERRORS + 1))
-        else
-            echo -e "${YELLOW}\u26a0\ufe0f  Toujours occupe. Demontage force (lazy umount)...${NC}"
-            if sudo umount -l "$MOUNT_POINT" 2>/dev/null; then
-                echo -e "${YELLOW}\u26a0\ufe0f  Demontage lazy applique.${NC}"
-                log_action "umount_lazy_stockage" "$DEVICE" "$MOUNT_POINT" "warning" "Demontage force (lazy)"
-                UMOUNT_OK=1
-            else
-                echo -e "${RED}\u274c Echec du demontage de $MOUNT_POINT.${NC}"
-                log_action "umount_stockage" "$DEVICE" "$MOUNT_POINT" "failed" "Echec du demontage"
-                ERRORS=$((ERRORS + 1))
-            fi
-        fi
+        log_action "umount" "$DEVICE" "$MOUNT_POINT" "failed" "Démontage refusé / Unmount refused"
+        ERRORS=$((ERRORS + 1))
     fi
 
     if [ "$UMOUNT_OK" -eq 1 ]; then
         echo -e "${GREEN}\u2705 Peripherique $DEVICE demonte avec succes.${NC}"
         log_action "umount_stockage" "$DEVICE" "$MOUNT_POINT" "success" "Peripherique demonte"
 
-        # Rebloquer le peripherique en lecture seule au niveau block device
-        # apres usage en stockage, par securite (empeche une reecriture
-        # accidentelle avant debranchement ou avant un montage forensique).
-        if [ -n "$DEVICE" ] && [ -b "$DEVICE" ] && command -v blockdev >/dev/null 2>&1; then
-            if sudo blockdev --setro "$DEVICE" 2>/dev/null; then
-                echo -e "${GREEN}\u2705 Block device $DEVICE rebloque en lecture seule (securite).${NC}"
-                log_action "set_ro_stockage" "$DEVICE" "" "success" "Block device rebloque en RO apres demontage"
-            else
-                echo -e "${YELLOW}\u26a0\ufe0f  blockdev --setro a echoue sur $DEVICE.${NC}"
-                log_action "set_ro_stockage" "$DEVICE" "" "warning" "blockdev --setro a echoue apres demontage"
-            fi
-        fi
+
     fi
 
     sleep 1

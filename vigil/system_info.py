@@ -12,27 +12,37 @@ def decode_mount(value):
     return ESCAPE.sub(lambda match: chr(int(match[1], 8)), value)
 
 
+def mount_records(lines):
+    for line in lines:
+        left, separator, right = line.partition(" - ")
+        fields, filesystem = left.split(), right.split()
+        if not separator or len(fields) < 6 or len(filesystem) < 3:
+            raise ValueError("inconsistent mountinfo / état des montages incohérent")
+        target = decode_mount(fields[4])
+        zone = next((zone for zone in ZONES if target == zone or target.startswith(zone + "/")), None)
+        if zone is not None:
+            yield {
+                "zone": zone, "mount_id": int(fields[0]), "major_minor": fields[2],
+                "mountpoint": target, "path": decode_mount(filesystem[1]),
+                "filesystem": filesystem[0], "mode": fields[5].split(","),
+            }
+
+
+def mounted_resources():
+    with Path("/proc/self/mountinfo").open(encoding="utf-8", errors="surrogateescape") as stream:
+        return list(mount_records(stream))
+
+
 def zone_mounts(lines):
     zones = {path: [] for path in ZONES}
-    for line in lines:
-        before, separator, after = line.partition(" - ")
-        fields = before.split()
-        filesystem = after.split()
-        if not separator or len(fields) < 6 or len(filesystem) < 3:
-            continue
-        target = decode_mount(fields[4])
-        for zone, entries in zones.items():
-            if target == zone or target.startswith(zone + "/"):
-                entries.append((
-                    target, decode_mount(filesystem[1]), filesystem[0],
-                    "ro" if "ro" in fields[5].split(",") else "rw"
-                    if "rw" in fields[5].split(",") else "",
-                ))
+    for row in mount_records(lines):
+        mode = "ro" if "ro" in row["mode"] else "rw" if "rw" in row["mode"] else ""
+        zones[row["zone"]].append((row["mountpoint"], row["path"], row["filesystem"], mode))
     return zones
 
 
 def read_zones():
-    with Path("/proc/self/mountinfo").open(encoding="utf-8", errors="replace") as stream:
+    with Path("/proc/self/mountinfo").open(encoding="utf-8", errors="surrogateescape") as stream:
         return zone_mounts(stream)
 
 

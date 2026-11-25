@@ -25,6 +25,9 @@ class CensusMountGuardTest(unittest.TestCase):
             partition.mkdir(parents=True)
             (partition / "partition").touch()
             (partition / "ro").write_text("1\n")
+            (partition / "dev").write_text("8:1\n")
+            (partition / "size").write_text("1024\n")
+            (partition.parent / "diskseq").write_text("5\n")
             parent_mode = partition.parent / "ro"
             parent_mode.write_text("0\n")
             (root / "8:1").symlink_to(partition)
@@ -36,9 +39,9 @@ class CensusMountGuardTest(unittest.TestCase):
                 return device if str(path) == "/dev/sda1" else original(path, *args, **kwargs)
 
             with patch.object(Path, "stat", stat_fixture):
-                with self.assertRaisesRegex(ValueError, "/dev/sda lacks block read-only"):
+                with self.assertRaisesRegex(ValueError, "Unexpected block protection"):
                     guard.validate_mounts([record], root)
                 parent_mode.write_text("1\n")
                 self.assertEqual(guard.validate_mounts([record], root), ["/investigation/device"])
-                with self.assertRaisesRegex(ValueError, "does not match"):
+                with self.assertRaisesRegex(ValueError, "block device identity changed"):
                     guard.validate_mounts([("8:2", *record[1:])], root)

@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 from uuid import uuid4
 
+from .device_manager import DeviceBusy, device_lease
 from .entity import atomic_write
 from .storage import utc_now
 from .system_info import read_zones
@@ -87,7 +88,11 @@ def capture_startup_state(state):
 
 def check_shutdown_state():
     """Block shutdown while either Vigil zone contains a mount."""
-    mounted = [row for entries in read_zones().values() for row in entries]
+    try:
+        with device_lease():
+            mounted = [row for entries in read_zones().values() for row in entries]
+    except DeviceBusy as error:
+        raise ShutdownBlocked(str(error)) from error
     if mounted:
         raise ShutdownBlocked("\n".join(
             f"{target} · {source} · {filesystem} · {mode}"

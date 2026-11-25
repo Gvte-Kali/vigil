@@ -1901,7 +1901,7 @@ class Workspace(QMainWindow):
                             "Mount the investigation volumes read-only.")
                 return
             self.launch_external(analysis_command(self.database_path, self.active_case_id, operator, module_id),
-                                 module_id, case_id=self.active_case_id)
+                                 module_id, case_id=self.active_case_id, device_mode="analysis")
         except (OSError, sqlite3.Error, ValueError) as error:
             self.fail(error)
 
@@ -2124,7 +2124,7 @@ class Workspace(QMainWindow):
             case = self.active_case_item()
             self.launch_external(legacy_mount_command(
                 operation, self.database_path, case_id, case.text(), operator,
-            ), operation, case_id=case_id)
+            ), operation, case_id=case_id, device_mode="operation")
         except (OSError, ValueError) as error:
             self.fail(error)
             return
@@ -2147,7 +2147,9 @@ class Workspace(QMainWindow):
             self.settings.setValue("external_terminal", choices[labels.index(name)])
             self.settings.sync()
 
-    def launch_external(self, arguments, operation, *, case_id=None):
+    def launch_external(self, arguments, operation, *, case_id=None, device_mode=None):
+        if device_mode is not None:
+            arguments = [sys.executable, "-m", "vigil.device_manager", device_mode, *arguments]
         context = {"operation": operation, "operator": self.operator.currentText(),
                    "case_id": case_id, "language": self.language}
         run = launch_tracked(arguments, self.database_path.parent / "terminal-runs", context,
@@ -2226,7 +2228,7 @@ class Workspace(QMainWindow):
             self.refresh_cases()
             self.launch_external(legacy_mount_command(
                 "scan", self.database_path, case_id, "Scan antivirus", operator, run_id=run_id,
-            ), "antivirus", case_id=case_id)
+            ), "antivirus", case_id=case_id, device_mode="operation")
         except (OSError, ValueError, sqlite3.Error) as error:
             self.fail(error)
 
@@ -2280,7 +2282,7 @@ class Workspace(QMainWindow):
         case_id = self.active_case_id
         try:
             arguments = storage_command(operation, self.database_path, case_id, case.text() if case else "", operator)
-            self.launch_external(arguments, f"storage-{operation}", case_id=case_id or None)
+            self.launch_external(arguments, f"storage-{operation}", case_id=case_id or None, device_mode="operation")
         except (OSError, ValueError) as error:
             if operation == "mount":
                 self.notify("Impossible d’ouvrir le montage du stockage.", "Could not open storage mounting.", str(error))

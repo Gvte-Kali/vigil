@@ -1,50 +1,42 @@
 #!/usr/bin/env python3
-"""List validated Linux block mounts for an automatic case census."""
+"""List mounts whose identity and RO protections were verified by Vigil Core."""
+import json
 import os
-import re
-import stat
 import sys
 from pathlib import Path
 
-TARGET = "/investigation"
-ESCAPED = re.compile(r"\\([0-7]{3})")
-
-
-def decode(value):
-    return ESCAPED.sub(lambda match: chr(int(match[1], 8)), value)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from vigil.device_manager import verify_resource
+from vigil.system_info import decode_mount as decode
+from vigil.system_info import mount_records as core_mount_records
 
 
 def mount_records(lines):
-    for line in lines:
-        left, _, right = line.partition(" - ")
-        fields, filesystem = left.split(), right.split()
-        if len(fields) < 6 or len(filesystem) < 3:
-            raise ValueError("unexpected mountinfo record")
-        target = decode(fields[4])
-        if target == TARGET or target.startswith(TARGET + "/"):
-            yield fields[2], target, fields[5].split(","), decode(filesystem[1])
+    for row in core_mount_records(lines):
+        if row["zone"] == "/investigation":
+            yield row["major_minor"], row["mountpoint"], row["mode"], row["path"]
 
 
-def validate_mounts(records, block_path=Path("/sys/dev/block")):
+def validate_mounts(records, block_path=Path("/sys/dev/block"), *, expected=None):
     targets = []
+    if expected is not None:
+        expected = {row["mountpoint"]: row for row in expected}
     for identity, target, options, source in records:
-        if target in targets or "ro" not in options or "rw" in options:
-            raise ValueError(f"{target}: ambiguous mount or mount not read-only")
-        info = Path(source).stat()
-        if not stat.S_ISBLK(info.st_mode):
-            raise ValueError(f"{target}: source is not a block device")
-        if identity != f"{os.major(info.st_rdev)}:{os.minor(info.st_rdev)}":
-            raise ValueError(f"{target}: source does not match the mounted device")
-        node = (block_path / identity).resolve(strict=True)
-        devices = [node]
-        if (node / "partition").is_file():
-            devices.append(node.parent)
-        for device in devices:
-            if (device / "ro").read_text(encoding="ascii").strip() != "1":
-                raise ValueError(f"{target}: /dev/{device.name} lacks block read-only protection")
+        if target in targets:
+            raise ValueError(f"{target}: ambiguous mount / montage ambigu")
+        verified = verify_resource({
+            "zone": "/investigation", "major_minor": identity, "mountpoint": target,
+            "mode": options, "path": source,
+        }, block_path=block_path)
+        if not verified["verified"]:
+            raise ValueError(f"{target}: {verified['error']}")
+        if expected is not None:
+            previous = expected.get(target, {})
+            if any(previous.get(key) != verified[key] for key in ("major_minor", "disk_sequence", "path")):
+                raise ValueError(f"{target}: device context changed / contexte périphérique modifié")
         targets.append(target)
-    if not targets:
-        raise ValueError("no mount under /investigation")
+    if not targets or expected is not None and set(targets) != set(expected):
+        raise ValueError("Investigation mounts changed or missing / montages d’investigation modifiés ou absents")
     return targets
 
 
@@ -56,7 +48,8 @@ def main():
             if records:
                 raise ValueError("/investigation already contains a mount; unmount before starting")
         else:
-            for target in validate_mounts(records):
+            context = os.environ.get("VIGIL_DEVICE_CONTEXT")
+            for target in validate_mounts(records, expected=json.loads(context) if context else None):
                 sys.stdout.buffer.write(os.fsencode(target) + b"\0")
     except (OSError, ValueError) as error:
         print(f"Recensement automatique / Automatic census: {error}", file=sys.stderr)
