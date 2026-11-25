@@ -128,7 +128,7 @@ print('Copied', flush=True)
                 for width, height, columns in ((120, 32, 3), (80, 24, 2), (46, 20, 1), (120, 32, 3)):
                     await pilot.resize_terminal(width, height)
                     await pilot.pause()
-                    self.assertEqual(workspace.query_one("#header").region.height, 2)
+                    self.assertEqual(workspace.query_one("#header").region.height, 4)
                     self.assertEqual(len({card.region.x for card in cards}), columns)
                     self.assertTrue(all(0 < card.region.width <= 30 for card in cards))
                 cards[0].focus()
@@ -138,23 +138,18 @@ print('Copied', flush=True)
                 with patch.dict("os.environ", {"VIGIL_ASCII": "1"}):
                     self.assertTrue(icon("scan").isascii())
 
-    async def test_recovery_rechecks_pending_reports_instead_of_startup_snapshot(self):
+    async def test_supervised_start_requests_protection_without_opening_old_reports(self):
         from unittest.mock import AsyncMock, patch
-        from vigil.tui_screens import Form
 
         with tempfile.TemporaryDirectory() as tmp:
             workspace = Workspace(Path(tmp) / "cases.sqlite", language="en", operator="Alice")
             async with workspace.run_test(size=(90, 30)) as pilot:
                 with patch.dict("os.environ", {"VIGIL_SESSION_GUARD": "12345", "VIGIL_SESSION_PENDING": '["old"]'}), \
                         patch("vigil.tui.Path.is_file", return_value=True), \
-                        patch.object(workspace, "pending_protection_reports", AsyncMock(side_effect=[["old"], []])):
-                    await workspace.request_protection()
-                    self.assertIsInstance(workspace.screen, Form)
-                    self.assertEqual(workspace.screen.title_text, "Review a previous session")
-                    await pilot.press("escape")
-                    await workspace.request_protection()
-                    self.assertEqual(workspace.screen.title_text, "Enable USB protection")
-                    await pilot.press("escape")
+                        patch.object(workspace, "launch_workflow", AsyncMock()) as launch:
+                    await workspace.offer_protection()
+                    launch.assert_awaited_once_with("protect", {}, None, "Alice")
+                await pilot.pause()
 
     async def test_operation_progress_is_separated_by_stage(self):
         import sys

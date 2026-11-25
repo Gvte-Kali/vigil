@@ -83,7 +83,7 @@ def device_manager_guard():
         if os.fstat(fd).st_uid != Path("/").stat().st_uid:
             raise ValueError("untrusted device lock")
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        yield
+        yield fd
     finally:
         os.close(fd)
 
@@ -145,46 +145,57 @@ def activate(pid):
         raise ValueError("Vigil hotplug requires Linux pidfd support")
     watcher = os.pidfd_open(int(pid))
     try:
-        with state_lock():
-            if process_identity(pid) != identity:
-                raise ValueError("session process changed")
-            path = SESSIONS / pid
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
-            with os.fdopen(fd, "w") as token:
-                token.write(identity + "\n")
-                os.fchmod(token.fileno(), 0o644)
-            try:
-                write_report(pid, identity, {"status": "pending"})
-                child = os.fork()
-            except (OSError, ValueError) as error:
-                path.unlink(missing_ok=True)
-                try:
-                    write_report(pid, identity, {"status": "error", "detail": str(error)})
-                except (OSError, ValueError):
-                    pass
-                raise
-        if child:
-            return
+        # Reconcile the root-owned ledger before admitting a new session.
+        # Keep the device lease through the transition to the active token.
+        with device_manager_guard() as lease:
+            recovery = cleanup_devices()
+            failures = [row for row in recovery["devices"] if row["state"] not in {"restored", "absent"}]
+            if failures:
+                raise ValueError("; ".join(f"{row['device']}: {row.get('detail', row['state'])}" for row in failures))
+            start_watcher(pid, identity, watcher, recovery, lease)
+    finally:
+        os.close(watcher)
+
+
+def start_watcher(pid, identity, watcher, recovery, lease):
+    with state_lock():
+        if process_identity(pid) != identity:
+            raise ValueError("session process changed")
+        path = SESSIONS / pid
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+        with os.fdopen(fd, "w") as token:
+            token.write(identity + "\n")
+            os.fchmod(token.fileno(), 0o644)
         try:
-            os.setsid()
-            with open("/dev/null", "r+b", buffering=0) as null:
-                for descriptor in (0, 1, 2):
-                    os.dup2(null.fileno(), descriptor)
-            poller = select.poll()
-            poller.register(watcher, select.POLLIN)
-            poller.poll()
-            write_report(pid, identity, cleanup())
-        except Exception as error:
-            syslog.syslog(syslog.LOG_ERR, f"vigil-hotplug: session cleanup: {error}")
+            write_report(pid, identity, {"status": "pending", "startup_recovery": recovery["status"]})
+            child = os.fork()
+        except (OSError, ValueError) as error:
+            path.unlink(missing_ok=True)
             try:
                 write_report(pid, identity, {"status": "error", "detail": str(error)})
             except (OSError, ValueError):
                 pass
-        finally:
-            os._exit(0)
+            raise
+    if child:
+        return
+    try:
+        os.close(lease)
+        os.setsid()
+        with open("/dev/null", "r+b", buffering=0) as null:
+            for descriptor in (0, 1, 2):
+                os.dup2(null.fileno(), descriptor)
+        poller = select.poll()
+        poller.register(watcher, select.POLLIN)
+        poller.poll()
+        write_report(pid, identity, cleanup())
+    except Exception as error:
+        syslog.syslog(syslog.LOG_ERR, f"vigil-hotplug: session cleanup: {error}")
+        try:
+            write_report(pid, identity, {"status": "error", "detail": str(error)})
+        except (OSError, ValueError):
+            pass
     finally:
-        os.close(watcher)
-
+        os._exit(0)
 
 def active():
     if not SESSIONS.is_dir():
@@ -288,13 +299,15 @@ def restore_device(record):
         # Devices already RO before Vigil are never forced RW.
         if record["mode"] == 0 and mode(fd) != 0:
             fcntl.ioctl(fd, BLOCK_RO_SET, struct.pack("i", 0))
-        if mode(fd) != record["mode"]:
+        current = mode(fd)
+        inherited = record["partition"] and record["mode"] == 1 and current == 0
+        if current != record["mode"] and not inherited:
             raise ValueError("kernel did not confirm the original block mode")
     finally:
         os.close(fd)
     subprocess.run(["/usr/bin/udevadm", "trigger", "--action=change", record["node"]],
                    check=True, timeout=5)
-    return "restored"
+    return "inherited" if inherited else "restored"
 
 
 def restore_devices():
@@ -315,6 +328,8 @@ def restore_devices():
                 path.unlink()
             elif row["state"] == "restored":
                 row["final_mode"] = record["mode"]
+            elif row["state"] == "inherited":
+                row.update(state="restored", final_mode=0)
         results.append(row)
     return results
 
@@ -324,7 +339,7 @@ def main():
         return 1
     try:
         match sys.argv[1:]:
-            case ["activate", pid]:
+            case ["activate" | "activate-reconciled", pid]:
                 activate(pid)
             case ["recover"]:
                 print(json.dumps(cleanup()))

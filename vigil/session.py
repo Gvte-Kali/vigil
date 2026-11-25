@@ -43,7 +43,7 @@ def receipt_path(pid):
         return None
 
 
-def read_receipt(path, *, wait=12):
+def read_receipt(path, *, wait=12, include_pending=False):
     if not HELPER.is_file():
         return {"status": "not_installed"}
     if path is None:
@@ -55,7 +55,7 @@ def read_receipt(path, *, wait=12):
             if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
                 return {"status": "unavailable"}
             receipt = json.loads(path.read_text())
-            if receipt["status"] != "pending":
+            if include_pending or receipt["status"] != "pending":
                 return receipt
         except FileNotFoundError:
             # No activation was recorded, or the installed helper predates receipts.
@@ -65,6 +65,23 @@ def read_receipt(path, *, wait=12):
         if time.monotonic() >= deadline:
             return {"status": "pending"}
         time.sleep(0.15)
+
+
+def record_startup_recovery(state, guard_pid, candidates):
+    receipt = read_receipt(receipt_path(int(guard_pid)), wait=0, include_pending=True)
+    if receipt.get("startup_recovery") != "complete":
+        return
+    for name in set(candidates) & set(pending_sessions(state.parent / "sessions")):
+        if not re.fullmatch(r"[0-9a-f]{32}\.json", name):
+            continue
+        journal = state.parent / "sessions" / name
+        try:
+            entry = json.loads(journal.read_text())
+            if entry.get("session") == journal.stem:
+                entry.update(status="closed", recovered_at_startup=True)
+                write_state(journal, entry)
+        except (OSError, ValueError, AttributeError):
+            continue
 
 
 def mount_check():
@@ -281,7 +298,8 @@ def supervise(arguments, *, interface="gui", state=None):
               "receipt": str(path) if path else None, "journal": str(supervisor_record) if supervisor_record else None,
               "version": release, "closed_at": datetime.now(timezone.utc).astimezone().isoformat(),
               "duration": round(time.monotonic() - started, 1),
-              "operations_at_exit": operations, "previous_unresolved": pending}
+              "operations_at_exit": operations, "previous_unresolved": pending,
+              "interface": interface}
     try:
         output = persist_report(state, report)
         if supervisor_record:
@@ -294,10 +312,13 @@ def supervise(arguments, *, interface="gui", state=None):
                                             "session": identifier, "report": str(output), "snapshot": snapshot,
                                             "pid": os.getpid(), "owner": owner.name if owner else "", "boot": boot})
     except OSError:
-        show_report(report, None, interactive=not terminal_workspace and sys.stdin.isatty())
+        if terminal_workspace:
+            show_compact_report(report, None)
+        else:
+            show_report(report, None, interactive=sys.stdin.isatty())
     else:
         if terminal_workspace:
-            show_report(report, output, interactive=False)
+            show_compact_report(report, output)
             return status if status >= 0 else 128 - status
         try:
             if not waiting_terminal:
@@ -498,12 +519,48 @@ def wait_session(journal):
     return 1
 
 
+def show_compact_report(report, path, *, interactive=False):
+    def tr(fr, en):
+        return en if report["language"] == "en" else fr
+
+    hotplug = report.get("recovery_retry", report["hotplug"])
+    failures = [row for row in hotplug.get("devices", []) if row.get("state") in {"error", "unverified"}]
+    mounted = report["mounts"]["status"] != "clear"
+    retry = bool(failures) or hotplug["status"] in {"error", "pending", "unavailable"}
+    if mounted:
+        print(tr("Montages encore présents ou non vérifiés.", "Mounts still present or unverified."))
+    if retry:
+        print(tr("Restitution USB à vérifier.", "USB recovery needs review."))
+        if detail := hotplug.get("detail"):
+            print(clean(detail))
+        for row in failures:
+            print(f"  {clean(row.get('device'))} · {clean(row.get('detail') or row.get('state'))}")
+    elif hotplug["status"] == "complete":
+        print(tr("Protection USB précédente rétablie.", "Previous USB state restored."))
+    elif hotplug["status"] == "other_session":
+        print(tr("Protection USB conservée pour l’autre session Vigil.", "USB protection retained for the other Vigil session."))
+    else:
+        print(tr("Session Vigil fermée.", "Vigil session closed."))
+    if path is not None:
+        print(f"{tr('Bilan', 'Report')} · {path}")
+    if interactive and retry and not mounted and HELPER.is_file():
+        try:
+            if input(tr("R : retenter la restitution · Entrée : fermer : ",
+                        "R: retry recovery · Enter: close: ")).strip().lower() == "r":
+                recover(report, path, tr)
+        except (EOFError, KeyboardInterrupt):
+            pass
+
+
 def show_report_file(path, *, review=False):
     report = json.loads(path.read_text(encoding="utf-8"))
     if review:
         report.setdefault("mounts_at_exit", report["mounts"])
         report["mounts"] = mount_check()
-    show_report(report, path, interactive=sys.stdin.isatty())
+    if os.environ.get("VIGIL_EMBEDDED_TERMINAL") == "1":
+        show_compact_report(report, path, interactive=sys.stdin.isatty())
+    else:
+        show_report(report, path, interactive=sys.stdin.isatty())
     hotplug = report.get("recovery_retry", report["hotplug"])
     return int(report["mounts"]["status"] != "clear" or hotplug["status"] in {"pending", "error", "unavailable"}
                or any(row.get("state") in {"error", "unverified"} for row in hotplug.get("devices", [])))

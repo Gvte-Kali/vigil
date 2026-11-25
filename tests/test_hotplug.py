@@ -97,3 +97,31 @@ class HotplugTest(unittest.TestCase):
             self.assertLess(output.index("EN — Authorise sudo"), output.index("MOCK_SUDO"))
             self.assertIn("Protection enabled.", output)
             self.assertNotIn(chr(27), output)
+
+    def test_partition_already_ro_inherits_its_disk_mode_at_recovery(self):
+        restore = hotplug["restore_device"]
+        record = {"major": 8, "minor": 17, "sequence": 42, "mode": 1,
+                  "node": "/sys/devices/fixture/sdb1", "device": "/dev/sdb1", "partition": True}
+        with patch.object(Path, "exists", return_value=True), \
+                patch.object(Path, "resolve", return_value=Path(record["node"])), \
+                patch("os.open", return_value=19), patch("os.close"), \
+                patch.dict(restore.__globals__, {"device_identity": lambda *_: 42, "mode": lambda _: 0}), \
+                patch("fcntl.ioctl") as ioctl, patch("subprocess.run") as trigger:
+            self.assertEqual(restore(record), "inherited")
+            ioctl.assert_not_called()
+            trigger.assert_called_once()
+            with self.assertRaisesRegex(ValueError, "original block mode"):
+                restore(dict(record, partition=False))
+
+    def test_activation_stops_if_the_root_ledger_cannot_be_recovered(self):
+        activate = hotplug["activate"]
+        with patch.dict("os.environ", {"SUDO_UID": "1000"}), \
+                patch.dict(activate.__globals__, {
+                    "process_identity": lambda _: "1000 555",
+                    "device_manager_guard": nullcontext,
+                    "cleanup_devices": lambda: {"status": "complete", "devices": [
+                        {"state": "error", "device": "/dev/sdb1", "detail": "busy"},
+                    ]},
+                }), patch("os.pidfd_open", return_value=19), patch("os.close"):
+            with self.assertRaisesRegex(ValueError, "/dev/sdb1: busy"):
+                activate("1234")

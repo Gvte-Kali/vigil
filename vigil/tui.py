@@ -54,7 +54,7 @@ def logo():
     source = legacy_base() / "data/icons/vigil.svg"
     if not source.is_file():
         source = Path(sys.prefix) / "share/vigil/vigil.svg"
-    return render_logo(source, "12x2") or Text("Vigil", style="bold")
+    return render_logo(source, "18x4") or Text("Vigil", style="bold")
 
 
 def organization_logo(data, relative_path):
@@ -118,7 +118,10 @@ class Workspace(App):
             yield Static(self.brand, id="brand")
             yield Static(id="session")
             yield b("sidebar-toggle", icon("menu"), icon("menu"))
-            yield b("language", "FR / EN", "EN / FR")
+            if supports_unicode():
+                yield b("language", "🇫🇷 FR / EN 🇬🇧", "🇫🇷 FR / EN 🇬🇧")
+            else:
+                yield b("language", "FR / EN", "FR / EN")
         with Horizontal(id="body"):
             with VerticalScroll(id="sidebar"):
                 for key, label in self.navigation().items():
@@ -306,15 +309,18 @@ class Workspace(App):
         if not Path("/usr/local/sbin/vigil-hotplug").is_file():
             raise ValueError(t("L’assistant USB est absent. Installez-le avec scripts/post-install/install-hotplug.sh.",
                                "The USB helper is missing. Install it with scripts/post-install/install-hotplug.sh."))
-        if pending := await self.pending_protection_reports():
-            self.ask("review-session", t("Vérifier une session précédente", "Review a previous session"),
-                     choices=tuple((name, name) for name in reversed(sorted(pending))),
-                     message=t("La protection exige la restitution de la session précédente. Ouvrez son bilan et utilisez R si la restauration est proposée.",
-                               "Protection requires recovery of the previous session. Open its report and press R if recovery is offered."))
-            return
-        self.ask("protect", t("Activer la protection USB", "Enable USB protection"),
-                 message=t("Autoriser la protection en lecture seule des nouveaux disques pour cette session ?",
-                           "Authorise read-only protection for new disks during this session?"))
+        await self.launch_workflow("protect", {}, self.active_case, self.operator)
+
+    async def finish_protection_start(self, status, guard, candidates):
+        if status == 0 and self.protection_active():
+            from .session import record_startup_recovery
+
+            await asyncio.to_thread(record_startup_recovery, self.state, guard, candidates)
+            self.notify(self.tr("Protection USB active.", "USB protection active."))
+        else:
+            self.notify(self.tr("Protection USB inactive. Consultez le diagnostic de l’opération.",
+                                "USB protection inactive. Check the operation diagnostics."), severity="warning")
+        await self.action_refresh_workspace()
 
     async def finish_session_review(self):
         await self.action_refresh_workspace()
@@ -476,8 +482,9 @@ class Workspace(App):
         if event.data_table.id == "case-table":
             self.refresh_case_detail(self.case_rows.get(event.row_key.value))
         elif event.data_table.id == "module-table":
-            if item := self.manifests.get(event.row_key.value):
-                self.query_one("#module-detail", Static).update(Text(
+            details = self.query("#module-detail")
+            if details and (item := self.manifests.get(event.row_key.value)):
+                details.first(Static).update(Text(
                     f"{event.row_key.value}  ·  {item.version}\n\n{item.name}\n"
                     f"{item.category}  ·  {item.entrypoint}\n"
                     f"{', '.join(item.dependencies)}"
@@ -1083,10 +1090,9 @@ class Workspace(App):
                 pid = os.environ.get("VIGIL_SESSION_GUARD", "")
                 if not pid.isdecimal() or not Path("/proc", pid).is_dir():
                     raise ValueError(t("La session supervisée n’est plus disponible.", "The supervised session is no longer available."))
-                if await self.pending_protection_reports():
-                    await self.request_protection()
-                    return
-                argv = ["/usr/bin/sh", str(legacy_base() / "scripts/post-install/activate-hotplug.sh"), pid]
+                pending = await self.pending_protection_reports()
+                argv = ["/usr/bin/sh", str(legacy_base() / "scripts/post-install/activate-hotplug.sh"),
+                        pid, "--reconcile-required"]
             case _:
                 return
         if mode:
@@ -1094,8 +1100,15 @@ class Workspace(App):
         run, argv = prepare_tracked(argv, self.state.parent / "terminal-runs",
                                    {"operation": action, "language": self.language, "operator": operator, "case_id": case})
         callback = self.finish_session_review if action == "review-session" else self.action_refresh_workspace
-        self.push_screen(Operation(str(self.query_one(f"#{action}", Button).label), t, argv, self.language, run),
-                         lambda _: self.background(callback))
+
+        def finish(status):
+            if action == "protect":
+                self.background(lambda: self.finish_protection_start(status, pid, pending))
+            else:
+                self.background(callback)
+
+        self.push_screen(Operation(str(self.query_one(f"#{action}", Button).label), t, argv,
+                                   self.language, run, close_on_success=action == "protect"), finish)
 
 
 def main():

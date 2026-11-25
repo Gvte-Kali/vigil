@@ -8,11 +8,11 @@ from textual.containers import Grid, Vertical
 from textual.widgets import Button, ProgressBar, Static
 
 ICONS = {
-    "menu": ("☰", "="), "dashboard": ("▦", "#"), "cases": ("▣", "[]"),
-    "quick": ("▸", ">"), "entity": ("◆", "@"), "catalogue": ("≡", "#"),
-    "scan": ("◎", "*"), "update": ("↻", "+"), "report": ("▤", "#"),
+    "menu": ("☰", "="), "dashboard": ("⌂", "#"), "cases": ("▤", "[]"),
+    "quick": ("›", ">"), "entity": ("◇", "@"), "catalogue": ("≡", "#"),
+    "scan": ("⊕", "+"), "update": ("↻", "+"), "report": ("≡", "#"),
     "mount": ("↑", "^"), "unmount": ("↓", "v"), "clone": ("⇄", "="),
-    "raw": ("◈", "*"), "ok": ("●", "+"), "warning": ("▲", "!"),
+    "raw": ("◇", "*"), "ok": ("●", "+"), "warning": ("▲", "!"),
 }
 
 

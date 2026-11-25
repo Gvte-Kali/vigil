@@ -108,10 +108,11 @@ class Operation(ModalScreen):
 
     COMPONENT_CLASSES = ModalScreen.COMPONENT_CLASSES | {"operation--error"}
 
-    def __init__(self, title, tr, argv, language, tracked=None):
+    def __init__(self, title, tr, argv, language, tracked=None, *, close_on_success=False):
         super().__init__()
         self.title_text, self.tr, self.argv, self.language = title, tr, argv, language
         self.tracked = tracked
+        self.close_on_success = close_on_success
         self.terminal = None
         self.status = None
         self.stages = {}
@@ -186,6 +187,8 @@ class Operation(ModalScreen):
                 f"{self.title_text} · {self.tr('Code de sortie', 'Exit code')} : {self.status}"
             ))
             self.query_one("#operation-close", Button).focus()
+            if self.close_on_success and self.status == 0:
+                self.call_after_refresh(self.dismiss, self.status)
 
     def update_echo(self):
         try:

@@ -21,7 +21,7 @@ et les protections sont celles du Core courant de `vigil-2.0`.
 ## Présentation du terminal intégré
 
 Les actions rapides s’affichent en cartes, sur une à trois colonnes selon la
-largeur. L’en-tête reste sur deux lignes. Les icônes se replient en ASCII sur
+largeur. L’en-tête accueille le logo SVG rendu sur quatre lignes. Les icônes se replient en ASCII sur
 un terminal non UTF-8 ou avec `VIGIL_ASCII=1`.
 
 Le terminal intégré conserve les messages dans le journal et met les étapes
@@ -29,7 +29,10 @@ de détection USB, de scan, de copie, de synchronisation et de vérification
 sur des barres séparées. Les scripts exécutés dans un terminal classique
 gardent leur affichage habituel.
 
-Si la protection USB est bloquée par une session antérieure, ouvrir le bilan
-proposé. Utiliser `R` si le bilan propose la restitution. La TUI réévalue
-l’état à la fermeture du bilan et repropose l’autorisation si la restitution
-est confirmée.
+Au démarrage de la TUI, l’assistant demande l’autorisation sudo et restaure
+les protections laissées par une précédente session avant d’armer udev. Une
+restitution impossible reste signalée. Le bilan affiché à la fermeture est
+concis et le rapport complet reste disponible sur disque. Après mise à jour
+du dépôt, réinstaller l’assistant privilégié avec
+`bash scripts/post-install/install-hotplug.sh` depuis le compte opérateur,
+après fermeture de toutes les sessions Vigil.
