@@ -128,7 +128,7 @@ class CaseLoad(QRunnable):
 
 
 class CaseManager(QDialog):
-    def __init__(self, parent, load_rows, create, import_case, delete, open_case):
+    def __init__(self, parent, load_rows, create, import_case, delete, open_case, *, import_archive):
         super().__init__(parent)
         self.tr_pair = tr = parent.tr_pair
         self.icon = parent.action_icon
@@ -236,7 +236,10 @@ class CaseManager(QDialog):
         management = QHBoxLayout(actions)
         management.setContentsMargins(0, 0, 0, 0)
         self.new = self.make_button(management, tr("Nouvelle affaire", "New case"), "plus", create)
-        self.import_button = self.make_button(management, tr("Importer", "Import"), "upload", import_case)
+        self.archive_button = self.make_button(management, tr("Importer une archive Vigil 2.0",
+                                                               "Import a Vigil 2.0 archive"), "upload", import_archive)
+        self.import_button = self.make_button(management, tr("Importer un projet Vigil 1.0",
+                                                              "Import a Vigil 1.0 project"), "folder", import_case)
         self.import_button.setToolTip(tr("Importer un ancien projet Vigil", "Import a legacy Vigil project"))
         self.delete = self.make_button(management, tr("Supprimer", "Delete"), "trash",
                                        lambda: delete(self.selected_id()), color="#FF9CA3")

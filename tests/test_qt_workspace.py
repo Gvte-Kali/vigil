@@ -96,6 +96,32 @@ class WorkspaceTest(unittest.TestCase):
             self.assertIsNone(window.case_picker)
             self.close_workspace(window)
 
+    def test_archive_preview_confirmation_restores_without_activating(self):
+        from vigil import storage
+        from vigil.case_export import export_case
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source" / "cases.sqlite"
+            with storage.database(source) as connection:
+                case_id = storage.create_case(connection, "Portable", "Alice")
+            archive = export_case(source, case_id, "Alice", root).path / "affaire.tar.gz"
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "restored" / "cases.sqlite")
+            window.add_operator("Bob")
+            accept, cancel = object(), object()
+            with patch("vigil.desktop.QFileDialog.getOpenFileName", return_value=(str(archive), "")), \
+                    patch("vigil.desktop.QMessageBox") as message, patch.object(window, "notify") as notify, \
+                    patch.object(window, "run_task", side_effect=lambda operation, success: success(operation())):
+                message.return_value.addButton.side_effect = [accept, cancel]
+                message.return_value.clickedButton.return_value = accept
+                window.import_case_archive()
+            self.assertEqual(window.cases.currentItem().text(), "Portable")
+            self.assertFalse(window.active_case_id)
+            self.assertIn(case_id, notify.call_args.args[2])
+            self.close_workspace(window)
+
     def test_case_manager_refuses_deletion_during_operations(self):
         from vigil.desktop import Workspace
 

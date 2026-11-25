@@ -22,6 +22,7 @@ class EvidencePanel(QWidget):
         self.has_case = has_case
         self.mounts = {}
         self.registered_files = {}
+        self.archived = False
         self.local_copies = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -72,7 +73,8 @@ class EvidencePanel(QWidget):
         self.tabs.setTabText(1, tr("Hexadécimal", "Hex"))
         self.tabs.setTabText(2, tr("Chaînes ASCII", "ASCII strings"))
 
-    def set_files(self, rows, *, copies=None, keep_state=True):
+    def set_files(self, rows, *, copies=None, keep_state=True, archived=False):
+        self.archived = archived
         copies = copies or {}
         self.local_copies = {name: copies.get(evidence_id) for evidence_id, name, _ in rows}
         self.registered_files = {name: digest for _, name, digest in rows}
@@ -162,7 +164,7 @@ class EvidencePanel(QWidget):
         item = QTreeWidgetItem(parent, [label])
         item.setIcon(0, self.icon("folder", "#55C5D2") if directory else self.file_icon(path))
         item.setToolTip(0, str(path))
-        item.setData(0, Qt.ItemDataRole.UserRole, (str(path), self.registered_files.get(str(path)), mount, directory))
+        item.setData(0, Qt.ItemDataRole.UserRole, (str(path), None if self.archived else self.registered_files.get(str(path)), mount, directory))
         if directory:
             item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
         return item
@@ -195,6 +197,8 @@ class EvidencePanel(QWidget):
             stack.extend(item.child(index) for index in range(item.childCount()))
 
     def registered_source(self, name):
+        if self.archived:
+            return name, None, False
         roots = [root for root in self.mounts or {} if Path(name).is_relative_to(root)]
         root = max(roots, key=len, default=None)
         return name, (root, self.mounts[root]) if root else None, False

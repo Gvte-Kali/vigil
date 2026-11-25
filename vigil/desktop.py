@@ -1,4 +1,5 @@
 """Bilingual Qt workspace for the local Vigil core."""
+import json
 import logging
 import os
 import shutil
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from . import storage
 from .case_export import export_case
+from .case_import import import_archive, verify_archive
 from .case_manager import CaseManager, NewCaseDialog
 from .case_removal import purge_case
 from .adapters import CENSUS_LIMIT, analysis_command, query_census
@@ -836,7 +838,8 @@ class Workspace(QMainWindow):
     def choose_case(self):
         state = self.database_path
         dialog = CaseManager(self, lambda: storage.case_manager_rows(state), self.new_case,
-                             self.import_case, self.delete_selected_case, self.open_managed_case)
+                             self.import_case, self.delete_selected_case, self.open_managed_case,
+                             import_archive=self.import_case_archive)
         self.case_picker = dialog
         dialog.reload()
         try:
@@ -1011,6 +1014,7 @@ class Workspace(QMainWindow):
             return
         try:
             with storage.database(self.database_path) as connection:
+                archived = storage.is_archive_case(connection, self.active_case_id)
                 rows = list(connection.execute(
                     "SELECT id, path, sha256 FROM evidence WHERE case_id = ? ORDER BY path",
                     (case.data(Qt.ItemDataRole.UserRole),),
@@ -1026,13 +1030,13 @@ class Workspace(QMainWindow):
                     copies[evidence_id] = copy
             except (OSError, ValueError):
                 continue
-        self.explorer.set_files(rows, copies=copies, keep_state=keep_explorer)
+        self.explorer.set_files(rows, copies=copies, keep_state=keep_explorer, archived=archived)
         self.refresh_explorer_mounts()
-        self.update_evidence_tree(rows, copies)
+        self.update_evidence_tree(rows, copies, archived=archived)
 
-    def update_evidence_tree(self, rows, copies=None):
+    def update_evidence_tree(self, rows, copies=None, *, archived=False):
         copies = copies or {}
-        self.case_folder_button.setVisible(bool(copies))
+        self.case_folder_button.setVisible(bool(copies) or archived)
         expanded = set()
         if self.evidence_case_id == self.active_case_id:
             expanded = {item.text(0) for item in (
@@ -1045,7 +1049,9 @@ class Workspace(QMainWindow):
         for evidence_id, name, digest in rows:
             path = Path(name)
             copy = copies.get(evidence_id)
-            group = str(copy.parents[1]) if copy else self.tr_pair("Sans copie locale", "No local copy")
+            group = str(copy.parents[1]) if copy else self.tr_pair(
+                "Preuve référencée — contenu indisponible", "Referenced evidence — content unavailable",
+            )
             if group not in groups:
                 groups[group] = QTreeWidgetItem(self.evidence, [group])
                 groups[group].setExpanded(group in expanded)
@@ -1169,7 +1175,9 @@ class Workspace(QMainWindow):
                     snapshot = inspect_file(local, display_name=original.name)
                     snapshot["local_copy"] = str(local)
                     return snapshot
-                if evidence_id is not None or original.is_relative_to("/investigation") or not original.is_file():
+                with storage.database(self.database_path) as connection:
+                    archived = storage.is_archive_case(connection, case_id)
+                if archived or evidence_id is not None or original.is_relative_to("/investigation") or not original.is_file():
                     raise ValueError(self.tr_pair(
                         "Cette preuve n’a pas de copie locale. Remontez le support d’origine en lecture seule "
                         "et ajoutez de nouveau le fichier aux preuves.",
@@ -1210,9 +1218,15 @@ class Workspace(QMainWindow):
             self.fail(error)
             return
         for row in rows[:PAGE_SIZE]:
+            provenance = row.get("provenance")
+            marker = self.tr_pair(" · Importé", " · Imported") if provenance else ""
+            details = row["details"]
+            if provenance:
+                details += "\n\n" + self.tr_pair("Provenance", "Provenance") + "\n" + json.dumps(
+                    provenance, ensure_ascii=False, indent=2,
+                )
             self.add_row(self.history_rows,
-                         f"{row['timestamp']}  ·  {row['operator']}  ·  {row['action']}",
-                         row["details"])
+                         f"{row['timestamp']}  ·  {row['operator']}  ·  {row['action']}{marker}", details)
             self.history_before = row["sequence"]
         self.more_history.setEnabled(len(rows) > PAGE_SIZE)
 
@@ -1258,6 +1272,11 @@ class Workspace(QMainWindow):
                         "Could not open the report folder.", str(directory))
 
     def export_full_case(self):
+        self.refresh_external_runs()
+        if self.busy is not None or self.external_runs:
+            self.notify("Attendez la fin des opérations Vigil avant l’export.",
+                        "Wait for Vigil operations to finish before exporting.")
+            return
         case_id = self.active_case_id
         if not case_id:
             self.notify("Choisissez d’abord une affaire.", "Choose a case first.")
@@ -1452,6 +1471,66 @@ class Workspace(QMainWindow):
             return False
         self.refresh_cases(case_id)
         return True
+
+    def import_case_archive(self):
+        if self.busy is not None:
+            return
+        operator = self.require_operator()
+        if not operator:
+            return
+        source, _ = QFileDialog.getOpenFileName(
+            self.case_picker or self, self.tr_pair("Archive Vigil 2.0", "Vigil 2.0 archive"),
+            filter=self.tr_pair("Archives TAR.GZ (*.tar.gz *.tgz);;Tous les fichiers (*)",
+                                "TAR.GZ archives (*.tar.gz *.tgz);;All files (*)"),
+        )
+        if not source:
+            return
+        path, state = Path(source), self.database_path
+
+        def confirm(preview):
+            tr = self.tr_pair
+            dialog = QMessageBox(self.case_picker or self)
+            dialog.setTextFormat(Qt.TextFormat.PlainText)
+            dialog.setWindowTitle(tr("Prévisualisation de l’import", "Import preview"))
+            dialog.setText(preview.name)
+            validation = tr("Valide, archive partielle", "Valid, partial archive") if preview.missing else tr("Valide, archive complète", "Valid, complete archive")
+            lines = [
+                validation, f"{tr('Affaire source', 'Source case')} · {preview.source_id}",
+                f"{tr('Version du format', 'Format version')} · {preview.schema_version}",
+                f"{tr('Date de l’export', 'Export date')} · {preview.exported_at}",
+                f"{tr('Preuves / copies / manquantes', 'Evidence / copies / missing')} · "
+                f"{preview.evidence_count} / {preview.evidence_count - preview.missing} / {preview.missing}",
+                f"{tr('Fichiers de résultats / PDF archivés', 'Result files / archived PDFs')} · "
+                f"{preview.results} / {preview.reports}",
+                f"{tr('Projet Vigil 1.0 embarqué', 'Vigil 1.0 project included')} · "
+                f"{tr('Oui', 'Yes') if preview.legacy else tr('Non', 'No')}",
+                f"{tr('Taille décompressée', 'Expanded size')} · {preview.bytes:,} {tr('octets', 'bytes')}",
+                tr("Somme externe vérifiée.", "External checksum verified.") if preview.sidecar_verified else
+                tr("Somme externe absente. Manifeste interne vérifié.", "No external checksum. Internal manifest verified."),
+            ]
+            dialog.setInformativeText("\n".join(lines))
+            dialog.setIcon(QMessageBox.Icon.Warning if preview.missing else QMessageBox.Icon.Information)
+            accept = dialog.addButton(tr("Importer", "Import"), QMessageBox.ButtonRole.AcceptRole)
+            cancel = dialog.addButton(tr("Annuler", "Cancel"), QMessageBox.ButtonRole.RejectRole)
+            dialog.setDefaultButton(cancel)
+            dialog.exec()
+            if dialog.clickedButton() is accept:
+                self.run_task(lambda: import_archive(state, path, operator, expected_sha256=preview.sha256),
+                              self.show_archive_import)
+
+        self.run_task(lambda: verify_archive(path), confirm)
+
+    def show_archive_import(self, result):
+        self.refresh_cases(result["case_id"])
+        missing = result["missing"]
+        if result["reused"]:
+            french, english = "Cette archive a déjà été importée.", "This archive was already imported."
+        elif missing:
+            french, english = "Archive partielle restaurée.", "Partial archive restored."
+        else:
+            french, english = "Affaire restaurée.", "Case restored."
+        self.notify(french, english, f"{result['case_id']}\nSHA-256 · {result['sha256']}\n"
+                    + self.tr_pair(f"Preuves sans contenu · {missing}", f"Evidence without content · {missing}"))
 
     def import_case(self):
         operator = self.require_operator()
@@ -1689,6 +1768,8 @@ class Workspace(QMainWindow):
             self.notify("Aucune extension discordante.", "No extension mismatches.")
 
     def run_task(self, operation, on_success):
+        if self.case_picker is not None:
+            self.case_picker.setEnabled(False)
         self.busy = QThread(self)
         self.worker = Worker(operation)
         self.worker.moveToThread(self.busy)
@@ -1712,6 +1793,8 @@ class Workspace(QMainWindow):
     def finish_task(self):
         self.busy.deleteLater()
         self.busy = self.worker = None
+        if self.case_picker is not None:
+            self.case_picker.setEnabled(True)
         self.statusBar().clearMessage()
         for button in self.buttons:
             button.setEnabled(True)

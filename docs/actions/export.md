@@ -15,22 +15,19 @@ complète** et une destination. Le dossier publié contient `affaire.tar.gz` et
 `affaire.tar.gz.sha256`. En CLI, la commande équivalente est
 `vigil2 cases export ID DESTINATION --operator NOM`.
 
-Vérifier l’archive avec `sha256sum -c affaire.tar.gz.sha256`. Après extraction,
-exécuter `sha256sum -c SHA256SUMS` depuis le dossier extrait. Le manifeste
-`affaire.json` associe chaque chemin d’origine à son fichier dans `preuves/`.
-L’archive inclut les résultats de l’affaire, le journal et les fichiers
-réguliers du projet hérité s’il a été importé.
+Depuis le **Gestionnaire d’affaires**, choisir **Importer une archive Vigil
+2.0**, sélectionner le TAR.GZ et confirmer après vérification. Le même service
+est disponible via `vigil2 cases verify-archive CHEMIN` et
+`vigil2 cases import-archive CHEMIN --operator NOM`. L’import des dossiers
+Vigil 1.0 avec `info.json` reste une action distincte.
 
-Les copies sont stockées sans extension et en mode Linux `0400`. Le format TAR
-enregistre ce mode. Une extraction doit conserver les permissions pour
-l’appliquer. Un fichier potentiellement malveillant reste à traiter comme
-tel même avec ses permissions de lecture seule.
+Une archive partielle conserve les références et empreintes des preuves dont
+la copie manque. Vigil les signale comme indisponibles. Les copies présentes
+sont contrôlées et restaurées en mode Linux `0400`.
 
-Si une preuve ancienne a été enregistrée sans copie, réajouter le fichier
-d’origine depuis l’explorateur ou l’onglet Preuves. Vigil compare son empreinte
-à celle enregistrée avant de créer la copie. Si la copie manque, l’export reste possible. Le manifeste indique un export
-partiel et conserve le chemin d’origine ainsi que l’empreinte enregistrée.
-Une copie présente dont le SHA-256 diffère bloque l’export.
+Le [contrat de portabilité](../development/case-archive.md) documente le
+format v3, la compatibilité v2, la couverture, les conflits, les contrôles
+d’intégrité et la reprise après erreur.
 
 ## Vigil 1.0
 

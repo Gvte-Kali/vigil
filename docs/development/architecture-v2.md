@@ -88,3 +88,10 @@ Cette vérification observe l’espace de montage de la GUI et les modes
 du noyau. La réconciliation se fait hors GUI sous la responsabilité de
 l’administrateur. Vigil ne remet jamais un périphérique en écriture pour
 quitter.
+
+## Portabilité des affaires
+
+La GUI et la CLI partagent le service d’import d’archives de Vigil, avec une
+prévisualisation et une publication transactionnelle. Le format, la matrice
+de couverture et la réconciliation après interruption sont décrits dans
+[Portabilité des affaires](case-archive.md).

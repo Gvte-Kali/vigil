@@ -482,3 +482,10 @@ Recette interface et terminaux
     opération et l’absence d’altération des preuves originales.
 [ ] Vérifier le redimensionnement du séparateur et les zones de défilement
     sur X11, Wayland et Hyprland, avec une mise à l’échelle de 150 %.
+
+[ ] Exporter une affaire synthétique et l’importer depuis le Gestionnaire
+    d’affaires sur une base vierge. Contrôler la prévisualisation, le journal,
+    l’ouverture des copies sans support, les PDF, le recensement et le réexport.
+[ ] Refaire l’import en CLI puis avec une archive partielle et un checksum
+    externe incorrect. Vérifier le JSON, les diagnostics et l’absence d’affaire
+    invalide. Tester aussi un dossier Vigil 1.0 contenant info.json.

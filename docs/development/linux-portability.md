@@ -74,3 +74,15 @@ avec les dépendances du paquet installées. Recette graphique et multi-distribu
 gestionnaires de fenêtres. Pour revenir à la version précédente, révoquer
 le commit correspondant ou désinstaller le paquet de l'environnement
 virtuel. Conserver la base et les projets sources pour reprise.
+
+La CLI peut aussi vérifier et restaurer un transfert d’affaire.
+
+```sh
+vigil2 cases verify-archive /chemin/affaire.tar.gz
+vigil2 cases import-archive /chemin/affaire.tar.gz --operator Alice
+```
+
+Le chemin peut désigner le dossier d’export. La commande retourne du JSON
+sur stdout. Le code 0 signale un succès, y compris une archive valide
+partielle. Le code 1 signale un échec et le diagnostic paraît sur stderr.
+Typer retourne 2 en cas d’erreur d’usage.

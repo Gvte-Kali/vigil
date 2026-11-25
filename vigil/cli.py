@@ -2,6 +2,7 @@
 import json
 import sqlite3
 from contextlib import contextmanager
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -9,6 +10,7 @@ import typer
 
 from . import storage
 from .case_export import export_case
+from .case_import import import_archive, verify_archive
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 
@@ -76,6 +78,19 @@ def import_case(path: Path, operator: str = typer.Option(...), db: DatabaseOptio
         with storage.database(db or storage.default_database()) as connection:
             case_id = storage.create_case(connection, name, operator, str(path), raw)
         emit({"id": case_id, "legacy_path": str(path)})
+
+
+@cases.command("verify-archive")
+def verify_case_archive(path: Path):
+    with command():
+        result = verify_archive(path)
+        emit({**asdict(result), "status": "valid-partial" if result.missing else "valid"})
+
+
+@cases.command("import-archive")
+def import_case_archive(path: Path, operator: str = typer.Option(...), db: DatabaseOption = None):
+    with command():
+        emit(import_archive(db or storage.default_database(), path, operator))
 
 
 @cases.command("export")
