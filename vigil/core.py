@@ -65,13 +65,45 @@ def discover(directory):
     return manifests, errors
 
 
+def script_diagnostics():
+    """Check the shared entrypoints used by the CLI and both workspaces."""
+    from .entity import legacy_base
+
+    root = legacy_base()
+    manifests, _ = discover(BUILTIN_MODULES)
+    entrypoints = {manifest.entrypoint for manifest in manifests.values()}
+    entrypoints.update({
+        "scripts/analyse/vigil_census_mount_guard.py", "scripts/analyse/vigil_usb_mount.sh",
+        "scripts/analyse/vigil_usb_umount.sh", "scripts/clamav/vigil_clamav_full_scan.sh",
+        "scripts/imager/vigil_acquire.py", "scripts/imager/vigil_acquire_triage.sh",
+        "scripts/lib/vigil-device-ops.sh", "scripts/lib/vigil-device-select.sh",
+        "scripts/lib/vigil-device-triage.sh", "scripts/lib/vigil-terminal.sh",
+        "scripts/lib/vigil_block_inventory.py", "scripts/post-install/activate-hotplug.sh",
+        "scripts/stockage/vigil_stockage_mount.sh", "scripts/stockage/vigil_stockage_umount.sh",
+    })
+    issues = {}
+    for entry in sorted(entrypoints):
+        path = root / entry
+        try:
+            if not path.resolve(strict=True).is_relative_to(root.resolve()):
+                raise ValueError("outside the Vigil installation")
+            if not path.is_file():
+                raise ValueError("expected a regular script")
+            with path.open("rb") as stream:
+                stream.read(1)
+        except (OSError, ValueError) as error:
+            issues[entry] = str(error)
+    return {"checked": len(entrypoints), "issues": issues}
+
+
 def doctor():
     return {
+        "scripts": script_diagnostics(),
         "desktop": os.environ.get("XDG_CURRENT_DESKTOP"),
         "session": "wayland" if os.environ.get("WAYLAND_DISPLAY") else
         "x11" if os.environ.get("DISPLAY") else "headless",
         "tools": {tool: shutil.which(tool) for tool in (
-            "bash", "file", "jq", "clamscan", "ewfinfo", "affinfo",
+            "bash", "sh", "python3", "unshare", "sudo", "file", "jq", "clamscan", "freshclam", "ewfinfo", "affinfo",
             "xdg-terminal-exec", "konsole", "gnome-terminal", "xfce4-terminal",
             "kitty", "xterm",
         )},

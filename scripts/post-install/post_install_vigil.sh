@@ -127,34 +127,8 @@ touch /opt/vigil/data/usb/whitelist.txt /opt/vigil/data/usb/blacklist.txt
 
 # --- 6.1. Installer Qt dans /opt/vigil ---
 vigil_install_cli /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop
-signature_dir=/opt/vigil/data/state/clamav
-if [ "$(realpath -m -- "$signature_dir")" != "$signature_dir" ]; then
-    echo "Le répertoire des signatures traverse un lien symbolique : $signature_dir" >&2
-    exit 1
-fi
-install -d -m 0700 /opt/vigil/data/state "$signature_dir"
-
-# --- 6.2. Autoriser seulement le répertoire de signatures dans AppArmor ---
-profile=/etc/apparmor.d/usr.bin.freshclam
-local_profile=/etc/apparmor.d/local/usr.bin.freshclam
-if [ -f "$profile" ] && command -v apparmor_parser >/dev/null; then
-    if ! grep -Eq '^[[:space:]]*#?include([[:space:]]+if exists)?[[:space:]]+<local/usr.bin.freshclam>' "$profile"; then
-        echo "Le profil FreshClam n’inclut pas $local_profile. Consultez docs/configuration/clamav.md." >&2
-        exit 1
-    fi
-    sudo install -d -m 0755 /etc/apparmor.d/local
-    sudo touch "$local_profile"
-    for rule in "owner $signature_dir/ rw," "owner $signature_dir/** rwk,"; do
-        if ! sudo grep -Fxq -- "$rule" "$local_profile"; then
-            printf '\n%s\n' "$rule" | sudo tee -a "$local_profile" >/dev/null
-        fi
-    done
-    if [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null || true)" = Y ]; then
-        sudo apparmor_parser -r "$profile"
-    fi
-elif [ -f "$profile" ]; then
-    echo "apparmor_parser indisponible : configuration FreshClam à valider par l’administrateur." >&2
-fi
+. "$script_directory/../lib/vigil-freshclam.sh"
+vigil_prepare_freshclam /opt/vigil/data/state/clamav
 
 # --- 8. Créer le raccourci bureau (item 6 du checklist) ---
 echo "Création du raccourci Vigil..."

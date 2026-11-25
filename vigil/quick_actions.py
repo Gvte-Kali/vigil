@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -54,7 +55,22 @@ def update_command(state):
             os.replace(generated, config)
         finally:
             generated.unlink(missing_ok=True)
-    return [executable, f"--config-file={config}"]
+    arguments = [executable, f"--config-file={config}"]
+    # FreshClam parses its configuration before printing its version. Probe
+    # with the same executable and operator before opening the update terminal.
+    try:
+        result = subprocess.run([*arguments, "--version"], capture_output=True, text=True, timeout=10, check=False)
+    except subprocess.TimeoutExpired as error:
+        raise ValueError("FreshClam : vérification de la configuration expirée / configuration check timed out") from error
+    if result.returncode:
+        diagnostic = (result.stderr or result.stdout).strip()
+        help_text = (
+            "Vérifiez les droits de lecture et les refus AppArmor ; sur /opt/vigil, relancez "
+            "scripts/post-install/update-cli.sh. / Check file permissions and AppArmor denials; "
+            "on /opt/vigil, rerun scripts/post-install/update-cli.sh."
+        )
+        raise ValueError(f"FreshClam · {config}\n{diagnostic}\n{help_text}")
+    return arguments
 
 
 def mount_command(operation):

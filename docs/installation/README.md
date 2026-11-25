@@ -60,7 +60,7 @@ vigil --version
 vigil --help
 ```
 
-Cette mise à jour réinstalle le paquet et prépare les lanceurs reconnus.
+Cette mise à jour réinstalle le paquet, prépare les lanceurs reconnus et réapplique l’accès FreshClam au dossier de signatures du site.
 Un conflit de commande est signalé avec son chemin. Le détail des
 emplacements gérés, du retour arrière et des raccourcis personnalisés
 figure dans [la transition CLI](../development/cli-command-transition.md).

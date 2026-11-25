@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -181,13 +182,46 @@ printf '%s\n' "${INVESTIGATION_MOUNTS[@]}"
             signatures.mkdir()
             old = signatures / "freshclam.conf"
             old.write_text("Example\n")
-            with patch("vigil.quick_actions.tool", return_value="/usr/bin/freshclam"):
+            with patch("vigil.quick_actions.tool", return_value="/usr/bin/freshclam"), \
+                    patch("vigil.quick_actions.subprocess.run", return_value=subprocess.CompletedProcess([], 0)) as probe:
                 command = update_command(directory / "vigil.sqlite")
                 update_command(directory / "vigil.sqlite")
             self.assertEqual(old.read_text(), "Example\n")
             config = signatures / "vigil-freshclam.conf"
             self.assertEqual(command[1], f"--config-file={config}")
+            self.assertEqual(probe.call_args.args[0], [*command, "--version"])
             self.assertIn(f'DatabaseDirectory "{signatures}"', config.read_text())
+
+    def test_refresh_configuration_failure_reports_scoped_repair(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("vigil.quick_actions.tool", return_value="/usr/bin/freshclam"), \
+                patch("vigil.quick_actions.subprocess.run", return_value=subprocess.CompletedProcess(
+                    [], 1, "", "Can't open/parse the config file"
+                )):
+            with self.assertRaisesRegex(ValueError, r"(?s)open/parse.*AppArmor.*update-cli.sh"):
+                update_command(Path(directory) / "cases.sqlite")
+
+    def test_freshclam_profile_permissions_can_be_reapplied(self):
+        library = Path(__file__).resolve().parents[1] / "scripts/lib/vigil-freshclam.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conf = root / "local" / "usr.bin.freshclam"
+            conf.parent.mkdir()
+            conf.write_text("owner /existing/ r,\n")
+            profile = root / "usr.bin.freshclam"
+            profile.write_text("  include if exists <local/usr.bin.freshclam>\n")
+            signatures = root / "clamav"
+            for _ in range(2):
+                subprocess.run(["/bin/bash", "-euc", """
+                    . "$1"
+                    apparmor_parser() { :; }
+                    sudo() { "$@"; }
+                    vigil_prepare_freshclam "$2" "$3" "$4"
+                """, "fixture", str(library), str(signatures), str(profile), str(conf)], check=True)
+            self.assertEqual([rule for rule in conf.read_text().splitlines() if rule], [
+                "owner /existing/ r,", f"owner {signatures}/ rw,", f"owner {signatures}/** rwk,",
+            ])
+            self.assertEqual(signatures.stat().st_mode & 0o777, 0o700)
 
     def test_preview_is_bounded_and_rejects_symbolic_links(self):
         with tempfile.TemporaryDirectory() as tmp:

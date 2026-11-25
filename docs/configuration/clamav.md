@@ -11,7 +11,7 @@ Depuis **Mettre à jour l’antivirus ClamAV**, choisir le mode de mise à jour.
 Les opérations s’exécutent dans Konsole.
 
 
-## Mise à jour depuis Qt sur Debian ou Parrot
+## Mise à jour depuis Qt et Textual sur Debian ou Parrot
 
 Vigil lance FreshClam avec une configuration et un répertoire de signatures
 propres au profil utilisateur. Si FreshClam renvoie `Can't open/parse the
@@ -37,7 +37,21 @@ signatures à `/opt/vigil/data/state/clamav` et enregistre une exception
 AppArmor pour ce seul répertoire dans le fichier local du profil
 FreshClam, en conservant les règles existantes.
 
-Pour un poste de développement qui lance directement le venv, vérifier
+Sur une installation existante sous `/opt/vigil`, lancer depuis le compte
+opérateur `bash scripts/post-install/update-cli.sh`. Ce script remet en place
+les règles limitées à `/opt/vigil/data/state/clamav` et recharge le profil
+FreshClam si AppArmor est actif. Le test suivant lit la configuration sans
+télécharger de signatures.
+
+```bash
+freshclam --config-file=/opt/vigil/data/state/clamav/vigil-freshclam.conf --version
+```
+
+Si le test échoue encore, vérifier les refus AppArmor dans le journal noyau
+et les droits de passage et de lecture avec
+`namei -l /opt/vigil/data/state/clamav/vigil-freshclam.conf`.
+
+Pour un poste de développement hors de `/opt/vigil`, vérifier
 l’inclusion du fichier local puis l’ouvrir avec `sudoedit`.
 
 ```bash
