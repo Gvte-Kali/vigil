@@ -31,4 +31,6 @@ vigil = ["modules/*.yaml"]
   "data/icons/home.svg", "data/icons/database.svg", "data/icons/settings.svg", "data/icons/play.svg",
   "data/icons/folder-tree.svg", "data/icons/flask-conical.svg", "data/icons/list.svg", "data/icons/search.svg",
   "data/icons/image.svg", "data/icons/plug.svg", "data/icons/circle-dot.svg",
+  "data/icons/folder-plus.svg", "data/icons/import.svg", "data/icons/archive.svg", "data/icons/folder-input.svg",
+  "data/icons/trash.svg", "data/icons/x.svg", "data/icons/LICENSE-lucide",
 ]

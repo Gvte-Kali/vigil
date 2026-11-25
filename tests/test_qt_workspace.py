@@ -96,6 +96,45 @@ class WorkspaceTest(unittest.TestCase):
             self.assertIsNone(window.case_picker)
             self.close_workspace(window)
 
+    def test_case_manager_action_bars_and_import_menu_at_minimum_size(self):
+        from PySide6.QtWidgets import QToolButton
+        from vigil.case_manager import CaseManager
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            for language, label in (("fr", "Importer"), ("en", "Import")):
+                window.change_language(language)
+                calls = []
+                dialog = CaseManager(window, lambda: [], lambda: None, lambda: calls.append("legacy"),
+                                     lambda _: None, lambda _: None,
+                                     import_archive=lambda: calls.append("archive"))
+                dialog.show()
+                self.app.processEvents()
+                for size in (dialog.size(), dialog.minimumSize()):
+                    dialog.resize(size)
+                    self.app.processEvents()
+                    self.assertLess(dialog.new.y(), dialog.search.y())
+                    self.assertLess(dialog.import_button.y(), dialog.search.y())
+                    self.assertEqual(dialog.count.geometry().center().y(), dialog.open.geometry().center().y())
+                    for action in (dialog.new, dialog.import_button, dialog.cancel, dialog.open):
+                        self.assertIs(action.parentWidget(), dialog)
+                        self.assertTrue(dialog.rect().contains(action.geometry()))
+                    self.assertFalse(dialog.open.isEnabled())
+                self.assertEqual(dialog.import_button.text(), label)
+                self.assertEqual(dialog.import_button.popupMode(), QToolButton.ToolButtonPopupMode.InstantPopup)
+                menu_actions = dialog.import_button.menu().actions()
+                self.assertEqual(len(menu_actions), 2)
+                for action in menu_actions:
+                    self.assertFalse(action.icon().isNull())
+                    action.trigger()
+                self.assertEqual(calls, ["archive", "legacy"])
+                dialog.reject()
+                dialog.deleteLater()
+            self.close_workspace(window)
+
     def test_archive_preview_confirmation_restores_without_activating(self):
         from vigil import storage
         from vigil.case_export import export_case

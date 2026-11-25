@@ -29,6 +29,7 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] Commande officielle vigil, migration des lanceurs connus et séparation de la GUI.
 [ ] Recette de transfert entre deux postes et de reprise après arrêt brutal en VM.
 [x] Le texte d’attente de l’inspecteur disparaît dès la sélection d’une affaire, sans attendre le prochain cycle Qt.
+[x] Gestionnaire d’affaires sans défilement des actions, avec menu d’import unique et validation séparée.
 [ ] Recette native du gestionnaire sous Parrot, X11, Wayland et Hyprland.
 [x] Langue de la GUI transmise aux terminaux et à l’acquisition après sudo. Premiers messages FR/EN.
 [ ] Traduire les messages spécifiques des scripts historiques, les outils de maintenance et les PDF. Recette FR/EN complète.

@@ -8,8 +8,8 @@ from PySide6.QtCore import (
 from PySide6.QtGui import QColor, QFontDatabase, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QHBoxLayout, QLabel,
-    QLineEdit, QListView, QPlainTextEdit, QPushButton, QScrollArea, QSplitter,
-    QStackedWidget, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget,
+    QLineEdit, QListView, QMenu, QPlainTextEdit, QPushButton, QScrollArea, QSplitter,
+    QStackedWidget, QStyle, QStyledItemDelegate, QToolButton, QVBoxLayout, QWidget,
 )
 
 from .desktop_theme import ACCENT, SUCCESS, VIOLET
@@ -166,6 +166,30 @@ class CaseManager(QDialog):
         header.addLayout(heading, 1)
         root.addLayout(header)
 
+        management = QHBoxLayout()
+        management.setSpacing(8)
+        self.new = self.make_button(management, tr("Nouvelle affaire", "New case"),
+                                    "folder-plus", create, color=SUCCESS)
+        self.import_button = QToolButton()
+        self.import_button.setObjectName("caseImportButton")
+        self.import_button.setText(tr("Importer", "Import"))
+        self.import_button.setIcon(self.icon("import", VIOLET))
+        self.import_button.setIconSize(QSize(16, 16))
+        self.import_button.setMinimumHeight(36)
+        self.import_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.import_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.import_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(self.import_button)
+        menu.setObjectName("caseImportMenu")
+        menu.addAction(self.icon("archive", ACCENT),
+                       tr("Importer une archive Vigil 2.0", "Import a Vigil 2.0 archive"), import_archive)
+        menu.addAction(self.icon("folder-input", VIOLET),
+                       tr("Importer un ancien projet Vigil 1.0", "Import a legacy Vigil 1.0 project"), import_case)
+        self.import_button.setMenu(menu)
+        management.addWidget(self.import_button)
+        management.addStretch()
+        root.addLayout(management)
+
         toolbar = QHBoxLayout()
         self.search = QLineEdit()
         self.search.setPlaceholderText(tr("Rechercher une affaire", "Search cases"))
@@ -179,7 +203,6 @@ class CaseManager(QDialog):
                             tr("Création récente", "Newest created"), tr("Dernière activité", "Last activity")])
         toolbar.addWidget(self.sort)
         self.count = plain_label()
-        toolbar.addWidget(self.count)
         root.addLayout(toolbar)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -218,40 +241,38 @@ class CaseManager(QDialog):
         self.list_stack.addWidget(empty)
         splitter.addWidget(self.list_stack)
 
+        inspector_panel = QWidget()
+        inspector_panel.setObjectName("caseInspectorPanel")
+        inspector_layout = QVBoxLayout(inspector_panel)
+        inspector_layout.setContentsMargins(1, 1, 1, 8)
+        inspector_layout.setSpacing(4)
         scroll = QScrollArea()
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
         inspector = QWidget()
         self.details = QVBoxLayout(inspector)
         self.details.setContentsMargins(12, 12, 12, 12)
         self.details.setSpacing(8)
         scroll.setWidget(inspector)
-        splitter.addWidget(scroll)
+        inspector_layout.addWidget(scroll, 1)
+        inspector_actions = QHBoxLayout()
+        inspector_actions.setContentsMargins(8, 0, 8, 0)
+        inspector_actions.addStretch()
+        self.delete = self.make_button(inspector_actions, tr("Supprimer", "Delete"), "trash",
+                                       lambda: delete(self.selected_id()), color="#FF9CA3")
+        self.delete.setProperty("caseDestructive", True)
+        inspector_layout.addLayout(inspector_actions)
+        splitter.addWidget(inspector_panel)
         splitter.setSizes([460, 380])
 
         divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.HLine)
+        divider.setObjectName("caseActionDivider")
+        divider.setFixedHeight(1)
         root.addWidget(divider)
         bar = QHBoxLayout()
-        actions = QWidget()
-        management = QHBoxLayout(actions)
-        management.setContentsMargins(0, 0, 0, 0)
-        self.new = self.make_button(management, tr("Nouvelle affaire", "New case"), "plus", create)
-        self.archive_button = self.make_button(management, tr("Importer une archive Vigil 2.0",
-                                                               "Import a Vigil 2.0 archive"), "upload", import_archive)
-        self.import_button = self.make_button(management, tr("Importer un projet Vigil 1.0",
-                                                              "Import a Vigil 1.0 project"), "folder", import_case)
-        self.import_button.setToolTip(tr("Importer un ancien projet Vigil", "Import a legacy Vigil project"))
-        self.delete = self.make_button(management, tr("Supprimer", "Delete"), "trash",
-                                       lambda: delete(self.selected_id()), color="#FF9CA3")
-        self.delete.setProperty("caseDestructive", True)
-        management.addStretch()
-        action_scroll = QScrollArea()
-        action_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        action_scroll.setWidget(actions)
-        action_scroll.setWidgetResizable(True)
-        action_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        action_scroll.setFixedHeight(actions.sizeHint().height() + 20)
-        bar.addWidget(action_scroll, 1)
+        bar.setSpacing(8)
+        bar.addWidget(self.count)
+        bar.addStretch()
         self.cancel = self.make_button(bar, tr("Annuler", "Cancel"), "x", self.reject)
         self.open = self.make_button(bar, tr("Ouvrir l’affaire", "Open case"), "folder",
                                      lambda: open_case(self.selected_id()), color="#101318")
@@ -270,14 +291,19 @@ class CaseManager(QDialog):
             shortcut = QShortcut(QKeySequence(key), self.list, activated=self.open.click)
             shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
             self.shortcuts.append(shortcut)
+        self.setTabOrder(self.new, self.import_button)
+        self.setTabOrder(self.import_button, self.search)
         self.setTabOrder(self.search, self.sort)
         self.setTabOrder(self.sort, self.list)
-        self.setTabOrder(self.list, self.new)
+        self.setFocusProxy(self.search)
+        self.search.setFocus()
         self.update_filter()
 
     def make_button(self, layout, text, icon, action, *, color=ACCENT):
         button = QPushButton(self.icon(icon, color), text)
         button.setAutoDefault(False)
+        button.setIconSize(QSize(16, 16))
+        button.setMinimumHeight(36)
         button.clicked.connect(action)
         layout.addWidget(button)
         return button

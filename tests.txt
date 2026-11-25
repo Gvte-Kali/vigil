@@ -495,3 +495,7 @@ Recette interface et terminaux
 [ ] Sur un poste de recette avec les anciens lanceurs, exécuter update-cli.sh
     deux fois. Contrôler command -v vigil, le raccourci Qt et la conservation
     des données. Vérifier le diagnostic face à un exécutable tiers homonyme.
+
+[ ] Dans le Gestionnaire d’affaires FR et EN, réduire la fenêtre au minimum.
+    Vérifier que les actions restent visibles, que les deux imports sont
+    accessibles sous « Importer » et que la suppression reste dans l’inspecteur.

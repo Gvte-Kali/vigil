@@ -33,6 +33,20 @@ QListView#caseManagerList {
     background: #18212B; alternate-background-color: #263444; selection-background-color: #203741;
     border: 1px solid #35404E; border-radius: 6px;
 }
+QWidget#caseInspectorPanel { border: 1px solid #35404E; border-radius: 6px; }
+QFrame#caseActionDivider { background: #35404E; border: none; }
+QToolButton#caseImportButton {
+    background: #273447; color: #F1F6FC; border: 1px solid #4B6076;
+    border-radius: 7px; padding: 6px 22px 6px 12px; font-weight: 600;
+}
+QToolButton#caseImportButton:hover { background: #35475D; border-color: #7393AE; }
+QToolButton#caseImportButton:focus { border-color: #A3F3FC; }
+QToolButton#caseImportButton:disabled { background: #202A36; color: #91A1B3; border-color: #35404E; }
+QToolButton#caseImportButton::menu-indicator { subcontrol-position: right center; right: 8px; }
+QMenu#caseImportMenu { background: #18212B; border: 1px solid #35404E; padding: 4px; }
+QMenu#caseImportMenu::item { padding: 8px 14px 8px 30px; border-radius: 4px; }
+QMenu#caseImportMenu::item:selected { background: #203741; color: #A5EAF2; }
+QMenu#caseImportMenu::item:disabled { color: #91A1B3; }
 QPushButton[caseDestructive="true"]:enabled { color: #FF9CA3; border-color: #75434B; }
 QPushButton[caseDestructive="true"]:enabled:hover { background: #482A34; }
 QListWidget#navigation {
