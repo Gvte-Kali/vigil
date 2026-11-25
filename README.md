@@ -15,20 +15,23 @@ Pour lancer l'espace de travail Qt sur un clone de la branche `vigil-2.0` :
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -e '.[desktop]'
-.venv/bin/vigil2-gui
+.venv/bin/vigil-gui
 ```
+
+Pour une installation existante dans `/opt/vigil`, suivre [la mise à jour des lanceurs](docs/installation/README.md#mettre-à-jour-les-lanceurs-dune-installation-existante).
 
 La [recette Parrot](tests.txt) couvre le sélecteur FR/EN, les affaires,
 les preuves et les parcours historiques encore disponibles dans Tkinter.
 
-## Installer la version historique
+## Installer Vigil sur un poste Parrot ou Debian
 
 Placer le dépôt dans `/opt/vigil`, puis lancer :
 
 ```bash
 cd /opt/vigil
 bash scripts/post-install/post_install_vigil.sh
-vigil
+vigil --help
+/opt/vigil/scripts/post-install/vigil-qt
 ```
 
 L'administrateur doit préparer les répertoires de travail et, sur un poste

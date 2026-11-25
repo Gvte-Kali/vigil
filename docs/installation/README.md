@@ -16,11 +16,13 @@ Consulter la [procédure de transition des privilèges](../development/phase-01-
 ```bash
 cd /opt/vigil
 bash scripts/post-install/post_install_vigil.sh
-vigil
+vigil --help
+/opt/vigil/scripts/post-install/vigil-qt
 ```
 
-Le post-install place le venv Qt dans `/opt/vigil/.venv` et le lanceur
-`vigil` démarre Qt avec les données de travail dans `/opt/vigil/data/state`.
+Le post-install place le venv dans `/opt/vigil/.venv`. La commande `vigil`
+ouvre la CLI. Le raccourci graphique appelle `vigil-qt`, qui démarre Qt
+avec les données de travail dans `/opt/vigil/data/state`.
 La configuration des signatures se trouve dans le sous-dossier `clamav`.
 Un lancement éditable depuis le code dans /opt/vigil utilise aussi cet
 emplacement pour la base, la custody historique, les signatures, les
@@ -42,6 +44,25 @@ au premier démarrage si le nouveau fichier de préférences est absent.
 L’accès RDP est proposé pendant l’installation et désactivé par défaut.
 Après installation, terminer les réglages KDE décrits dans `post-install-checked.txt`
 à la racine du dépôt, puis [configurer l’entité et les utilisateurs](../configuration/systeme.md).
+
+## Mettre à jour les lanceurs d’une installation existante
+
+Fermer Vigil, puis lancer depuis la session opérateur.
+
+```bash
+cd /opt/vigil
+git pull --ff-only
+bash scripts/post-install/update-cli.sh
+hash -r
+command -v vigil
+vigil --version
+vigil --help
+```
+
+Cette mise à jour réinstalle le paquet et prépare les lanceurs reconnus.
+Un conflit de commande est signalé avec son chemin. Le détail des
+emplacements gérés, du retour arrière et des raccourcis personnalisés
+figure dans [la transition CLI](../development/cli-command-transition.md).
 
 ## Modifications du poste
 

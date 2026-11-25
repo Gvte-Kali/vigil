@@ -13,12 +13,12 @@ grand_parent: Actions
 Depuis **Affaire en cours → Exporter l’affaire**, choisir **Créer l’archive
 complète** et une destination. Le dossier publié contient `affaire.tar.gz` et
 `affaire.tar.gz.sha256`. En CLI, la commande équivalente est
-`vigil2 cases export ID DESTINATION --operator NOM`.
+`vigil cases export ID DESTINATION --operator NOM`.
 
 Depuis le **Gestionnaire d’affaires**, choisir **Importer une archive Vigil
 2.0**, sélectionner le TAR.GZ et confirmer après vérification. Le même service
-est disponible via `vigil2 cases verify-archive CHEMIN` et
-`vigil2 cases import-archive CHEMIN --operator NOM`. L’import des dossiers
+est disponible via `vigil cases verify-archive CHEMIN` et
+`vigil cases import-archive CHEMIN --operator NOM`. L’import des dossiers
 Vigil 1.0 avec `info.json` reste une action distincte.
 
 Une archive partielle conserve les références et empreintes des preuves dont

@@ -3,6 +3,7 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import asdict
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -14,7 +15,7 @@ from .case_import import import_archive, verify_archive
 from .core import BUILTIN_MODULES, discover, doctor
 from .images import inspect_raw
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(name="vigil", no_args_is_help=True)
 modules = typer.Typer(no_args_is_help=True)
 cases = typer.Typer(no_args_is_help=True)
 evidence = typer.Typer(no_args_is_help=True)
@@ -22,6 +23,25 @@ app.add_typer(modules, name="modules")
 app.add_typer(cases, name="cases")
 app.add_typer(evidence, name="evidence")
 DatabaseOption = Annotated[Optional[Path], typer.Option("--db")]
+
+
+def show_version(requested: bool):
+    if requested:
+        try:
+            release = version("vigil-dfir")
+        except PackageNotFoundError:
+            release = "2.0.0a1"
+        typer.echo(f"Vigil {release}")
+        raise typer.Exit()
+
+
+@app.callback()
+def options(
+    version_requested: Annotated[Optional[bool], typer.Option(
+        "--version", callback=show_version, is_eager=True, help="Show the Vigil version and exit.",
+    )] = None,
+):
+    """Vigil digital forensics workspace."""
 
 
 @contextmanager
@@ -126,4 +146,4 @@ def inspect_raw_command(path: Path, sector_size: int = 512):
 
 
 if __name__ == "__main__":
-    app()
+    app(prog_name="vigil")

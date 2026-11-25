@@ -3,6 +3,8 @@ set -euo pipefail
 
 script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 . "$script_directory/../lib/vigil-terminal.sh"
+. "$script_directory/../lib/vigil-launchers.sh"
+vigil_launchers_preflight /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop
 
 vigil_banner 'Vigil · Installation de Vigil / Vigil installation'
 printf '%s\n' 'FR — sudo prépare les dossiers système, installe les dépendances et configure Vigil sur ce poste.' \
@@ -124,8 +126,7 @@ touch /opt/vigil/data/active_project
 touch /opt/vigil/data/usb/whitelist.txt /opt/vigil/data/usb/blacklist.txt
 
 # --- 6.1. Installer Qt dans /opt/vigil ---
-python3 -m venv /opt/vigil/.venv
-/opt/vigil/.venv/bin/python -m pip install -e '/opt/vigil[desktop]'
+vigil_install_cli /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop
 signature_dir=/opt/vigil/data/state/clamav
 if [ "$(realpath -m -- "$signature_dir")" != "$signature_dir" ]; then
     echo "Le répertoire des signatures traverse un lien symbolique : $signature_dir" >&2
@@ -155,8 +156,6 @@ elif [ -f "$profile" ]; then
     echo "apparmor_parser indisponible : configuration FreshClam à valider par l’administrateur." >&2
 fi
 
-sudo ln -sf /opt/vigil/scripts/post-install/vigil-qt /usr/local/bin/vigil
-
 # --- 8. Créer le raccourci bureau (item 6 du checklist) ---
 echo "Création du raccourci Vigil..."
 # Installer l'icône SVG de l'application dans le chemin système des icônes.
@@ -177,7 +176,7 @@ sudo tee /usr/share/applications/vigil.desktop >/dev/null <<DESKTOP_EOF
 [Desktop Entry]
 Name=Vigil
 Comment=Outil d'analyse forensique pour périphériques USB
-Exec=/usr/local/bin/vigil
+Exec=/opt/vigil/scripts/post-install/vigil-qt
 Icon=$VIGIL_ICON
 Terminal=false
 Type=Application

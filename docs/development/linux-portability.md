@@ -8,8 +8,8 @@ et la GUI Tk restent dans la distribution du dépôt.
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install .
-.venv/bin/vigil2 doctor
-.venv/bin/vigil2 modules list
+.venv/bin/vigil doctor
+.venv/bin/vigil modules list
 ```
 
 Cible de validation Debian/Kali/Parrot, Fedora, Arch, openSUSE et Alpine,
@@ -25,7 +25,7 @@ Konsole, GNOME Terminal, XFCE Terminal, kitty ou xterm. Installer Tk et un
 terminal utilisable dans la session. Tk repose sur X11, donc XWayland est
 nécessaire dans une session Wayland. Le workspace Qt utilise les plugins de plateforme Qt pour X11 ou Wayland
 selon la session et ne dépend pas d'un gestionnaire de fenêtres précis.
-Installer l'extra `desktop` et lancer `vigil2-gui` depuis le venv.
+Installer l'extra `desktop` et lancer `vigil-gui` depuis le venv.
 La [recette Parrot](../../tests.txt) détaille la bascule FR/EN persistante,
 les parcours Qt disponibles et la coexistence avec Tk. Le transport PTY possède un terminal de contrôle, reçoit les frappes et
 le redimensionnement. Son raccordement aux adaptateurs et au futur
@@ -39,12 +39,12 @@ dépendances minimales. Le diagnostic inspecte le PATH et la session,
 sans exécuter les outils. Les commandes produisent du JSON.
 
 ```bash
-vigil2 cases create 'Affaire exemple' --operator Alice
-vigil2 cases list
-vigil2 cases import /chemin/vers/copie-projet --operator Alice
-vigil2 evidence add ID_AFFAIRE /chemin/vers/fixture.raw --operator Alice
-vigil2 evidence verify ID_PREUVE --operator Alice
-vigil2 evidence inspect-raw /chemin/vers/fixture.raw
+vigil cases create 'Affaire exemple' --operator Alice
+vigil cases list
+vigil cases import /chemin/vers/copie-projet --operator Alice
+vigil evidence add ID_AFFAIRE /chemin/vers/fixture.raw --operator Alice
+vigil evidence verify ID_PREUVE --operator Alice
+vigil evidence inspect-raw /chemin/vers/fixture.raw
 ```
 
 La base v1 est initialisée transactionnellement dans
@@ -78,8 +78,8 @@ virtuel. Conserver la base et les projets sources pour reprise.
 La CLI peut aussi vérifier et restaurer un transfert d’affaire.
 
 ```sh
-vigil2 cases verify-archive /chemin/affaire.tar.gz
-vigil2 cases import-archive /chemin/affaire.tar.gz --operator Alice
+vigil cases verify-archive /chemin/affaire.tar.gz
+vigil cases import-archive /chemin/affaire.tar.gz --operator Alice
 ```
 
 Le chemin peut désigner le dossier d’export. La commande retourne du JSON

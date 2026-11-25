@@ -1,4 +1,4 @@
 #!/bin/sh
 # Site launcher for the installation rooted at /opt/vigil.
 export VIGIL_STATE_DIR=/opt/vigil/data/state
-exec /opt/vigil/.venv/bin/vigil2-gui "$@"
+exec /opt/vigil/.venv/bin/vigil-gui "$@"

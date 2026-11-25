@@ -13,10 +13,10 @@ A. Installation et mises à jour
     git rev-parse --short HEAD
     Vérifier que la branche active est vigil-2.0.
 [ ] Installer une fois les dépendances Qt dans un environnement utilisateur.
-    python3 -m venv "$HOME/.venvs/vigil2"
-    "$HOME/.venvs/vigil2/bin/python" -m pip install -e '.[desktop]'
+    python3 -m venv "$HOME/.venvs/vigil"
+    "$HOME/.venvs/vigil/bin/python" -m pip install -e '.[desktop]'
 [ ] Lancer la suite depuis /opt/vigil.
-    QT_QPA_PLATFORM=offscreen "$HOME/.venvs/vigil2/bin/python" -m unittest discover -s tests -v
+    QT_QPA_PLATFORM=offscreen "$HOME/.venvs/vigil/bin/python" -m unittest discover -s tests -v
     Vérifier qu’aucun test Qt n’est marqué skipped.
 [ ] Préparer une session isolée depuis le même terminal.
     recette=$(mktemp -d)
@@ -24,7 +24,7 @@ A. Installation et mises à jour
     export XDG_CONFIG_HOME="$recette/config"
     printf 'Session de recette : %s\n' "$recette"
     Fermer puis relancer depuis ce terminal pour tester la persistance.
-[ ] Lancer "$HOME/.venvs/vigil2/bin/vigil2-gui" dans la session graphique.
+[ ] Lancer "$HOME/.venvs/vigil/bin/vigil-gui" dans la session graphique.
     Vérifier le logo, l’affichage du thème et les onglets.
 [ ] Après un nouveau pull, relancer la même commande. Réinstaller avec pip
     si les dépendances ou le point d’entrée changent.
@@ -106,9 +106,9 @@ D. Registre, CLI et compatibilité
     Le test tests/test_vigil_core.py fabrique une fixture et vérifie l’audit.
 [ ] Dans Modules, vérifier les neuf analyses du registre. Dans Diagnostic,
     vérifier la session et les outils détectés ou signalés indisponibles.
-[ ] Lancer "$HOME/.venvs/vigil2/bin/vigil2" doctor et
-    "$HOME/.venvs/vigil2/bin/vigil2" modules list. Comparer avec Qt.
-[ ] Lancer "$HOME/.venvs/vigil2/bin/vigil2" cases list depuis la même
+[ ] Lancer "$HOME/.venvs/vigil/bin/vigil" doctor et
+    "$HOME/.venvs/vigil/bin/vigil" modules list. Comparer avec Qt.
+[ ] Lancer "$HOME/.venvs/vigil/bin/vigil" cases list depuis la même
     session de recette. Vérifier que les affaires créées dans Qt y figurent.
 [ ] Vérifier la lecture d’un index census synthétique, le rejet des bases
     checksafe mal formées et la saisie PTY avec la suite automatisée.
@@ -489,3 +489,9 @@ Recette interface et terminaux
 [ ] Refaire l’import en CLI puis avec une archive partielle et un checksum
     externe incorrect. Vérifier le JSON, les diagnostics et l’absence d’affaire
     invalide. Tester aussi un dossier Vigil 1.0 contenant info.json.
+
+[ ] Dans un venv neuf, installer le paquet puis exécuter vigil --help,
+    vigil --version et vigil --show-completion. Vérifier le lanceur graphique.
+[ ] Sur un poste de recette avec les anciens lanceurs, exécuter update-cli.sh
+    deux fois. Contrôler command -v vigil, le raccourci Qt et la conservation
+    des données. Vérifier le diagnostic face à un exécutable tiers homonyme.

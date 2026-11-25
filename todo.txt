@@ -26,6 +26,7 @@ CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
 [x] Nom lisible des dossiers d’affaires et migration vérifiée par fixture SQLite. Activation explicite dans le sélecteur.
 [x] Gestionnaire d’affaires Qt avec modèle filtrable, inspecteur, création et suppression contextualisée.
 [x] Archives d’affaires v3 vérifiables et restaurables par Qt et CLI, lecture v2 et migration SQLite 5.
+[x] Commande officielle vigil, migration des lanceurs connus et séparation de la GUI.
 [ ] Recette de transfert entre deux postes et de reprise après arrêt brutal en VM.
 [x] Le texte d’attente de l’inspecteur disparaît dès la sélection d’une affaire, sans attendre le prochain cycle Qt.
 [ ] Recette native du gestionnaire sous Parrot, X11, Wayland et Hyprland.
