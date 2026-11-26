@@ -36,7 +36,7 @@ vigil_banner 'Vigil · Installation de Vigil / Vigil installation'
 sudo -v
 if sudo test -e /etc/sudoers.d/vigil; then
     echo "Règle sudoers Vigil existante : faites-la examiner et retirer par l'administrateur."
-    echo "Voir docs/development/phase-01-transition.md."
+    echo "Voir docs/installation/README.md#reprendre-le-post-install."
     exit 1
 fi
 check_vigil_zones_unmounted() {

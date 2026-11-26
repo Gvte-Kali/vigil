@@ -35,13 +35,9 @@ git clone --branch vigil-2.0 --single-branch https://github.com/Gvte-Kali/vigil.
 cd /opt/vigil
 install -d -m 0700 logs rapports
 bash scripts/post-install/post_install_vigil.sh --dry-run
-bash scripts/post-install/post_install_vigil.sh
-hash -r
-command -v vigil vigil-gui vigil-tui
-vigil --version
-vigil --help
-vigil doctor
-vigil gui
+bash scripts/post-install/post_install_vigil.sh &&
+  hash -r && command -v vigil vigil-gui vigil-tui &&
+  vigil --version && vigil --help && vigil doctor && vigil gui
 ```
 
 Le post-install met à jour les index APT, simule la résolution des paquets,
@@ -75,6 +71,38 @@ Après installation, [configurer l’entité et les utilisateurs](../configurati
 Dans Actions rapides, lancer la mise à jour des signatures avant le premier
 scan. Pendant la recette, ouvrir aussi `vigil tui` et vérifier la protection
 et sa restitution à la fermeture avec un support synthétique.
+
+## Reprendre le post-install
+
+Si le post-install s’arrête sur `/etc/sudoers.d/vigil`, les lanceurs sont
+encore absents. Garder le clone dans `/opt/vigil` et examiner le fichier
+depuis un compte administrateur dont les droits sont indépendants de ce fichier.
+
+```bash
+sudo visudo -c
+sudo cat -- /etc/sudoers.d/vigil
+```
+
+Si le fichier contient uniquement la règle héritée de Vigil, déplacer la
+sauvegarde hors de `/etc/sudoers.d`. Si le fichier contient aussi des règles
+utiles à d’autres opérations, demander à l’administrateur de les conserver
+dans un fichier distinct validé avec `visudo` avant de retirer l’ancien fichier.
+
+```bash
+sudo install -d -m 0700 /root/vigil-sudoers-backup
+sudo mv -- /etc/sudoers.d/vigil "/root/vigil-sudoers-backup/vigil-$(date +%Y%m%d-%H%M%S)"
+sudo visudo -c
+sudo -l
+```
+
+Depuis le compte opérateur, relancer le post-install. La suite s’exécute
+uniquement si le post-install réussit.
+
+```bash
+cd /opt/vigil && bash scripts/post-install/post_install_vigil.sh &&
+  hash -r && command -v vigil vigil-gui vigil-tui &&
+  vigil --version && vigil gui
+```
 
 ## Mettre à jour les lanceurs d’une installation existante
 

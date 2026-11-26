@@ -18,3 +18,10 @@ rendu sur mobile avant de publier. Ne pas ajouter `_site/`, `.jekyll-cache/`,
 La publication GitHub Pages conserve la source `docs/`. La palette Graphite est
 chargée par `_sass/color_schemes/graphite.scss`. Le README de chaque rubrique
 conserve son adresse pour préserver les liens existants.
+
+Pour ajouter une traduction anglaise, placer la page sous `en/` et déclarer
+`layout: english`, `parent: English` et `translation_of: chemin/page.md`
+avec le chemin de la page française relatif à `docs/`. Le bouton du thème
+déduit les deux destinations de ce lien. Il propose l’accueil anglais
+quand une page française n’a pas de traduction. Tester les deux sens
+avec `--baseurl /vigil` pour couvrir le préfixe de GitHub Pages.
