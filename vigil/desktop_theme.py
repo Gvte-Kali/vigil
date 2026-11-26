@@ -9,8 +9,8 @@ WARNING = "#E4BC72"
 VIOLET = "#B59AF0"
 SPACE = 8
 ICONS = {
-    "Home": "home", "Current case": "folder", "Module catalogue": "database",
-    "Organization settings": "settings", "Quick actions": "play",
+    "Dashboard": "home", "Configuration": "settings", "Entity": "folder", "System": "settings", "Current case": "folder", "Module catalogue": "database",
+    "Quick actions": "play",
     "Evidence explorer": "folder-tree", "Evidence": "shield", "Analyses": "flask-conical",
     "Actions and history": "list", "PDF reports": "folder", "Export case": "upload",
 }

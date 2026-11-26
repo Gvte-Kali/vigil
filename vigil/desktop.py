@@ -42,7 +42,7 @@ from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
 from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_workflow_command
-from .external_terminal import TERMINALS, launch_terminal, launch_tracked
+from .external_terminal import TERMINALS, detected_terminal, launch_terminal, launch_tracked
 
 ANALYSIS_LABELS = {
     "archives": ("Archives", "Archives"),
@@ -216,7 +216,7 @@ class Workspace(QMainWindow):
         self.setCentralWidget(root)
 
         self.navigation_group("ESPACE DE TRAVAIL", "WORKSPACE")
-        home = self.page("Accueil", "Home", scroll=True)
+        home = self.page("Tableau de bord", "Dashboard", scroll=True)
         self.dashboard_case = QLabel()
         self.dashboard_case.setTextFormat(Qt.TextFormat.PlainText)
         home.addWidget(self.dashboard_case)
@@ -253,7 +253,6 @@ class Workspace(QMainWindow):
         self.hotplug_status.setWordWrap(True)
         hotplug_column = QVBoxLayout()
         dashboard_body.addLayout(hotplug_column, 3)
-        hotplug_column.addWidget(self.hotplug_status)
         self.system_panel = SystemPanel(self.tr_pair, self.action_icon)
         hotplug_column.addWidget(self.system_panel, 1)
         dashboard_side = QVBoxLayout()
@@ -264,22 +263,6 @@ class Workspace(QMainWindow):
         dashboard_side.addWidget(recent)
         self.dashboard_events = QListWidget()
         dashboard_side.addWidget(self.dashboard_events, 1)
-        tooling = QLabel()
-        tooling.setObjectName("quickActionTitle")
-        self.bind(tooling.setText, "Session et outils", "Session and tools")
-        dashboard_side.addWidget(tooling)
-        self.tools_filter = QComboBox()
-        self.tools_filter.addItems(["", ""])
-        self.bind(lambda label: self.tools_filter.setItemText(0, label), "Tous les outils", "All tools")
-        self.bind(lambda label: self.tools_filter.setItemText(1, label), "Outils manquants", "Missing tools")
-        self.tools_filter.currentIndexChanged.connect(self.filter_tools)
-        dashboard_side.addWidget(self.tools_filter)
-        self.diagnostics = self.data_table(3)
-        self.bind(lambda _: self.diagnostics.setHorizontalHeaderLabels([
-            self.tr_pair("Outil", "Tool"), self.tr_pair("État", "Status"), self.tr_pair("Chemin", "Path")
-        ]), "", "")
-        dashboard_side.addWidget(self.diagnostics, 1)
-
 
         self.case_picker = None
         self.cases = QListWidget(self)
@@ -316,21 +299,7 @@ class Workspace(QMainWindow):
         self.investigation_mount.setWordWrap(True)
         case_workspace.addWidget(self.investigation_mount)
         self.case_workspace_page = case_workspace.parentWidget()
-        case_body = QHBoxLayout()
-        case_workspace.addLayout(case_body, 1)
-        self.case_navigation = QTabBar()
-        self.case_navigation.setExpanding(False)
-        self.case_navigation.setUsesScrollButtons(True)
-        self.case_navigation.setIconSize(QSize(16, 16))
-        case_workspace.insertWidget(case_workspace.count() - 1, self.case_navigation)
-        self.case_pages = QStackedWidget()
-        case_content = QScrollArea()
-        case_content.setFrameShape(QFrame.Shape.NoFrame)
-        case_content.setWidgetResizable(True)
-        case_content.setWidget(self.case_pages)
-        case_body.addWidget(case_content, 1)
-        self.case_navigation.setObjectName("caseNavigation")
-        self.bind(self.case_navigation.setAccessibleName, "Vues de l’affaire", "Case views")
+        self.case_navigation, self.case_pages = self.workspace_tabs(case_workspace, "Vues de l’affaire", "Case views")
 
         explorer = self.case_view("Explorateur", "Evidence explorer")
         self.explorer_case_id = None
@@ -390,35 +359,6 @@ class Workspace(QMainWindow):
         self.button(module_actions, "Consulter un index de recensement",
                     "Query a census index", self.query_index, primary=True)
         module_actions.addStretch()
-        catalogue = self.page("Catalogue de modules", "Module catalogue")
-        catalogue_actions = QHBoxLayout()
-        catalogue.addLayout(catalogue_actions)
-        self.catalogue_filter = QLineEdit()
-        self.catalogue_filter.addAction(self.action_icon("search", ACCENT), QLineEdit.ActionPosition.LeadingPosition)
-        self.bind(self.catalogue_filter.setPlaceholderText, "Rechercher un module", "Search modules")
-        catalogue_actions.addWidget(self.catalogue_filter, 1)
-        self.catalogue_availability = QComboBox()
-        self.catalogue_availability.addItems(["", ""])
-        self.bind(lambda text: self.catalogue_availability.setItemText(0, text), "Tous", "All")
-        self.bind(lambda text: self.catalogue_availability.setItemText(1, text), "Disponibles", "Available")
-        catalogue_actions.addWidget(self.catalogue_availability)
-        self.button(catalogue_actions, "Créer un module", "Create a module", self.new_module, primary=True)
-        module_split = QSplitter()
-        catalogue.addWidget(module_split, 1)
-        self.catalogue = self.data_table(3)
-        self.bind(lambda _: self.catalogue.setHorizontalHeaderLabels([
-            self.tr_pair("Module", "Module"), "Version", self.tr_pair("État", "Status")
-        ]), "", "")
-        self.catalogue.setColumnWidth(0, 200)
-        self.catalogue.currentCellChanged.connect(self.show_module_details)
-        self.catalogue_filter.textChanged.connect(self.filter_catalogue)
-        self.catalogue_availability.currentIndexChanged.connect(self.filter_catalogue)
-        module_split.addWidget(self.catalogue)
-        self.module_inspector = QPlainTextEdit()
-        self.module_inspector.setReadOnly(True)
-        module_split.addWidget(self.module_inspector)
-        module_split.setSizes([560, 360])
-
         history = self.case_view("Actions et journal", "Actions and history")
         self.history_filter = QLineEdit()
         self.bind(self.history_filter.setPlaceholderText, "Filtrer par action ou opérateur",
@@ -439,10 +379,6 @@ class Workspace(QMainWindow):
         actions.addStretch()
         self.history_before = None
         self.history_page = history.parentWidget()
-        self.navigation_group("SYSTÈME", "SYSTEM")
-        entity_page = self.page("Configuration de l’entité", "Organization settings", scroll=True)
-        self.entity_panel = EntityPanel(data_directory(), self.tr_pair)
-        entity_page.addWidget(self.entity_panel)
         reports = self.case_view("Rapports PDF", "PDF reports")
         self.pdf_reports_page = reports.parentWidget()
         self.pdf_reports = QTableWidget(0, 3)
@@ -531,14 +467,76 @@ class Workspace(QMainWindow):
         acquisition.addStretch()
         sections.addStretch()
 
+        self.navigation_group("SYSTÈME", "SYSTEM")
+        configuration = self.page("Configuration", "Configuration")
+        self.configuration_tabs, self.configuration_pages = self.workspace_tabs(
+            configuration, "Onglets de configuration", "Configuration tabs"
+        )
+        self.configuration_tabs.currentChanged.connect(self.configuration_pages.setCurrentIndex)
+        entity_page = self.workspace_tab(self.configuration_tabs, self.configuration_pages, "Entité", "Entity")
+        self.entity_panel = EntityPanel(data_directory(), self.tr_pair)
+        entity_page.addWidget(self.entity_panel)
+        system = self.workspace_tab(self.configuration_tabs, self.configuration_pages, "Système", "System")
+        self.section_heading(system, "Terminal par défaut", "Default terminal")
+        self.terminal_status = QLabel()
+        self.terminal_status.setTextFormat(Qt.TextFormat.PlainText)
+        system.addWidget(self.terminal_status)
+        self.button_for_terminal = self.button(system, "Choisir le terminal…", "Choose terminal…",
+                                               self.choose_terminal)
+        self.section_heading(system, "Session et environnement graphique", "Session and graphical environment")
+        self.session_status = QLabel()
+        self.session_status.setTextFormat(Qt.TextFormat.PlainText)
+        system.addWidget(self.session_status)
+        self.section_heading(system, "Protections système", "System protections")
+        system.addWidget(self.hotplug_status)
+        self.section_heading(system, "Diagnostic des outils et dépendances", "Tool and dependency diagnostics")
+        self.tools_filter = QComboBox()
+        self.tools_filter.addItems(["", "", ""])
+        self.bind(lambda label: self.tools_filter.setItemText(0, label), "Tous les outils", "All tools")
+        self.bind(lambda label: self.tools_filter.setItemText(1, label), "Outils manquants", "Missing tools")
+        self.bind(lambda label: self.tools_filter.setItemText(2, label), "Outils disponibles", "Available tools")
+        self.tools_filter.currentIndexChanged.connect(self.filter_tools)
+        system.addWidget(self.tools_filter)
+        self.diagnostics = self.data_table(3)
+        self.bind(lambda _: self.diagnostics.setHorizontalHeaderLabels([
+            self.tr_pair("Outil", "Tool"), self.tr_pair("État", "Status"), self.tr_pair("Chemin", "Path")
+        ]), "", "")
+        system.addWidget(self.diagnostics, 1)
+
+        catalogue = self.workspace_tab(self.configuration_tabs, self.configuration_pages,
+                                       "Catalogue de modules", "Module catalogue")
+        catalogue_actions = QHBoxLayout()
+        catalogue.addLayout(catalogue_actions)
+        self.catalogue_filter = QLineEdit()
+        self.catalogue_filter.addAction(self.action_icon("search", ACCENT), QLineEdit.ActionPosition.LeadingPosition)
+        self.bind(self.catalogue_filter.setPlaceholderText, "Rechercher un module", "Search modules")
+        catalogue_actions.addWidget(self.catalogue_filter, 1)
+        self.catalogue_availability = QComboBox()
+        self.catalogue_availability.addItems(["", ""])
+        self.bind(lambda text: self.catalogue_availability.setItemText(0, text), "Tous", "All")
+        self.bind(lambda text: self.catalogue_availability.setItemText(1, text), "Disponibles", "Available")
+        catalogue_actions.addWidget(self.catalogue_availability)
+        self.button(catalogue_actions, "Créer un module", "Create a module", self.new_module, primary=True)
+        module_split = QSplitter()
+        catalogue.addWidget(module_split, 1)
+        self.catalogue = self.data_table(3)
+        self.bind(lambda _: self.catalogue.setHorizontalHeaderLabels([
+            self.tr_pair("Module", "Module"), "Version", self.tr_pair("État", "Status")
+        ]), "", "")
+        self.catalogue.setColumnWidth(0, 200)
+        self.catalogue.currentCellChanged.connect(self.show_module_details)
+        self.catalogue_filter.textChanged.connect(self.filter_catalogue)
+        self.catalogue_availability.currentIndexChanged.connect(self.filter_catalogue)
+        module_split.addWidget(self.catalogue)
+        self.module_inspector = QPlainTextEdit()
+        self.module_inspector.setReadOnly(True)
+        module_split.addWidget(self.module_inspector)
+        module_split.setSizes([560, 360])
+
         self.footer_protection = QLabel()
         self.footer_zones = QLabel()
         self.statusBar().addPermanentWidget(self.footer_protection)
         self.statusBar().addPermanentWidget(self.footer_zones)
-        self.button_for_terminal = QPushButton()
-        self.bind(self.button_for_terminal.setText, "Terminal…", "Terminal…")
-        self.button_for_terminal.clicked.connect(self.choose_terminal)
-        self.statusBar().addPermanentWidget(self.button_for_terminal)
         self.refresh_operators()
         self.translate()
         self.refresh_cases()
@@ -647,14 +645,39 @@ class Workspace(QMainWindow):
             return inner
         return layout
 
-    def case_view(self, french, english):
+    def section_heading(self, layout, french, english):
+        title = QLabel()
+        title.setObjectName("quickActionTitle")
+        self.bind(title.setText, french, english)
+        layout.addWidget(title)
+
+    def workspace_tabs(self, layout, french, english):
+        navigation = QTabBar()
+        navigation.setExpanding(False)
+        navigation.setUsesScrollButtons(True)
+        navigation.setIconSize(QSize(16, 16))
+        navigation.setObjectName("caseNavigation")
+        self.bind(navigation.setAccessibleName, french, english)
+        layout.addWidget(navigation)
+        pages = QStackedWidget()
+        content = QScrollArea()
+        content.setFrameShape(QFrame.Shape.NoFrame)
+        content.setWidgetResizable(True)
+        content.setWidget(pages)
+        layout.addWidget(content, 1)
+        return navigation, pages
+
+    def workspace_tab(self, navigation, pages, french, english):
         widget = QWidget()
-        self.case_pages.addWidget(widget)
-        index = self.case_navigation.addTab(self.action_icon(ICONS[english], ACCENT), "")
-        self.bind(lambda label: self.case_navigation.setTabText(index, label), french, english)
+        pages.addWidget(widget)
+        index = navigation.addTab(self.action_icon(ICONS[english], ACCENT), "")
+        self.bind(lambda label: navigation.setTabText(index, label), french, english)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         return layout
+
+    def case_view(self, french, english):
+        return self.workspace_tab(self.case_navigation, self.case_pages, french, english)
 
     def open_case_view(self, index):
         if index >= 0:
@@ -788,8 +811,14 @@ class Workspace(QMainWindow):
 
     def refresh_diagnostics(self):
         result = doctor()
+        self.refresh_terminal_status()
+        session = self.tr_pair("Session graphique", "Graphical session")
+        desktop = self.tr_pair("Environnement de bureau", "Desktop environment")
+        self.session_status.setText(
+            f"{session} · {result['session']} · Qt {QApplication.platformName()}\n"
+            f"{desktop} · {result['desktop'] or '—'}"
+        )
         self.diagnostics.setRowCount(0)
-        self.add_table_row(self.diagnostics, [self.tr_pair("Session graphique", "Graphical session"), result["session"], ""])
         for name, path in result["tools"].items():
             self.add_table_row(self.diagnostics, [name, self.tr_pair("Disponible", "Available") if path
                                                   else self.tr_pair("Indisponible", "Unavailable"), path or "—"],
@@ -1123,7 +1152,8 @@ class Workspace(QMainWindow):
     def filter_tools(self, *_):
         for row in range(self.diagnostics.rowCount()):
             ready = self.diagnostics.item(row, 0).data(Qt.ItemDataRole.UserRole + 1)
-            self.diagnostics.setRowHidden(row, self.tools_filter.currentIndex() == 1 and ready)
+            mode = self.tools_filter.currentIndex()
+            self.diagnostics.setRowHidden(row, (mode == 1 and ready) or (mode == 2 and not ready))
 
     def filter_catalogue(self, *_):
         query = self.catalogue_filter.text().strip().casefold()
@@ -2175,6 +2205,14 @@ class Workspace(QMainWindow):
             "Legacy script opened in the terminal.",
         ), 10000)
 
+    def refresh_terminal_status(self):
+        preferred = self.settings.value("external_terminal", "")
+        preferred = preferred if preferred in TERMINALS else ""
+        configured = preferred or self.tr_pair("Automatique", "Automatic")
+        terminal = detected_terminal(preferred) or self.tr_pair("Aucun détecté", "None detected")
+        state = self.tr_pair("Terminal détecté", "Detected terminal")
+        self.terminal_status.setText(f"{configured} · {state} {terminal}")
+
     def choose_terminal(self):
         current = self.settings.value("external_terminal", "")
         choices = ["", *TERMINALS]
@@ -2188,6 +2226,7 @@ class Workspace(QMainWindow):
         if accepted:
             self.settings.setValue("external_terminal", choices[labels.index(name)])
             self.settings.sync()
+            self.refresh_terminal_status()
 
     def launch_external(self, arguments, operation, *, case_id=None, device_mode=None):
         if dev_mode.active():

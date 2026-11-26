@@ -35,6 +35,32 @@ def session_preferences(state):
         return "fr", ""
 
 
+def set_terminal_preference(state, preferred):
+    if preferred and preferred not in TERMINALS:
+        raise ValueError("unknown terminal preference")
+    path = state.parent / "preferences" / f"{os.getuid()}.ini"
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    parser = configparser.ConfigParser(interpolation=None, delimiters=("=",))
+    parser.optionxform = str
+    if path.exists():
+        try:
+            with path.open(encoding="utf-8") as stream:
+                parser.read_file(stream)
+        except configparser.Error as error:
+            raise ValueError("Invalid Vigil preferences") from error
+    if not parser.has_section("General"):
+        parser.add_section("General")
+    parser["General"]["external_terminal"] = preferred
+    with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, encoding="utf-8", delete=False) as stream:
+        staged = Path(stream.name)
+        try:
+            parser.write(stream, space_around_delimiters=False)
+            stream.flush()
+            os.replace(staged, path)
+        finally:
+            staged.unlink(missing_ok=True)
+
+
 def receipt_path(pid):
     try:
         fields = (Path("/proc") / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()

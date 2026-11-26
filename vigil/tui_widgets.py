@@ -9,7 +9,7 @@ from textual.widgets import Button, ProgressBar, Static
 
 ICONS = {
     "menu": ("☰", "="), "dashboard": ("⌂", "#"), "cases": ("▤", "[]"),
-    "quick": ("›", ">"), "entity": ("◇", "@"), "catalogue": ("≡", "#"),
+    "quick": ("›", ">"), "configuration": ("⚙", "@"),
     "scan": ("⊕", "+"), "update": ("↻", "+"), "report": ("≡", "#"),
     "mount": ("↑", "^"), "unmount": ("↓", "v"), "clone": ("⇄", "="),
     "raw": ("◇", "*"), "ok": ("●", "+"), "warning": ("▲", "!"),

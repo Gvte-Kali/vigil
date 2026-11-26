@@ -89,6 +89,9 @@ PHASE 06 — TUI TEXTUAL ET MIGRATION FONCTIONNELLE
     la GUI. Préserver --help, --version et les sorties JSON de Typer.
 
 PHASE 07 — PARITÉ ET STABILISATION NATIVES
+[x] Navigation GUI/TUI commune, onglets Entité, Système et Catalogue
+    sous Configuration, diagnostic hors du tableau de bord et préférence
+    de terminal partagée.
 [x] Vérifier le shell Qt, les dialogues, les lanceurs et les intégrations
     Core sur fixtures. Documenter la recette Parrot/Debian et Arch/Omarchy
     et consigner les backends réellement testés dans tests.txt.

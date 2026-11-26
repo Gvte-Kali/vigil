@@ -7,7 +7,23 @@ nav_order: 11
 
 # Système et utilisateurs
 
-Depuis l’accueil, ouvrir **Configuration du système**.
+Dans la GUI et la TUI, ouvrir **Système → Configuration** dans le menu
+latéral. Le menu principal présente **Tableau de bord** sous **Espace de
+travail**, puis **Affaire en cours** et **Actions rapides** sous
+**Investigation**.
+
+La page Configuration contient trois onglets horizontaux.
+
+- **Entité** regroupe les informations et le logo de l’organisation.
+- **Système** affiche la session graphique, les protections et le diagnostic
+  des outils, filtrable par disponibilité. Choisir **Automatique** pour
+  utiliser le premier terminal compatible détecté. Le choix de terminal
+  est partagé entre la GUI et la TUI pour les ouvertures externes.
+- **Catalogue de modules** regroupe la recherche, les filtres, le tableau,
+  l’inspecteur et la création de modules.
+
+Le tableau de bord conserve les métriques et l’activité de l’affaire,
+l’inventaire des disques et l’état des montages.
 
 ## Configurer l’entité
 

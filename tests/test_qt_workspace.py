@@ -568,10 +568,10 @@ class WorkspaceTest(unittest.TestCase):
                 QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
                 root / "cases.sqlite",
             )
-            self.assertEqual(window.navigation.currentItem().text(), "Accueil")
+            self.assertEqual(window.navigation.currentItem().text(), "Tableau de bord")
             self.assertEqual(window.pages.currentIndex(), 0)
             self.assertTrue(window.pages.currentWidget().isAncestorOf(window.system_panel))
-            self.assertTrue(window.pages.currentWidget().isAncestorOf(window.diagnostics))
+            self.assertFalse(window.pages.currentWidget().isAncestorOf(window.diagnostics))
             self.assertNotIn("Diagnostic", [window.navigation.item(i).text()
                                             for i in range(window.navigation.count())])
             self.assertEqual(window.system_panel.resources_timer.interval(), 5000)
@@ -582,6 +582,17 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(window.navigation.item(0).text(), "WORKSPACE")
             self.assertEqual(window.navigation.currentItem().text(), "Current case")
             self.assertEqual(window.pages.currentIndex(), 1)
+            self.assertEqual([window.navigation.item(i).text() for i in range(window.navigation.count())],
+                             ["WORKSPACE", "Dashboard", "INVESTIGATION", "Current case",
+                              "Quick actions", "SYSTEM", "Configuration"])
+            window.navigation.setCurrentRow(6)
+            tabs = window.configuration_tabs
+            self.assertEqual(type(tabs), type(window.case_navigation))
+            self.assertEqual([tabs.tabText(i) for i in range(tabs.count())],
+                             ["Entity", "System", "Module catalogue"])
+            for index, child in enumerate((window.entity_panel, window.diagnostics, window.catalogue)):
+                tabs.setCurrentIndex(index)
+                self.assertTrue(window.configuration_pages.currentWidget().isAncestorOf(child))
             self.close_workspace(window)
 
     def test_group_can_collapse_and_reopen(self):
@@ -619,10 +630,10 @@ class WorkspaceTest(unittest.TestCase):
                 root / "cases.sqlite",
             )
             sidebar = window.navigation
-            quick = sidebar.item(sidebar.count() - 1)
+            quick = sidebar.item(4)
             self.assertEqual(quick.text(), "Actions rapides")
             system = next(sidebar.item(index) for index in range(sidebar.count())
-                          if sidebar.item(index).text() == "SYSTÈME")
+                          if sidebar.item(index).text() == "INVESTIGATION")
             sidebar.itemWidget(system).click()
             self.assertTrue(quick.isHidden())
             sidebar.itemWidget(system).click()
@@ -661,10 +672,30 @@ class WorkspaceTest(unittest.TestCase):
             window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
                                root / "cases.sqlite")
             self.assertFalse(window.findChildren(QDockWidget))
+            self.assertTrue(window.configuration_pages.widget(1).isAncestorOf(window.button_for_terminal))
+            self.assertFalse(window.statusBar().isAncestorOf(window.button_for_terminal))
             with patch.object(QInputDialog, "getItem", return_value=("foot", True)):
                 window.button_for_terminal.click()
             self.assertEqual(window.settings.value("external_terminal"), "foot")
             self.close_workspace(window)
+            from vigil.session import session_preferences, set_terminal_preference
+
+            state = root / "cases.sqlite"
+            import os
+
+            path = root / "preferences" / f"{os.getuid()}.ini"
+            path.parent.mkdir(exist_ok=True)
+            prefs = QSettings(str(path), QSettings.Format.IniFormat)
+            prefs.setValue("language", "en")
+            prefs.setValue("external_terminal", "foot")
+            prefs.sync()
+            self.assertEqual(session_preferences(state), ("en", "foot"))
+            set_terminal_preference(state, "ghostty")
+            self.assertEqual(session_preferences(state), ("en", "ghostty"))
+            prefs.sync()
+            self.assertEqual(prefs.value("external_terminal"), "ghostty")
+            set_terminal_preference(state, "")
+            self.assertEqual(session_preferences(state), ("en", ""))
 
     def test_mount_storage_button_sends_mount_without_an_active_case(self):
         from PySide6.QtWidgets import QMessageBox, QPushButton

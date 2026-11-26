@@ -18,7 +18,7 @@ class TerminalWorkspaceTest(unittest.IsolatedAsyncioTestCase):
             source.write_text("Vigil fixture")
             workspace = Workspace(state, language="en")
             async with workspace.run_test(size=(104, 34)) as pilot:
-                await pilot.click("#nav-entity")
+                await pilot.click("#nav-configuration")
                 await pilot.pause()
                 workspace.query_one("#operator-name", Input).value = "Alice"
                 workspace.query_one("#set-operator").scroll_visible(immediate=True)
@@ -66,11 +66,31 @@ class TerminalWorkspaceTest(unittest.IsolatedAsyncioTestCase):
             workspace = Workspace(Path(tmp) / "cases.sqlite", language="fr", operator="Alice")
             async with workspace.run_test(size=(100, 32)) as pilot:
                 self.assertEqual([button.id for button in workspace.query("#sidebar Button")],
-                                 ["nav-dashboard", "nav-cases", "nav-quick", "nav-entity", "nav-catalogue"])
+                                 ["nav-dashboard", "nav-cases", "nav-quick", "nav-configuration"])
                 self.assertEqual([pane.id for pane in workspace.query("#workspace-tabs TabPane")],
                                  ["sources", "explorer", "evidence", "analyses", "history", "reports", "export"])
+                self.assertTrue(await pilot.click("#nav-configuration"))
+                self.assertEqual([pane.id for pane in workspace.query("#configuration-tabs TabPane")],
+                                 ["entity", "configuration-system", "catalogue"])
+                from textual.widgets import Select, TabbedContent
+                from vigil.session import session_preferences
+
+                self.assertTrue(await pilot.click("#--content-tab-configuration-system"))
+                workspace.query_one("#terminal-preference", Select).value = "foot"
+                self.assertTrue(await pilot.click("#save-terminal"))
+                await pilot.pause()
+                self.assertEqual(session_preferences(workspace.state)[1], "foot")
+                tool_filter = workspace.query_one("#tool-filter", Select)
+                for mode, available in (("available", True), ("missing", False)):
+                    tool_filter.value = mode
+                    await pilot.pause()
+                    self.assertEqual(workspace.table("tool-table").row_count,
+                                     sum(bool(path) == available for path in workspace.diagnostic["tools"].values()))
                 self.assertTrue(await pilot.click("#language"))
                 await pilot.pause()
+                self.assertEqual(workspace.query_one("#configuration-tabs", TabbedContent).active,
+                                 "configuration-system")
+                self.assertEqual(workspace.query_one("#terminal-preference", Select).value, "foot")
                 self.assertEqual(str(workspace.query_one("#nav-cases", Button).label), "Current case")
                 await pilot.resize_terminal(76, 25)
                 await pilot.click("#sidebar-toggle")

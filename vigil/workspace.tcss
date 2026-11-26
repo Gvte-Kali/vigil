@@ -29,7 +29,7 @@ ContentSwitcher, TabbedContent, TabPane, VerticalScroll { height: 1fr; }
 #status-bar.status-ok { color: $success; }
 #status-bar.status-warning { color: $warning; }
 .heading { text-style: bold; color: $cyan; height: auto; }
-#dashboard > .heading, #quick > .heading, #entity > .heading, #catalogue > .heading { margin: 1 0; }
+#dashboard > .heading, #quick > .heading, #configuration > .heading { margin: 1 0; }
 .panel { background: $surface; padding: 0 1; height: auto; }
 .master-detail { height: 1fr; }
 .master-detail DataTable, .master-detail Tree { width: 3fr; }
@@ -59,7 +59,7 @@ Input:focus, Select:focus { border: tall $cyan; }
 #resources { color: $foreground; }
 #recent-activity { color: $secondary; }
 #module-errors { color: $error; }
-#workspace-tabs, #case-workspace { height: 1fr; }
+#workspace-tabs, #configuration-tabs, #case-workspace { height: 1fr; }
 .section-panel { height: auto; margin-bottom: 1; }
 .quick-group .heading { margin-bottom: 1; }
 #storage-group .heading { color: $success; }
@@ -139,3 +139,5 @@ PickerTable > .picker-table--file { color: $foreground; }
 
 .antivirus-reports { width: 92%; max-width: 115; height: 85%; }
 #antivirus-report-error { height: auto; color: $error; }
+
+#tool-table { height: 10; }

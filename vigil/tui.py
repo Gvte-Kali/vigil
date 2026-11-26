@@ -22,7 +22,8 @@ from .case_export import export_case
 from .case_import import import_archive, verify_archive
 from .case_removal import purge_case
 from .core import BUILTIN_MODULES, discover, doctor
-from .external_terminal import prepare_tracked
+from .external_terminal import TERMINALS, detected_terminal, prepare_tracked
+from .session import session_preferences, set_terminal_preference
 from .history import PAGE_SIZE, case_events
 from .images import inspect_raw
 from .inspection import inspect_file, investigation_mounts, list_evidence_directory
@@ -88,6 +89,8 @@ class Workspace(App):
         self.report_paths = {}
         self.explorer_path = None
         self.current_page = "dashboard"
+        self.current_configuration_tab = "entity"
+        self.diagnostic = {}
         self.manager_open = True
         self.sidebar_manual = False
         self.cpu_sample = None
@@ -108,8 +111,7 @@ class Workspace(App):
             "dashboard": t("Tableau de bord", "Dashboard"),
             "cases": t("Affaire en cours", "Current case"),
             "quick": t("Actions rapides", "Quick actions"),
-            "entity": t("Entité", "Entity"),
-            "catalogue": t("Catalogue de modules", "Module catalogue"),
+            "configuration": t("Configuration", "Configuration"),
         }
 
     def button(self, key, french, english, **options):
@@ -132,9 +134,11 @@ class Workspace(App):
         with Horizontal(id="body"):
             with VerticalScroll(id="sidebar"):
                 for key, label in self.navigation().items():
+                    if key == "dashboard":
+                        yield Static(t("ESPACE DE TRAVAIL", "WORKSPACE"), classes="nav-group")
                     if key == "cases":
                         yield Static(t("INVESTIGATION", "INVESTIGATION"), classes="nav-group")
-                    if key == "entity":
+                    if key == "configuration":
                         yield Static(t("SYSTÈME", "SYSTEM"), classes="nav-group")
                     yield NavigationItem(label, key)
             with ContentSwitcher(initial="dashboard", id="pages"):
@@ -148,9 +152,6 @@ class Workspace(App):
                     yield Static(id="recent-activity", classes="panel")
                     yield Static(t("Disques et partitions", "Disks and partitions"), classes="heading")
                     yield Tree(t("Périphériques bloc", "Block devices"), id="disk-tree")
-                    yield b("diagnose", "Diagnostic des outils", "Tool diagnostics")
-                    yield b("protect", "Activer la protection USB", "Enable USB protection")
-                    yield b("review-session", "Bilan des sessions", "Session reports")
                 with Vertical(id="cases"):
                     yield Static(t("Gestionnaire d’affaires", "Case manager"), classes="heading", id="manager-title")
                     with Horizontal(id="case-tools"):
@@ -257,28 +258,52 @@ class Workspace(App):
                                    "raw", id="raw", classes="sensitive"),
                     ), id="acquisition-group", classes="quick-group", glyph="raw",
                        description=t("Clonage et images forensiques vérifiées.", "Verified disk clones and forensic images."))
-                with VerticalScroll(id="entity"):
-                    yield Static(t("Configuration de l’entité", "Organization settings"), classes="heading")
-                    yield Static(id="entity-config", classes="panel")
-                    yield Static(id="entity-logo-preview")
-                    yield b("edit-entity", "Modifier l’entité", "Edit organization")
-                    yield b("entity-logo", "Choisir ou retirer le logo", "Choose or remove logo")
-                    yield Static(t("Opérateur de session", "Session operator"), classes="heading")
-                    yield DataTable(id="operator-table", cursor_type="row")
-                    yield Input(placeholder=t("Nom de l’opérateur", "Operator name"), id="operator-name")
-                    yield b("set-operator", "Choisir l’opérateur", "Set operator", variant="primary")
-                with Vertical(id="catalogue"):
-                    yield Static(t("Catalogue de modules", "Module catalogue"), classes="heading")
-                    with Horizontal(id="case-tools-modules"):
-                        yield Input(placeholder=t("Rechercher un module", "Search modules"), id="module-search")
-                        yield Select([(t("Tous", "All"), "all"), (t("Disponibles", "Available"), "available")],
-                                     value="all", allow_blank=False, id="module-filter")
-                    with Horizontal(classes="master-detail"):
-                        yield DataTable(id="module-table", cursor_type="row")
-                        with VerticalScroll(classes="panel"):
-                            yield Static(id="module-detail")
-                    yield Static(id="module-errors")
-                    yield b("create-module", "Créer un module", "Create module")
+                with Vertical(id="configuration"):
+                    yield Static(t("Configuration", "Configuration"), classes="heading")
+                    with TabbedContent(initial=self.current_configuration_tab, id="configuration-tabs"):
+                        with TabPane(t("Entité", "Entity"), id="entity"):
+                            with VerticalScroll(id="configuration-entity"):
+                                yield Static(t("Configuration de l’entité", "Organization settings"), classes="heading")
+                                yield Static(id="entity-config", classes="panel")
+                                yield Static(id="entity-logo-preview")
+                                yield b("edit-entity", "Modifier l’entité", "Edit organization")
+                                yield b("entity-logo", "Choisir ou retirer le logo", "Choose or remove logo")
+                                yield Static(t("Opérateur de session", "Session operator"), classes="heading")
+                                yield DataTable(id="operator-table", cursor_type="row")
+                                yield Input(placeholder=t("Nom de l’opérateur", "Operator name"), id="operator-name")
+                                yield b("set-operator", "Choisir l’opérateur", "Set operator", variant="primary")
+                        with TabPane(t("Système", "System"), id="configuration-system"):
+                            with VerticalScroll():
+                                yield Static(t("Terminal par défaut", "Default terminal"), classes="heading")
+                                yield Select([(t("Automatique", "Automatic"), ""), *((name, name) for name in TERMINALS)],
+                                             value="", allow_blank=False, id="terminal-preference")
+                                yield Static(id="detected-terminal", classes="panel")
+                                yield b("save-terminal", "Enregistrer le terminal", "Save terminal")
+                                yield Static(t("Session et environnement graphique", "Session and graphical environment"), classes="heading")
+                                yield Static(id="configuration-session", classes="panel")
+                                yield Static(t("Protections système", "System protections"), classes="heading")
+                                yield Static(id="configuration-protection", classes="panel")
+                                yield b("protect", "Activer la protection USB", "Enable USB protection")
+                                yield b("review-session", "Bilan des sessions", "Session reports")
+                                yield Static(t("Diagnostic des outils et dépendances", "Tool and dependency diagnostics"), classes="heading")
+                                yield Select([(t("Tous les outils", "All tools"), "all"),
+                                              (t("Outils disponibles", "Available tools"), "available"),
+                                              (t("Outils manquants", "Missing tools"), "missing")],
+                                             value="all", allow_blank=False, id="tool-filter")
+                                yield DataTable(id="tool-table", cursor_type="row")
+                                yield b("diagnose", "Détails du diagnostic", "Diagnostic details")
+                        with TabPane(t("Catalogue de modules", "Module catalogue"), id="catalogue"):
+                            yield Static(t("Catalogue de modules", "Module catalogue"), classes="heading")
+                            with Horizontal(id="case-tools-modules"):
+                                yield Input(placeholder=t("Rechercher un module", "Search modules"), id="module-search")
+                                yield Select([(t("Tous", "All"), "all"), (t("Disponibles", "Available"), "available")],
+                                             value="all", allow_blank=False, id="module-filter")
+                            with Horizontal(classes="master-detail"):
+                                yield DataTable(id="module-table", cursor_type="row")
+                                with VerticalScroll(classes="panel"):
+                                    yield Static(id="module-detail")
+                            yield Static(id="module-errors")
+                            yield b("create-module", "Créer un module", "Create module")
         yield StatusIndicator(id="status-bar")
         yield Footer()
 
@@ -350,6 +375,7 @@ class Workspace(App):
         t = self.tr
         columns = {
             "case-table": [t("Affaire", "Case"), t("Référence", "Reference"), t("Preuves", "Evidence")],
+            "tool-table": [t("Outil", "Tool"), t("État", "Status"), t("Chemin", "Path")],
             "operator-table": [t("Opérateur", "Operator")],
             "evidence-table": [t("Chemin", "Path"), t("Octets", "Bytes"), "SHA-256", t("Copie locale", "Local copy")],
             "mount-table": [t("Montage", "Mountpoint"), t("Source", "Source"), t("Mode", "Mode"), t("État", "Status")],
@@ -460,7 +486,8 @@ class Workspace(App):
             for index, r in enumerate(rows)
         ))
         summary = [
-            f"{r['mountpoint']}  ·  {r['path']}  ·  {t('Vérifié', 'Verified') if r['verified'] else t('Non vérifié', 'Unverified')}"
+            f"{r['mountpoint']}  ·  {r['path']}  ·  {(r.get('mount_mode') or '—').upper()}  ·  "
+            f"{t('Vérifié', 'Verified') if r['verified'] else t('Non vérifié', 'Unverified')}"
             for r in rows
         ]
         self.query_one("#mount-summary", Static).update(Text("\n".join(summary) or t("Aucun montage Vigil.", "No Vigil mounts.")))
@@ -470,6 +497,9 @@ class Workspace(App):
         if dev_mode.active():
             state = t("Mode recette · opérations système désactivées",
                       "Development mode · system operations disabled")
+        self.query_one("#configuration-protection", Static).update(Text(
+            f"{state}\n{count} {t('montage(s)', 'mount(s)')} · /investigation RO · /stockage RW"
+        ))
         self.query_one("#status-bar", StatusIndicator).show(
             state, f"{count} {t('montage(s)', 'mount(s)')}  ·  /investigation RO  ·  /stockage RW",
             active=protection,
@@ -482,6 +512,8 @@ class Workspace(App):
             await self.refresh_cases()
             await self.refresh_mounts()
             self.refresh_metrics()
+            self.diagnostic = await asyncio.to_thread(doctor)
+            self.refresh_configuration()
             config = await asyncio.to_thread(load_entity, data_directory())
             captions = (t("Entité", "Entity"), t("Établissement", "Establishment"),
                         t("Adresse", "Address"), t("Téléphone", "Phone"), t("Courriel", "Email"))
@@ -683,9 +715,9 @@ class Workspace(App):
     def refresh_metrics(self):
         if len(self.screen_stack) != 1:
             return
-        memory, uptime, _, count = system_metrics()
+        memory, uptime, load, count = system_metrics()
         if memory:
-            used, total = memory[0] - memory[1], memory[0]
+            used, total = memory
             self.query_one("#ram-progress", ProgressBar).update(progress=100 * used / total)
             ram = f"{used // 2**20} / {total // 2**20} MiB"
         else:
@@ -700,12 +732,41 @@ class Workspace(App):
         except (OSError, ValueError):
             pass
         t = self.tr
-        active = int(self.active_case in self.case_rows)
+        case = self.case_rows.get(self.active_case, {})
+        load_label = " / ".join(f"{value:.2f}" for value in load) if load else "—"
         self.query_one("#resources", Static).update(Text(
-            f"{t('Affaires', 'Cases')} : {len(self.case_rows)}  ·  {t('Actives', 'Active')} : {active}  ·  "
-            f"CPU : {count or '—'}  ·  RAM : {ram}\n"
+            f"{t('Affaire en cours', 'Current case')} : {case.get('name', '—')}  ·  "
+            f"{t('Preuves', 'Evidence')} : {case.get('evidence_count', '—')}\n"
+            f"CPU : {count or '—'}  ·  RAM : {ram}  ·  {t('Charge', 'Load')} : {load_label}\n"
             f"{t('Temps de fonctionnement', 'Uptime')} : {f'{uptime // 60} min' if uptime is not None else '—'}"
         ))
+
+    def refresh_configuration(self):
+        t = self.tr
+        _, preferred = session_preferences(self.state)
+        self.query_one("#terminal-preference", Select).value = preferred
+        detected = detected_terminal(preferred) or t("Aucun détecté", "None detected")
+        self.query_one("#detected-terminal", Static).update(Text(f"{t('Terminal détecté', 'Detected terminal')} · {detected}"))
+        desktop = self.diagnostic.get("desktop") or "—"
+        session = self.diagnostic.get("session") or "—"
+        self.query_one("#configuration-session", Static).update(Text(
+            f"{t('Session graphique', 'Graphical session')} · {session}\n"
+            f"{t('Environnement de bureau', 'Desktop environment')} · {desktop}\n"
+            f"TERM · {os.environ.get('TERM') or '—'}"
+        ))
+        self.filter_tools()
+
+    def filter_tools(self):
+        mode = self.query_one("#tool-filter", Select).value
+        t = self.tr
+        self.replace_rows("tool-table", ((tool, (tool, t("Disponible", "Available") if path else
+                                                 t("Indisponible", "Unavailable"), path or "—"))
+                                         for tool, path in self.diagnostic.get("tools", {}).items()
+                                         if mode == "all" or (mode == "available") == bool(path)))
+
+    def on_tabbed_content_tab_activated(self, event):
+        if event.tabbed_content.id == "configuration-tabs":
+            self.current_configuration_tab = event.pane.id
 
     def show_page(self, page):
         self.current_page = page
@@ -756,7 +817,9 @@ class Workspace(App):
             self.filter_modules()
 
     def on_select_changed(self, event):
-        if event.select.id == "case-sort":
+        if event.select.id == "tool-filter":
+            self.filter_tools()
+        elif event.select.id == "case-sort":
             self.filter_cases()
         elif event.select.id == "module-filter":
             self.filter_modules()
@@ -1061,7 +1124,8 @@ class Workspace(App):
                           "clone", "raw", "quick-update"}
         if action in needs_operator and not self.operator:
             self.notify(t("Choisissez un opérateur dans Entité.", "Choose an operator under Entity."), severity="warning")
-            self.show_page("entity")
+            self.show_page("configuration")
+            self.query_one("#configuration-tabs", TabbedContent).active = "entity"
             return
         match action:
             case "quit":
@@ -1139,8 +1203,14 @@ class Workspace(App):
                 await self.request_protection()
             case "quick-scan" | "quick-update" | "storage-mount" | "storage-unmount" | "mount-case" | "unmount-case" | "run-analysis" | "export-audit":
                 self.ask(action, str(self.query_one(f"#{action}", Button).label))
+            case "save-terminal":
+                preference = self.query_one("#terminal-preference", Select).value
+                await asyncio.to_thread(set_terminal_preference, self.state, preference)
+                self.refresh_configuration()
             case "diagnose":
-                self.info(t("Diagnostic", "Diagnostics"), json.dumps(await asyncio.to_thread(doctor), ensure_ascii=False, indent=2))
+                self.diagnostic = await asyncio.to_thread(doctor)
+                self.refresh_configuration()
+                self.info(t("Diagnostic", "Diagnostics"), json.dumps(self.diagnostic, ensure_ascii=False, indent=2))
             case "reload-explorer":
                 await self.refresh_explorer()
             case "register-preview" if self.explorer_path and self.active_case and self.operator:

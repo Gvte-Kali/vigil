@@ -39,6 +39,11 @@ def terminal_commands(arguments, preferred=""):
             yield [executable, *TERMINALS[name], *arguments]
 
 
+def detected_terminal(preferred=""):
+    command = next(terminal_commands(["true"], preferred), None)
+    return Path(command[0]).name if command else None
+
+
 def terminal_command(arguments, preferred=""):
     command = next(terminal_commands(arguments, preferred), None)
     if command is None:
