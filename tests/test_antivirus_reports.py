@@ -148,3 +148,18 @@ printf '%s\n' '----------- SCAN SUMMARY -----------' 'Scanned files: 1' 'Infecte
                 self.assertIn("/profile/clamav", contents)
                 self.assertIn("192 h", contents)
                 self.assertNotIn("AUCUNE MENACE DÉTECTÉE", contents)
+
+
+    def test_expected_empty_files_account_for_the_gap_but_symlinks_do_not(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            log = ("/investigation/example/a.txt: Empty file\n"
+                   "/investigation/example/b.txt: Empty file\n"
+                   "/investigation/example/link: Symbolic link\n"
+                   "/investigation/example/fixture: Example FOUND")
+            fixture(run, expected=3, infected=1, errors=1, text=log)
+            summary = scan_summary(run, 0, 0)
+            self.assertEqual((summary["status"], summary["threats"], summary["empty_files"]),
+                             ("complete", 1, 2))
+            fixture(run, expected=4, infected=1, errors=1, text=log)
+            self.assertEqual(scan_summary(run, 0, 0)["status"], "partial")

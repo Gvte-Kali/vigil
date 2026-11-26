@@ -170,13 +170,17 @@ final_pause() {
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s) d'exécution.${NC}"
         [ "$INFECTED_TOTAL" -gt 0 ] && echo -e "${RED}  ($INFECTED_TOTAL fichier(s) infecté(s) détecté(s)).${NC}"
-        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
-        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
+        if [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && [ -z "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+            echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+            read -r
+        fi
         exit 1
     elif [ "$INFECTED_TOTAL" -gt 0 ]; then
         echo -e "${RED}❌ Scan terminé : $INFECTED_TOTAL fichier(s) infecté(s) détecté(s).${NC}"
-        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
-        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
+        if [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && [ -z "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+            echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+            read -r
+        fi
     else
         echo -e "${GREEN}✅ Scan terminé sans erreur, aucun fichier infecté.${NC}"
     fi
@@ -631,7 +635,9 @@ echo -e "Rapports : $RAPPORTS_DIR/clamav_*_${STAMP}.log"
 echo ""
 echo -e "${BLUE}=== Génération du rapport PDF ===${NC}"
 PDF_GENERATED=0
-if [ "$GEN_PDF" -eq 0 ]; then
+if [ -n "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+    vigil_text "Le PDF consolidé sera généré après le démontage." "The consolidated PDF will be generated after unmounting."
+elif [ "$GEN_PDF" -eq 0 ]; then
     echo -e "${YELLOW}⏏️  Génération du rapport PDF désactivée (--no-pdf).${NC}"
 else
     PDF_SCRIPT="$(dirname "$0")/../pdf/vigil_pdf.py"

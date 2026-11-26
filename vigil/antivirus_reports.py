@@ -38,6 +38,7 @@ def read_json(path):
 def scan_summary(run, scan_status, operation_status, *, requires_triage=True):
     logs = sorted(path for path in run.glob("clamav_*.log") if path.is_file() and not path.is_symlink())
     issues = []
+    empty_files = set()
     threats = scanned = completed = 0
     for log in logs:
         scanned_count = infected_count = None
@@ -46,6 +47,9 @@ def scan_summary(run, scan_status, operation_status, *, requires_triage=True):
             for raw in stream:
                 line = raw.rstrip()
                 if line.startswith("Vigil ClamAV metadata: "):
+                    continue
+                if not summary and line.startswith("/") and line.endswith(": Empty file"):
+                    empty_files.add(line.removesuffix(": Empty file"))
                     continue
                 if line.strip() == "----------- SCAN SUMMARY -----------":
                     summary = True
@@ -66,8 +70,9 @@ def scan_summary(run, scan_status, operation_status, *, requires_triage=True):
         expected = sum(total for total, _ in counts)
         if len(counts) != len(logs) or any(code not in {0, 1} for _, code in counts):
             issues.append("Sortie ClamAV incomplète ou en erreur / Incomplete or failed ClamAV output.")
-        if scanned < expected:
-            issues.append(f"Écart inventaire/scan / Inventory to scan gap: {expected - scanned}")
+        unexplained = expected - scanned - len(empty_files)
+        if unexplained > 0:
+            issues.append(f"Écart inexpliqué inventaire/scan / Unexplained inventory to scan gap: {unexplained}")
         if any(code == 1 for _, code in counts) and not threats:
             issues.append("Menace signalée sans total cohérent / Threat reported without a consistent count.")
     except (OSError, ValueError):
@@ -98,7 +103,7 @@ def scan_summary(run, scan_status, operation_status, *, requires_triage=True):
     else:
         status = "partial" if issues else "complete"
     return {"status": status, "threats": threats if completed else None, "scanned": scanned,
-            "expected": expected, "issues": issues, "logs": logs, "triage": triage}
+            "expected": expected, "empty_files": len(empty_files), "issues": issues, "logs": logs, "triage": triage}
 
 
 def publish_report(run, name, started, user, project, generator, scan_status, operation_status, *,

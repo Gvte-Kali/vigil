@@ -2355,6 +2355,8 @@ def build_antivirus_report(path, run, summary, started, user, project):
     story.append(info_table([
         (tr("Fichiers recensés", "Files inventoried"), str(expected) if expected is not None else tr("Non renseigné", "Not available")),
         (tr("Fichiers analysés", "Files scanned"), str(summary["scanned"])),
+        (tr("Fichiers vides signalés par ClamAV", "Empty files reported by ClamAV"),
+         str(summary.get("empty_files", 0))),
         (tr("Menaces recensées", "Threats recorded"), str(summary["threats"]) if summary["threats"] is not None else tr("Non renseigné", "Not available")),
     ]))
     story.append(Paragraph(
