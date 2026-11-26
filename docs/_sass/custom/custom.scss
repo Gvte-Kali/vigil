@@ -59,3 +59,16 @@ a:focus-visible, button:focus-visible, input:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }
+
+.main-header .language-switch {
+  align-self: center;
+  flex: none;
+  margin: 0.4rem 0.75rem;
+}
+
+@media (max-width: 49.99rem) {
+  .side-bar + .main .main-header { display: block; }
+  .side-bar + .main .main-header:not(.nav-open) {
+    .search, .aux-nav { display: none; }
+  }
+}

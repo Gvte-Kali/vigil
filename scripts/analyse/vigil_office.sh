@@ -31,16 +31,10 @@ GREY='\e[90m'
 BOLD='\e[1m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 ERRORS=0
@@ -96,20 +90,24 @@ while [ $# -gt 0 ]; do
 done
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+CONFIG_FILE="${VIGIL_DATA_DIR:-$VIGIL_BASE/data}/config/system.json"
 INVESTIGATION_DIR="${VIGIL_INVESTIGATION_DIR:-/investigation}"
 STAMP=$(date +"%Y%m%d_%H%M%S")
 WORK_DIR=$(mktemp -d -t "vigil_office_${STAMP}.XXXXXX")
-RAPPORTS_DIR="$VIGIL_BASE/rapports"
+RAPPORTS_DIR="${VIGIL_ANALYSIS_RESULTS:-$VIGIL_BASE/rapports}"
 
 # --- Verifier qu'un utilisateur (obligatoire) est actif ---
-if [ ! -f "$ACTIVE_USER_FILE" ]; then
-    echo -e "${RED}❌ Aucun utilisateur actif sélectionné.${NC}"
-    echo "Sélectionnez un utilisateur via l'interface GUI."
+if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+    ACTIVE_USER="${VIGIL_ACTIVE_USER:?opérateur Vigil requis}"
+    ACTIVE_PROJECT="${VIGIL_LEGACY_PROJECT:?affaire Vigil requise}"
+    source "$VIGIL_BASE/scripts/analyse/vigil_case_analysis.sh" || exit 1
+elif [ -f "$ACTIVE_USER_FILE" ]; then
+    ACTIVE_USER=$(cat "$ACTIVE_USER_FILE")
+    ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
+else
+    echo "Sélectionnez un utilisateur via l’interface Vigil."
     exit 1
 fi
-ACTIVE_USER=$(cat "$ACTIVE_USER_FILE")
-ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
 ACTIVE_ENTITY="(non configurée)"
 if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     ACTIVE_ENTITY=$(jq -r '.entity_name // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
@@ -121,8 +119,8 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Analyse terminée avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     else
         echo -e "${GREEN}✅ Analyse terminée sans erreur.${NC}"
@@ -162,7 +160,7 @@ if [ -z "$ACTIVE_PROJECT" ] || [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     echo -e "${RED}(chaîne de custody). Sélectionnez un projet via la GUI.${NC}"
     exit 1
 fi
-PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
+PROJECT_LOG_DIR="${VIGIL_LEGACY_CASE_DIR:-$PROJECTS_DIR/$ACTIVE_PROJECT}"
 if [ ! -d "$PROJECT_LOG_DIR" ] || [ ! -w "$PROJECT_LOG_DIR" ]; then
     echo -e "${RED}❌ Le dossier du projet est introuvable ou non inscriptible : $PROJECT_LOG_DIR${NC}"
     exit 1
@@ -185,19 +183,23 @@ print_banner
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}  Vigil - Analyse des fichiers bureautiques ${NC}"
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 log_action "start" "Début de l\'analyse"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # --- Verifier que /investigation contient des peripheriques montes ---
-echo -e "${BLUE}=== Vérification des périphériques montés ===${NC}"
-MOUNTED_DIRS=0
-while IFS= read -r -d '' dir; do
-    if mountpoint -q "$dir" 2>/dev/null; then
-        MOUNTED_DIRS=$((MOUNTED_DIRS + 1))
-    fi
-done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+echo -e "${BLUE}=== $(vigil_text "Vérification des périphériques montés" "Checking mounted devices") ===${NC}"
+if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+    case_analysis_prepare
+else
+    MOUNTED_DIRS=0
+    while IFS= read -r -d '' dir; do
+        if mountpoint -q "$dir" 2>/dev/null; then
+            MOUNTED_DIRS=$((MOUNTED_DIRS + 1))
+        fi
+    done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+fi
 
 if [ "$MOUNTED_DIRS" -eq 0 ]; then
     echo -e "${YELLOW}⚠️  Aucun périphérique monté dans /investigation/.${NC}"
@@ -239,7 +241,13 @@ while IFS= read -r -d '' f; do
     REL="${f#$INVESTIGATION_DIR/}"
     echo -e "${f}\t${MIME}\t${SIZE}\t${MTIME_ISO}\t${REL}\t${ext_lower}\t${cat}" >> "$OFFICE_LIST"
     OFFICE_COUNT=$((OFFICE_COUNT + 1))
-done < <(find "$INVESTIGATION_DIR" -type f -print0 2>/dev/null)
+done < <(
+    if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+        cat "$WORK_DIR/files"
+    else
+        find "$INVESTIGATION_DIR" -type f -print0 2>/dev/null
+    fi
+)
 
 echo -e "${GREEN}✅ ${OFFICE_COUNT} fichier(s) bureautique(s) détecté(s) sur ${TOTAL_FILES} fichier(s) total.${NC}"
 if [ "$OFFICE_COUNT" -eq 0 ]; then
@@ -258,9 +266,9 @@ EOFJSON
             PDF_OUT=$(python3 "$PDF_SCRIPT" --kind office --json "$JSON_FILE" \
                 --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-                echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+                echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
                 log_action "success" "Rapport PDF généré : $PDF_OUT"
-                if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+                if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
                     cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                         echo -e "${GREEN}   Rapport copié dans le dossier du projet${NC}"
                 fi
@@ -444,10 +452,10 @@ if [ -f "$JSON_FILE" ] && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 
         --project "$ACTIVE_PROJECT" \
         --dir "$RAPPORTS_DIR" 2>&1)
     if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-        echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+        echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
         log_action "success" "Rapport PDF généré : $PDF_OUT"
         # Copie du rapport PDF dans le dossier du projet (pour l'export).
-        if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+        if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
             cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                 echo -e "${GREEN}   Rapport copié dans le dossier du projet : ${PROJECT_LOG_DIR}/$(basename "$PDF_OUT")${NC}"
         fi

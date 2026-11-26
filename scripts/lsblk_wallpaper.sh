@@ -1,6 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+if [ -t 1 ]; then
+    . "$(dirname -- "${BASH_SOURCE[0]}")/lib/vigil-terminal.sh"
+    vigil_banner 'Vigil · Inventaire mural / Disk wallpaper'
+    printf '%s\n' 'sudo est utilisé si une dépendance manque. / sudo is used if a dependency is missing.'
+fi
+
 # --- 1. Installer les dépendances si manquantes ---
 if ! command -v convert &> /dev/null; then
     echo "Installation de ImageMagick..."

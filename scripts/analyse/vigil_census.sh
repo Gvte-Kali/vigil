@@ -40,16 +40,10 @@ GREY='\e[90m'
 BOLD='\e[1m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █    █  █     
-█   █  █  █  ██  █     
- █ █   █  █   █  █     
-  █   ███ ███  ██████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 ERRORS=0
@@ -60,12 +54,12 @@ export VIGIL_BASE VIGIL_DATA_DIR
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 ACTIVE_PROJECT_FILE="$VIGIL_BASE/data/active_project"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+CONFIG_FILE="$VIGIL_DATA_DIR/config/system.json"
 INVESTIGATION_DIR="${VIGIL_INVESTIGATION_DIR:-/investigation}"
 STOCKAGE_DIR="${VIGIL_STOCKAGE_DIR:-/stockage}"
 STAMP=$(date +"%Y%m%d_%H%M%S")
 WORK_DIR=$(mktemp -d -t "vigil_census_${STAMP}.XXXXXX")
-RAPPORTS_DIR="$VIGIL_BASE/rapports"
+RAPPORTS_DIR="${VIGIL_ANALYSIS_RESULTS:-$VIGIL_BASE/rapports}"
 
 # --- Parsing des arguments ---
 # --pdf          : forcer la generation du rapport PDF (comportement par defaut)
@@ -107,6 +101,14 @@ else
     exit 1
 fi
 ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    if [ -z "${VIGIL_LEGACY_PROJECT:-}" ] || [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ] ||
+       [ "$INVESTIGATION_DIR" != /investigation ] || [ "$DO_NO_PROJECT" -eq 1 ]; then
+        echo "Recensement automatique : contexte d’affaire incomplet." >&2
+        exit 1
+    fi
+    ACTIVE_PROJECT="$VIGIL_LEGACY_PROJECT"
+fi
 if [ "$DO_NO_PROJECT" -eq 1 ]; then
     # Mode autonome (recherche de menaces) : pas de projet, l'index SQLite
     # est un livrable de la chasse ecrit dans hunt/ (racine du projet,
@@ -121,7 +123,9 @@ if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     ACTIVE_ENTITY=$(jq -r '.entity_name // empty' "$CONFIG_FILE" 2>/dev/null || echo "")
     [ -z "$ACTIVE_ENTITY" ] && ACTIVE_ENTITY="(non configurée)"
 fi
-if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    PROJECT_LOG_DIR="$VIGIL_LEGACY_CASE_DIR"
+elif [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     if [ "$DO_NO_PROJECT" -eq 1 ]; then
         PROJECT_LOG_DIR="$VIGIL_BASE/hunt"
         mkdir -p "$PROJECT_LOG_DIR" 2>/dev/null || true
@@ -132,39 +136,18 @@ else
     PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
 fi
 
-# --- Purge des recensements precedents du projet ---
-# Un recensement neant se superpose pas : les anciens livrables du meme type
-# sont supprimes et remplaces par les nouveaux (evite l'accumulation de
-# census_*.sqlite/.tsv, traces .sains/.doublons et rapports PDF a chaque
-# montage/demontage). Les autres livrables du projet sont intacts.
-if { [ "$ACTIVE_PROJECT" != "(no-project)" ] || [ "$DO_NO_PROJECT" -eq 1 ]; } \
-   && [ -d "$PROJECT_LOG_DIR" ]; then
-    purge_count=0
-    for _f in "$PROJECT_LOG_DIR"/census_*.sqlite \
-              "$PROJECT_LOG_DIR"/census_*.tsv \
-              "$PROJECT_LOG_DIR"/census_*.sqlite.sha256 \
-              "$PROJECT_LOG_DIR"/.sains.census_* \
-              "$PROJECT_LOG_DIR"/.doublons.census_* \
-              "$PROJECT_LOG_DIR"/rapport_census_*.pdf; do
-        [ -e "$_f" ] || continue
-        rm -f -- "$_f" && purge_count=$((purge_count + 1))
-    done
-    if [ "$purge_count" -gt 0 ]; then
-        echo -e "${GREY}Nettoyage de $purge_count fichier(s) de recensement precedent(s) :" \
-             "les nouveaux livrables les remplacent.${NC}"
-    fi
-fi
+
 
 # --- final_pause : ne ferme jamais le terminal sans lecture ---
 final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Recensement terminé avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+        [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && read -r
         exit 1
     else
-        echo -e "${GREEN}✅ Recensement terminé sans erreur.${NC}"
+        echo -e "${GREEN}Recensement terminé. Consultez le statut de l’index ci-dessus.${NC}"
     fi
 }
 
@@ -226,21 +209,29 @@ clear
 print_banner
 
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}  Vigil - Recensement des fichiers          ${NC}"
+echo -e "${BLUE}  Vigil - $(vigil_text "Recensement des fichiers" "File inventory")          ${NC}"
 echo -e "${BLUE}============================================${NC}"
 if [ "$DO_NO_PROJECT" -eq 1 ]; then
-    echo -e "${BLUE}Projet : (sans projet)${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") $(vigil_text "(sans projet)" "(no case)")${NC}"
 else
-    echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 fi
 log_action "start" "Début du recensement"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # --- Verifier que /investigation contient des peripheriques montes ---
-echo -e "${BLUE}=== Vérification des périphériques montés ===${NC}"
+echo -e "${BLUE}=== $(vigil_text "Vérification des périphériques montés" "Checking mounted devices") ===${NC}"
 MOUNTED_DIRS=0
 MOUNT_INFO=""
+CENSUS_ROOTS=()
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    if ! python3 -I "$VIGIL_BASE/scripts/analyse/vigil_census_mount_guard.py" > "$WORK_DIR/mounts"; then
+        fail "Recensement automatique refusé : protections ou identité non confirmées."
+    fi
+    mapfile -d '' -t CENSUS_ROOTS < "$WORK_DIR/mounts"
+    MOUNTED_DIRS="${#CENSUS_ROOTS[@]}"
+else
 while IFS= read -r -d '' dir; do
     # Un dossier est considere comme un peripherique monte s'il apparait
     # comme mountpoint, OU (fallback dev/test sans privileges root) s'il
@@ -258,6 +249,7 @@ while IFS= read -r -d '' dir; do
         MOUNT_INFO="${MOUNT_INFO}${dir}\n"
     fi
 done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+fi
 
 if [ "$MOUNTED_DIRS" -eq 0 ]; then
     echo -e "${YELLOW}⚠️  Aucun périphérique monté dans /investigation/.${NC}"
@@ -269,7 +261,7 @@ echo ""
 
 # --- Etape 1 : recensement des fichiers ---
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}  Étape 1 : Recensement des fichiers        ${NC}"
+echo -e "${BLUE}  Étape 1 : $(vigil_text "Recensement des fichiers" "File inventory")        ${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}Inventaire intégral des fichiers dans /investigation/...${NC}"
 echo ""
@@ -280,17 +272,30 @@ RAW_LIST="$WORK_DIR/raw_list.tsv"
 : > "$RAW_LIST"
 
 # find -printf : %p chemin | %s taille | dates a/m/c/b | %A* atime | %T* mtime |
-# %C* ctime | %w btime (birth) | %f nom | %y type
-# btime (%w) n'est pas supporte par tous les FS ; on le capture quand meme
+# %C* ctime. Le champ btime reste vide : GNU find ne fournit pas %w.
 # (vide si absent).
-find "$INVESTIGATION_DIR" -type f -printf "%p\t%s\t%AY%Am%Ad%AH%AM\t%TY%Tm%Td%TH%TM\t%CY%Cm%Cd%CH%CM\t%w\t%m\t%u\t%g\n" 2>/dev/null \
-    > "$RAW_LIST"
+FIND_FORMAT="%p\t%s\t%AY%Am%Ad%AH%AM\t%TY%Tm%Td%TH%TM\t%CY%Cm%Cd%CH%CM\t\t%m\t%u\t%g\n"
+FIND_LOG="$WORK_DIR/find-errors.log"
+FIND_STATUS=0
+if [ "${VIGIL_CASE_CENSUS:-}" = "1" ]; then
+    find "${CENSUS_ROOTS[@]}" -xdev -type f -printf "$FIND_FORMAT" > "$RAW_LIST" 2>"$FIND_LOG" || FIND_STATUS=$?
+else
+    find "$INVESTIGATION_DIR" -type f -printf "$FIND_FORMAT" > "$RAW_LIST" 2>"$FIND_LOG" || FIND_STATUS=$?
+fi
+if [ "$FIND_STATUS" -gt 1 ]; then
+    cat "$FIND_LOG" >&2
+    fail "Recensement interrompu : find a quitté avec le code $FIND_STATUS."
+fi
+if [ "$FIND_STATUS" -ne 0 ] || [ -s "$FIND_LOG" ]; then
+    cat "$FIND_LOG" >&2
+    echo -e "${YELLOW}⚠️  Parcours incomplet : conservation des entrées lisibles et des diagnostics dans SQLite.${NC}"
+fi
 
 TOTAL_FILES=$(wc -l < "$RAW_LIST")
 echo -e "${GREEN}✅ ${TOTAL_FILES} fichier(s) recensé(s).${NC}"
 echo ""
 
-if [ "$TOTAL_FILES" -eq 0 ]; then
+if [ "$TOTAL_FILES" -eq 0 ] && [ "$FIND_STATUS" -eq 0 ] && [ ! -s "$FIND_LOG" ]; then
     echo -e "${YELLOW}⚠️  Aucun fichier à recenser.${NC}"
     log_action "success" "Aucun fichier recensé"
     JSON_FILE="$WORK_DIR/resultat.json"
@@ -304,11 +309,12 @@ EOFJSON
         if [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 2>&1; then
             mkdir -p "$RAPPORTS_DIR" 2>/dev/null || true
             PDF_OUT=$(python3 "$PDF_SCRIPT" --kind census --json "$JSON_FILE" \
-                --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" --dir "$RAPPORTS_DIR" 2>&1)
+                --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" \
+                --fname-prefix "rapport_census_${WORK_DIR##*.}" --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-                echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+                echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
                 log_action "success" "Rapport PDF généré : $PDF_OUT"
-                if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+                if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
                     cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                         echo -e "${GREEN}   Rapport copié dans le dossier du projet${NC}"
                 fi
@@ -338,7 +344,7 @@ echo -e "${YELLOW}Analyse des types MIME via file...${NC}"
 echo ""
 
 MIME_LIST="$WORK_DIR/mime_list.tsv"
-cut -f 1 "$RAW_LIST" | file --mime-type -b -e compress -e tar -e elf -f - 2>/dev/null \
+cut -f 1 "$RAW_LIST" | LC_ALL=C file --mime-type -b -e compress -e tar -e elf -f - 2>/dev/null \
     > "$WORK_DIR/mime_types.txt"
 # Normalisation des types office (identique a scalpel/bin/census).
 sed -i \
@@ -350,12 +356,12 @@ sed -i \
     "$WORK_DIR/mime_types.txt"
 
 # Encodage MIME (optionnel, informatif) via file --mime.
-cut -f 1 "$RAW_LIST" | file --mime -b -e compress -e tar -e elf -f - 2>/dev/null \
+cut -f 1 "$RAW_LIST" | LC_ALL=C file --mime -b -e compress -e tar -e elf -f - 2>/dev/null \
     | sed 's/.*; charset=//' > "$WORK_DIR/mime_encodings.txt"
 
 MIME_COUNT=$(wc -l < "$WORK_DIR/mime_types.txt")
 echo -e "${GREEN}✅ ${MIME_COUNT} type(s) MIME déterminé(s).${NC}"
-[ "$TOTAL_FILES" -ne "$MIME_COUNT" ] && fail "Les journaux n'ont pas le même nombre d'entrées ($TOTAL_FILES vs $MIME_COUNT)."
+
 echo ""
 
 # --- Etape 3 : dedoublonnage + checksafe + stockage SQLite (Python) ---
@@ -373,22 +379,28 @@ python3 - "$RAW_LIST" "$WORK_DIR/mime_types.txt" "$WORK_DIR/mime_encodings.txt" 
           "$JSON_FILE" "$DATE_ANALYSIS" "$ACTIVE_USER" "$ACTIVE_PROJECT" \
           "$ACTIVE_ENTITY" "$PROJECT_LOG_DIR" "$INVESTIGATION_DIR" \
           "$STOCKAGE_DIR" "$DO_DEDUP" "$DO_CHECKSAFE" "$VIGIL_VERSION" \
-          "$EXT_MAP_FILE" "$DO_NO_PROJECT" \
-          <<'PYCENSUS'
+          "$EXT_MAP_FILE" "$DO_NO_PROJECT" "$(dirname -- "$0")" "${WORK_DIR##*.}" \
+          "$FIND_LOG" "$FIND_STATUS" <<'PYCENSUS'
 import os
 import sys
 import json
 import sqlite3
 import hashlib
-import pickle
 from datetime import datetime, timezone
 
 (raw_list, mime_types_file, mime_encodings_file, out_json, date_analysis,
  active_user, active_project, active_entity, project_log_dir,
  investigation_dir, stockage_dir, do_dedup, do_checksafe,
- vigil_version, ext_map_file, no_project) = sys.argv[1:18]
+ vigil_version, ext_map_file, no_project, script_dir, run_suffix, find_log, find_status) = sys.argv[1:]
+sys.path.insert(0, script_dir)
+from vigil_checksafe import is_safe, load_database
 do_dedup = do_dedup == "1"
 do_checksafe = do_checksafe == "1"
+find_status = int(find_status)
+with open(find_log, encoding="utf-8", errors="backslashreplace") as fh:
+    inventory_errors = [("find", None, line.rstrip("\n")) for line in fh if line.strip()]
+if find_status and not inventory_errors:
+    inventory_errors.append(("find", None, f"find: code de sortie {find_status}"))
 
 # --- Audit extension vs format reel (extensions trompeuses) ---
 # Charge la table extension -> MIME attendus (data/config/ext_mime_map.json).
@@ -474,7 +486,8 @@ def content_hash(path):
             for chunk in iter(lambda: fh.read(1 << 20), b""):
                 h.update(chunk)
         return h.hexdigest()
-    except OSError:
+    except OSError as exc:
+        inventory_errors.append(("sha256", path, str(exc)))
         return ""
 
 
@@ -518,6 +531,14 @@ try:
         mime_encodings = [ln.rstrip("\n") for ln in fh]
 except OSError:
     mime_encodings = [""] * len(records)
+for stage, values in (("mime_type", mime_types), ("mime_encoding", mime_encodings)):
+    if len(values) != len(records):
+        inventory_errors.append((stage, None, f"{len(values)} résultat(s) pour {len(records)} entrée(s)"))
+        values.clear()
+    for i, (rec, value) in enumerate(zip(records, values)):
+        if value.startswith(("cannot open ", "cannot read ", "ERROR:")):
+            inventory_errors.append((stage, rec["path"], value))
+            values[i] = ""
 if len(mime_types) < len(records):
     mime_types += [""] * (len(records) - len(mime_types))
 if len(mime_encodings) < len(records):
@@ -566,72 +587,37 @@ else:
     for rec in records:
         rec["content_hash"] = ""
 
-# --- checksafe : filtre par base de noms + base de hashes (CONSERVE tel quel) ---
-# Sources externes recherchees dans /stockage (files.safe.name / files.safe.hash)
-# — config de l'operateur/autorite, pas dans Vigil. Bases pickle (set python),
-# comme scalpel/bin/checksafe. Comportement sans base : ne filtre rien.
+# --- checksafe : bases TSV externes et sémantique historique nom/SHA-1 ---
 safe_filtered_count = 0
-checksafe_base_name = 0
-checksafe_base_hash = 0
-name_db = None
-hash_db = None
+name_db = hash_db = None
+checksafe_errors = []
 if do_checksafe:
-    name_path = os.path.join(stockage_dir, "files.safe.name")
-    hash_path = os.path.join(stockage_dir, "files.safe.hash")
-    if os.path.isfile(name_path) and os.path.getsize(name_path) > 0:
-        checksafe_base_name = 1
+    for filename, column in (("files.safe.name.tsv", "name"),
+                             ("files.safe.hash.tsv", "sha1")):
+        path = os.path.join(stockage_dir, filename)
         try:
-            with open(name_path, "rb") as fh:
-                name_db = pickle.load(fh)
-            print(f"  Utilisation d'une base de noms externe : {name_path}")
-        except Exception as exc:
-            print(f"  ⚠️  Base de noms externe inexploitable : {exc}")
-            name_db = None
-    if os.path.isfile(hash_path) and os.path.getsize(hash_path) > 0:
-        checksafe_base_hash = 1
-        try:
-            with open(hash_path, "rb") as fh:
-                hash_db = pickle.load(fh)
-            print(f"  Utilisation d'une base de signatures externe : {hash_path}")
-        except Exception as exc:
-            print(f"  ⚠️  Base de signatures externe inexploitable : {exc}")
-            hash_db = None
-
-# Reproduit la semantique exacte de scalpel/bin/checksafe :
-#   - si la base de noms est vide (None), la signature est systematiquement
-#     verifiee aupres de la base des signatures ;
-#   - si la base de signatures est vide (None), toutes les entrees ressortent
-#     sur stderr (pas de filtre) -> aucun fichier n'est marque sain.
-def is_safe(path):
-    """Retourne True si le fichier est considere sain (a retirer)."""
-    name = os.path.basename(path).lower()
-    if name_db is None or name in name_db:
-        if hash_db is not None:
-            try:
-                with open(path, "rb") as fh:
-                    digest = hashlib.sha1(fh.read()).digest()
-                if digest in hash_db:
-                    return True
-            except OSError:
-                return False
-        # base de signatures vide -> rien n'est sain (pas de filtre)
-        return False
-    return False
-
-if do_checksafe and (checksafe_base_name or checksafe_base_hash):
-    print("  Filtrage checksafe en cours...")
-    for rec in records:
-        if is_safe(rec["path"]):
-            rec["is_safe_filtered"] = 1
-            safe_filtered_count += 1
+            entries = load_database(path, column)
+        except (OSError, ValueError) as exc:
+            checksafe_errors.append(f"{filename}: {exc}")
+            continue
+        if column == "name":
+            name_db = entries
         else:
-            rec["is_safe_filtered"] = 0
-else:
-    for rec in records:
-        rec["is_safe_filtered"] = 0
-    if do_checksafe:
-        print("  Aucune base externe trouvée : checksafe ne filtre rien "
-              "(comportement attendu et documenté).")
+            hash_db = entries
+    for error in checksafe_errors:
+        print(f"  ⚠️  Checksafe désactivé : {error}", file=sys.stderr)
+    if any(os.path.lexists(os.path.join(stockage_dir, name))
+           for name in ("files.safe.name", "files.safe.hash")):
+        print("  ⚠️  Ancienne base checksafe ignorée. Fournissez les bases TSV.",
+              file=sys.stderr)
+
+checksafe_base_name = int(name_db is not None)
+checksafe_base_hash = int(hash_db is not None)
+checksafe_active = bool(do_checksafe and hash_db and not checksafe_errors)
+for rec in records:
+    matched = checksafe_active and is_safe(rec["path"], name_db, hash_db)
+    rec["is_safe_filtered"] = int(matched)
+    safe_filtered_count += int(matched)
 
 # --- Marquage des doublons sur chaque enregistrement (conservation) ---
 # On conserve TOUS les fichiers ; on marque les doublons (le premier fichier
@@ -675,7 +661,7 @@ if no_project or (active_project and active_project != "(no-project)"):
     os.makedirs(project_dir, exist_ok=True)
     db_path = os.path.join(project_dir, "census.sqlite")
     # On evite d'ecraser une base precedente : suffixe horodate.
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_" + run_suffix
     db_path = os.path.join(project_dir, f"census_{stamp}.sqlite")
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
@@ -689,7 +675,8 @@ if no_project or (active_project and active_project != "(no-project)"):
             total_files INTEGER, duplicate_count INTEGER,
             safe_filtered_count INTEGER,
             checksafe_base_name INTEGER, checksafe_base_hash INTEGER,
-            tool_versions TEXT, vigil_version TEXT
+            tool_versions TEXT, vigil_version TEXT,
+            scan_status TEXT, error_count INTEGER, find_exit_code INTEGER
         )
     """)
     cur.execute("""
@@ -709,6 +696,13 @@ if no_project or (active_project and active_project != "(no-project)"):
             FOREIGN KEY (inventory_id) REFERENCES inventory_meta(id)
         )
     """)
+    cur.execute("""
+        CREATE TABLE inventory_errors (
+            id INTEGER PRIMARY KEY,
+            inventory_id INTEGER NOT NULL REFERENCES inventory_meta(id),
+            stage TEXT NOT NULL, path TEXT, message TEXT NOT NULL
+        )
+    """)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_files_mime ON files(inventory_id, mime_type)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_files_mtime ON files(inventory_id, mtime)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_files_hash ON files(content_hash)")
@@ -724,14 +718,19 @@ if no_project or (active_project and active_project != "(no-project)"):
             blockdev_ro, operator, project, entity, started_at, ended_at,
             duration, total_files, duplicate_count, safe_filtered_count,
             checksafe_base_name, checksafe_base_hash, tool_versions,
-            vigil_version)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            vigil_version, scan_status, error_count, find_exit_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (investigation_dir, "", "", "", "", "", "", active_user,
           active_project, active_entity, started_at, ended_at, "",
           len(records), duplicate_count, safe_filtered_count,
           checksafe_base_name, checksafe_base_hash, tool_versions,
-          vigil_version))
+          vigil_version, "partial" if inventory_errors else "complete",
+          len(inventory_errors), find_status))
     inv_id = cur.lastrowid
+    cur.executemany("""
+        INSERT INTO inventory_errors (inventory_id, stage, path, message)
+        VALUES (?, ?, ?, ?)
+    """, ((inv_id, *entry) for entry in inventory_errors))
 
     rows = []
     for i, rec in enumerate(records):
@@ -863,12 +862,15 @@ dir_stats = [
 result = {
     "date": date_analysis,
     "total_files": len(records),
+    "scan_status": "partial" if inventory_errors else "complete",
+    "error_count": len(inventory_errors),
     "duplicate_count": duplicate_count,
     "duplicate_groups": len([g for g in dup_groups.values() if len(g) > 1]),
     "safe_filtered_count": safe_filtered_count,
     "checksafe_base_name": bool(checksafe_base_name),
     "checksafe_base_hash": bool(checksafe_base_hash),
-    "checksafe_active": bool(do_checksafe and (checksafe_base_name or checksafe_base_hash)),
+    "checksafe_active": checksafe_active,
+    "checksafe_errors": checksafe_errors,
     "mime_stats": mime_stats,
     "mime_ext_stats": mime_ext_stats,
     "dir_stats": dir_stats,
@@ -883,6 +885,8 @@ with open(out_json, "w", encoding="utf-8") as fh:
     json.dump(result, fh, ensure_ascii=False, indent=2)
 
 print(f"  Fichiers recensés : {len(records)}")
+if inventory_errors:
+    print(f"  ⚠️ Index partiel : {len(inventory_errors)} diagnostic(s) dans inventory_errors.")
 print(f"  Extensions trompeuses : {mismatch_count}")
 print(f"  Doublons marqués : {duplicate_count} (dans "
       f"{result['duplicate_groups']} groupe(s))")
@@ -908,12 +912,13 @@ if [ -f "$JSON_FILE" ] && [ -f "$PDF_SCRIPT" ] && command -v python3 >/dev/null 
         --json "$JSON_FILE" \
         --user "$ACTIVE_USER" \
         --project "$ACTIVE_PROJECT" \
+        --fname-prefix "rapport_census_${WORK_DIR##*.}" \
         --dir "$RAPPORTS_DIR" 2>&1)
     if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-        echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+        echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
         log_action "success" "Rapport PDF généré : $PDF_OUT"
         # Copie du rapport PDF dans le dossier du projet (pour l'export).
-        if [ -n "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
+        if [ "$RAPPORTS_DIR" != "$PROJECT_LOG_DIR" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
             cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null && \
                 echo -e "${GREEN}   Rapport copié dans le dossier du projet : ${PROJECT_LOG_DIR}/$(basename "$PDF_OUT")${NC}"
         fi
@@ -935,7 +940,14 @@ if [ -n "$JSON_OUT" ] && [ -f "$JSON_FILE" ]; then
 fi
 
 # --- Nettoyage du dossier temporaire ---
+if [ "$ERRORS" -gt 0 ]; then
+    log_action "error" "Recensement terminé avec erreur (${TOTAL_FILES} entrées de parcours)"
+elif grep -q '^  "scan_status": "partial",' "$JSON_FILE"; then
+    log_action "warning" "Recensement partiel (${TOTAL_FILES} entrées de parcours)"
+else
+    log_action "success" "Recensement terminé (${TOTAL_FILES} entrées de parcours)"
+fi
+
 rm -rf "$WORK_DIR" 2>/dev/null || true
-log_action "success" "Recensement terminé (${TOTAL_FILES} fichiers)"
 
 final_pause

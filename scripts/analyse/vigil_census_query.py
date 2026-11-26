@@ -21,6 +21,7 @@ import glob
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
 COLUMNS = "path, size, mime_type, extension_mismatch, content_hash"
 
@@ -28,19 +29,18 @@ COLUMNS = "path, size, mime_type, extension_mismatch, content_hash"
 def find_latest_index(project_dir):
     """Retourne la base census_*.sqlite la plus récente du dossier projet.
 
-    Les livrables sont horodatés (census_YYYYMMDD_HHMMSS.sqlite) ; le tri
-    lexicographique du suffixe correspond au tri chronologique.
+    Les livrables sont horodatés ; les nouveaux noms ajoutent un suffixe unique.
     """
     if not project_dir or not os.path.isdir(project_dir):
         return ""
     candidates = glob.glob(os.path.join(project_dir, "census_*.sqlite"))
     if not candidates:
         return ""
-    return max(candidates, key=lambda p: p.rsplit("_", 1)[-1])
+    return max(candidates, key=os.path.basename)
 
 
 def query_files(db_path, mismatched=False, octet_stream=False,
-                mime="", extension=""):
+                mime="", extension="", limit=None):
     """Retourne la liste des fichiers de l'index selon les filtres.
 
     Chaque entrée est un tuple (chemin_absolu, taille, mime, mismatch,
@@ -48,10 +48,14 @@ def query_files(db_path, mismatched=False, octet_stream=False,
     """
     if not os.path.isfile(db_path):
         raise FileNotFoundError(f"Index introuvable : {db_path}")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+    conn.execute("PRAGMA trusted_schema = OFF")
     conn.row_factory = sqlite3.Row
     try:
         cur = conn.cursor()
+        cur.execute("PRAGMA trusted_schema=OFF")
+        if limit is not None:
+            conn.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 16384)
         sql = f"SELECT {COLUMNS} FROM files"
         where = []
         params = []
@@ -68,6 +72,9 @@ def query_files(db_path, mismatched=False, octet_stream=False,
         if where:
             sql += " WHERE " + " AND ".join(where)
         sql += " ORDER BY path"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
         return [tuple(r) for r in cur.execute(sql, params)]
     finally:
         conn.close()
@@ -86,7 +93,10 @@ def main():
                     help="Préfixe de type MIME (ex : image/)")
     ap.add_argument("--extension", default="",
                     help="Extension (ex : jpg)")
+    ap.add_argument("--limit", type=int, help="Nombre maximal de lignes")
     args = ap.parse_args()
+    if args.limit is not None and not 1 <= args.limit <= 1000:
+        ap.error("--limit doit être compris entre 1 et 1000")
     if not (args.mismatched or args.octet_stream
             or args.mime or args.extension):
         print("Erreur : précisez au moins un filtre (--mismatched, "
@@ -95,7 +105,7 @@ def main():
     try:
         rows = query_files(args.index, mismatched=args.mismatched,
                            octet_stream=args.octet_stream,
-                           mime=args.mime, extension=args.extension)
+                           mime=args.mime, extension=args.extension, limit=args.limit)
     except (OSError, sqlite3.Error) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
         sys.exit(1)

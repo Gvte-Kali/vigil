@@ -12,16 +12,12 @@ YELLOW='\e[93m'
 BLUE='\e[96m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 ERRORS=0
@@ -32,7 +28,8 @@ VIGIL_BASE="${VIGIL_BASE:-/opt/vigil}"
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 ACTIVE_PROJECT_FILE="$VIGIL_BASE/data/active_project"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+VIGIL_DATA_DIR="${VIGIL_DATA_DIR:-$VIGIL_BASE/data}"
+CONFIG_FILE="$VIGIL_DATA_DIR/config/system.json"
 
 STOCKAGE_DIR="/stockage"
 
@@ -51,7 +48,17 @@ if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     [ -z "$ACTIVE_ENTITY" ] && ACTIVE_ENTITY="(non configuree)"
 fi
 
-if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    ACTIVE_USER="${VIGIL_ACTIVE_USER:?opérateur Vigil requis}"
+    ACTIVE_PROJECT="${VIGIL_LEGACY_PROJECT:?contexte Vigil requis}"
+    LOG_WRITER=(tee)
+else
+    LOG_WRITER=(sudo tee)
+fi
+
+if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
+    PROJECT_LOG_DIR="${VIGIL_LEGACY_CASE_DIR:?dossier de journal Vigil requis}"
+elif [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     PROJECT_LOG_DIR="/tmp"
 else
     PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
@@ -66,11 +73,11 @@ log_action() {
     local status="$4"
     local message="$5"
 
-    [ "$ACTIVE_PROJECT" = "(no-project)" ] && return
+    [ "${VIGIL_QT_STORAGE:-}" != "1" ] && [ "$ACTIVE_PROJECT" = "(no-project)" ] && return
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S.%6NZ")
     local log_entry="[$timestamp] User:$ACTIVE_USER | Entity:$ACTIVE_ENTITY | Project:$ACTIVE_PROJECT | Action:$action | Device:$device | File:$file_path | Status:$status | Message:$message"
 
-    echo "$log_entry" | sudo tee -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
+    echo "$log_entry" | "${LOG_WRITER[@]}" -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
 
     if command -v jq >/dev/null 2>&1; then
         local json_entry
@@ -85,7 +92,7 @@ log_action() {
             --arg status "$status" \
             --arg message "$message" \
             '{timestamp: $timestamp, user: $user, entity: $entity, project: $project, action: $action, device: $device, file_path: $file_path, status: $status, message: $message}' 2>/dev/null) || true
-        [ -n "$json_entry" ] && echo "$json_entry" | sudo tee -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
+        [ -n "$json_entry" ] && echo "$json_entry" | "${LOG_WRITER[@]}" -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
     fi
 }
 
@@ -96,22 +103,21 @@ log_action() {
 # Tri du plus profond au moins profond (demontage enfants avant parents).
 list_mounts_under_stockage() {
     local mounts
-    mounts="$(awk '$2 ~ "^/stockage/" {print $2}' /proc/mounts 2>/dev/null)"
-    if [ -z "$mounts" ] && command -v lsblk >/dev/null 2>&1; then
-        mounts="$(lsblk -J -o MOUNTPOINTS 2>/dev/null \
-            | grep -oE '"/stockage/[^"]*"' | tr -d '"')"
+    mounts=$(vigil_mounts_in_zone /stockage) || return 1
+    if [ -n "${VIGIL_DEVICE_TARGET:-}" ]; then
+        printf '%s\n' "$mounts" | grep -Fx -- "$VIGIL_DEVICE_TARGET" || true
+    else
+        printf '%s\n' "$mounts"
     fi
-    printf '%s\n' "$mounts" \
-        | awk -v base="/stockage/" 'index($0, base) == 1' \
-        | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
 }
 
 
 final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
+        [ "${VIGIL_QT_STORAGE:-}" = "1" ] && exit 1
         echo -e "${RED}\u274c Script termine avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entree pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entree pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
@@ -123,11 +129,11 @@ final_pause() {
 clear
 print_banner
 if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
-    echo -e "${BLUE}Projet : (aucun)${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") $(vigil_text "(aucun)" "(none)")${NC}"
 else
-    echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 fi
-echo -e "${BLUE}Entite : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}Entite : ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # S'assurer que /stockage existe
@@ -158,7 +164,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     [ "$CLEANED" -gt 0 ] && log_action "cleanup_stockage" "" "$STOCKAGE_DIR" "success" "$CLEANED dossiers vides supprimes"
 
     # Rien n'est monté : le contexte actif est incohérent -> nettoyage.
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    [ "${VIGIL_QT_STORAGE:-}" = "1" ] || rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
     log_action "clear_active" "" "$STOCKAGE_DIR" "success" "Contexte actif efface (rien monte)"
     final_pause
     exit 0
@@ -174,7 +180,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo ""
     echo -e "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}"
 
-    DEVICE=$(mount | grep " ${MOUNT_POINT} " | awk '{print $1}' | head -n 1 || true)
+    DEVICE=$(findmnt --noheadings --output SOURCE --mountpoint "$MOUNT_POINT" || true)
 
     if [ -z "$DEVICE" ]; then
         echo -e "${YELLOW}\u26a0\ufe0f  Impossible de determiner le peripherique monte sur $MOUNT_POINT.${NC}"
@@ -184,47 +190,22 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo -e "${YELLOW}Demontage de $MOUNT_POINT...${NC}"
     UMOUNT_OK=0
 
-    if sudo umount "$MOUNT_POINT" 2>/dev/null; then
+    if vigil_unmount_target /stockage "$MOUNT_POINT"; then
         UMOUNT_OK=1
     else
-        echo -e "${YELLOW}\u26a0\ufe0f  Demontage normal echoue (peripherique occupe ?). Synchronisation...${NC}"
-        sync 2>/dev/null || true
-        if sudo umount "$MOUNT_POINT" 2>/dev/null; then
-            UMOUNT_OK=1
-        else
-            echo -e "${YELLOW}\u26a0\ufe0f  Toujours occupe. Demontage force (lazy umount)...${NC}"
-            if sudo umount -l "$MOUNT_POINT" 2>/dev/null; then
-                echo -e "${YELLOW}\u26a0\ufe0f  Demontage lazy applique.${NC}"
-                log_action "umount_lazy_stockage" "$DEVICE" "$MOUNT_POINT" "warning" "Demontage force (lazy)"
-                UMOUNT_OK=1
-            else
-                echo -e "${RED}\u274c Echec du demontage de $MOUNT_POINT.${NC}"
-                log_action "umount_stockage" "$DEVICE" "$MOUNT_POINT" "failed" "Echec du demontage"
-                ERRORS=$((ERRORS + 1))
-            fi
-        fi
+        log_action "umount" "$DEVICE" "$MOUNT_POINT" "failed" "Démontage refusé / Unmount refused"
+        ERRORS=$((ERRORS + 1))
     fi
 
     if [ "$UMOUNT_OK" -eq 1 ]; then
         echo -e "${GREEN}\u2705 Peripherique $DEVICE demonte avec succes.${NC}"
         log_action "umount_stockage" "$DEVICE" "$MOUNT_POINT" "success" "Peripherique demonte"
 
-        # Rebloquer le peripherique en lecture seule au niveau block device
-        # apres usage en stockage, par securite (empeche une reecriture
-        # accidentelle avant debranchement ou avant un montage forensique).
-        if [ -n "$DEVICE" ] && [ -b "$DEVICE" ] && command -v blockdev >/dev/null 2>&1; then
-            if sudo blockdev --setro "$DEVICE" 2>/dev/null; then
-                echo -e "${GREEN}\u2705 Block device $DEVICE rebloque en lecture seule (securite).${NC}"
-                log_action "set_ro_stockage" "$DEVICE" "" "success" "Block device rebloque en RO apres demontage"
-            else
-                echo -e "${YELLOW}\u26a0\ufe0f  blockdev --setro a echoue sur $DEVICE.${NC}"
-                log_action "set_ro_stockage" "$DEVICE" "" "warning" "blockdev --setro a echoue apres demontage"
-            fi
-        fi
+
     fi
 
     sleep 1
-    if [ -d "$MOUNT_POINT" ]; then
+    if [ "$UMOUNT_OK" -eq 1 ] && [ "$MOUNT_POINT" != "$STOCKAGE_DIR" ] && [ -d "$MOUNT_POINT" ]; then
         if [ -z "$(ls -A "$MOUNT_POINT" 2>/dev/null)" ]; then
             sudo rmdir "$MOUNT_POINT" 2>/dev/null && {
                 echo -e "${GREEN}\ud83e\uddf9 Dossier de montage supprime : $MOUNT_POINT${NC}"
@@ -260,6 +241,7 @@ else
     ERRORS=$((ERRORS + 1))
 fi
 
+if [ "${VIGIL_QT_STORAGE:-}" != "1" ] || [ "${#REMAINING_MOUNTS[@]}" -eq 0 ]; then
 # --- 4. Nettoyage final des dossiers vides residuels ---
 CLEANED=0
 while IFS= read -r -d '' dir; do
@@ -272,12 +254,14 @@ while IFS= read -r -d '' dir; do
 done < <(find "$STOCKAGE_DIR" -mindepth 1 -depth -type d -print0 2>/dev/null)
 [ "$CLEANED" -gt 0 ] && log_action "cleanup_stockage" "" "$STOCKAGE_DIR" "success" "$CLEANED dossiers residuels supprimes"
 
+fi
+
 # --- 5. Nettoyage du contexte actif (anti mauvaise manipulation) ---
 # Une fois /stockage vide (tout démonté), on efface l'utilisateur et le
 # projet actifs pour éviter qu'une action suivante ne s'exécute par erreur
 # avec un contexte devenu incohérent.
 if [ ${#REMAINING_MOUNTS[@]} -eq 0 ]; then
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    [ "${VIGIL_QT_STORAGE:-}" = "1" ] || rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
     log_action "clear_active" "" "$STOCKAGE_DIR" "success" "Contexte actif (utilisateur/projet) effacé après démontage"
 fi
 

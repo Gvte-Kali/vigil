@@ -7,8 +7,13 @@ has_children: true
 
 # Interface graphique
 
-Vigil utilise Python et Tkinter. L’accueil regroupe **Configuration** et **Actions**.
-Les opérations interactives s’ouvrent dans **Konsole**, installé avec le poste.
+Vigil 2.0 ouvre la GUI Qt avec `vigil gui` ou `vigil-gui`. La navigation
+regroupe Espace de travail, Investigation et Système. La TUI Textual se lance
+avec `vigil tui` ou `vigil-tui`. Voir [Installation](../installation/README.md)
+pour les lanceurs et [Recette native](../development/native-recette.md) pour les essais.
+
+Les repères détaillés ci-dessous concernent la GUI Tkinter de Vigil 1.0,
+conservée dans `gui/`.
 
 ## Pages et modules
 

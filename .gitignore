@@ -9,3 +9,7 @@ active_user
 /scalpel/*
 /analysis/*
 /hunt/*
+
+# Local Python environments and editable-install metadata
+/.venv/
+*.egg-info/

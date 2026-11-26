@@ -58,16 +58,10 @@ GREY='\e[90m'
 BOLD='\e[1m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 print_options_table() {
@@ -123,6 +117,7 @@ SIZE_MODE="unlimited"
 ALERT_ENC_SET=0
 ALERT_ENC=1
 JSON_OUT_DIR=""
+SIGNATURE_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --pdf)        GEN_PDF=1; PDF_SET=1 ;;
@@ -130,6 +125,7 @@ while [ $# -gt 0 ]; do
         --log)        GEN_LOG=1; LOG_SET=1 ;;
         --no-log)     GEN_LOG=0; LOG_SET=1 ;;
         --all)        SCAN_ALL=1 ;;
+        --offline)    SIGNATURE_ARGS+=(--offline) ;;
         --comment)    shift; SCAN_COMMENT="${1:-}"; COMMENT_SET=1 ;;
         --comment=*) SCAN_COMMENT="${1#--comment=}"; COMMENT_SET=1 ;;
         --yes)        AUTO_YES=1 ;;
@@ -149,7 +145,7 @@ done
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 CONFIG_FILE="$VIGIL_DATA_DIR/config/system.json"
 INVESTIGATION_DIR="/investigation"
-RAPPORTS_DIR="$VIGIL_BASE/rapports"
+RAPPORTS_DIR="${VIGIL_LEGACY_SCAN_DIR:-$VIGIL_BASE/rapports}"
 
 # Le scan antivirus ClamAV ne necessite pas de projet actif et ne logge pas
 # dans la chaine de custody (exception prevue : l'AV n'est pas une analyse
@@ -174,13 +170,17 @@ final_pause() {
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s) d'exécution.${NC}"
         [ "$INFECTED_TOTAL" -gt 0 ] && echo -e "${RED}  ($INFECTED_TOTAL fichier(s) infecté(s) détecté(s)).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        if [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && [ -z "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+            echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+            read -r
+        fi
         exit 1
     elif [ "$INFECTED_TOTAL" -gt 0 ]; then
         echo -e "${RED}❌ Scan terminé : $INFECTED_TOTAL fichier(s) infecté(s) détecté(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-        read -r
+        if [ "${VIGIL_CASE_ANALYSIS:-}" != "1" ] && [ -z "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+            echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+            read -r
+        fi
     else
         echo -e "${GREEN}✅ Scan terminé sans erreur, aucun fichier infecté.${NC}"
     fi
@@ -219,6 +219,12 @@ progress_monitor() {
     local start=$SECONDS
     local bar_width=30 full="" empty=""
     local i line pct filled bar elapsed eta
+    local embedded=0 last_frame=-1
+    [ "${VIGIL_EMBEDDED_TERMINAL:-}" = 1 ] && embedded=1
+    if [ "$embedded" -eq 1 ]; then
+        use_tty=0
+        vigil_progress_frame clamav 0 "0 / $total"
+    fi
 
     for ((i = 0; i < bar_width; i++)); do
         full+="#"
@@ -230,7 +236,13 @@ progress_monitor() {
         case "$line" in
             *": OK")
                 done=$((done + 1))
-                if [ "$use_tty" = "1" ]; then
+                if [ "$embedded" -eq 1 ] && [ "$last_frame" -ne "$SECONDS" ]; then
+                    pct=0
+                    [ "$total" -gt 0 ] && pct=$((done * 100 / total))
+                    [ "$pct" -gt 99 ] && pct=99
+                    vigil_progress_frame clamav "$pct" "$done / $total"
+                    last_frame=$SECONDS
+                elif [ "$use_tty" = "1" ]; then
                     if [ "$total" -gt 0 ]; then
                         pct=$((done * 100 / total))
                         [ "$pct" -gt 99 ] && pct=99
@@ -268,7 +280,9 @@ progress_monitor() {
         esac
     done
 
-    if [ "$use_tty" = "1" ]; then
+    if [ "$embedded" -eq 1 ]; then
+        vigil_progress_frame clamav 100 "$done / $total" true
+    elif [ "$use_tty" = "1" ]; then
         elapsed=$((SECONDS - start))
         printf '\r\033[96m[%s]\033[0m 100%% \033[1m%s\033[0m/%s fichiers | infectés : %s | durée %s            \n' \
             "$full" "$done" "$total" "$infected" "$(fmt_duration "$elapsed")"
@@ -281,41 +295,24 @@ print_banner
 echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}  Vigil - Scan antivirus ClamAV               ${NC}"
 echo -e "${BLUE}============================================${NC}"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
-# --- Vérification des dépendances ---
-echo -e "${BLUE}=== Vérification des dépendances ===${NC}"
-if ! command -v clamscan >/dev/null 2>&1; then
-    echo -e "${RED}❌ clamscan n'est pas installé.${NC}"
-    echo -e "${YELLOW}    Installez-le : sudo apt install clamav${NC}"
-    echo -e "${YELLOW}    Puis mettez à jour les bases : sudo bash $(dirname "$0")/vigil_clamav_update.sh${NC}"
-    ERRORS=$((ERRORS + 1))
-    final_pause
-    exit 1
+# Resolve the same Vigil profile regardless of operator or scan mode.
+clamav_core="$(dirname -- "$0")/../../vigil/clamav.py"
+DB_DIR=$(python3 "$clamav_core" directory) || exit 1
+export VIGIL_CLAMAV_DB_DIR="$DB_DIR"
+mkdir -p -- "$RAPPORTS_DIR" || exit 1
+signature_log="$RAPPORTS_DIR/clamav-signatures-$(date +%Y%m%d_%H%M%S)-$$.json"
+if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+    signature_log="$RAPPORTS_DIR/clamav-signatures.json"
 fi
-
-# Vérifier que les bases virales existent
-DB_DIR=$(clamconf 2>/dev/null | sed -nE 's/^\s*DatabaseDirectory\s*=\s*"?([^"]*)"?\s*$/\1/p' | tail -1)
-[ -z "$DB_DIR" ] && DB_DIR="/var/lib/clamav"
-HAS_DB=0
-for db in main.cvd main.cld daily.cvd daily.cld; do
-    if [ -f "$DB_DIR/$db" ]; then HAS_DB=1; break; fi
-done
-if [ "$HAS_DB" = "0" ]; then
-    echo ""
-    echo -e "${YELLOW}⚠️  ${BOLD}Aucune base virale trouvée${NC} ${GREY}dans $DB_DIR${NC}"
-    echo -e "  ${GREY}Mettez à jour les bases :${NC} ${BOLD}sudo bash $(dirname "$0")/vigil_clamav_update.sh${NC}"
-    if [ "$AUTO_YES" = "1" ]; then
-        echo -e "${GREY}--yes : continuation automatique sans base virale.${NC}"
-    else
-        echo -ne "\n${BOLD}${YELLOW}Voulez-vous continuer quand même ? (o/n) : ${NC}"
-        read -r CONT
-        [ "$CONT" = "o" ] || [ "$CONT" = "O" ] || { echo -e "${YELLOW}Annulé.${NC}"; exit 0; }
-    fi
-fi
-
-echo -e "${GREEN}✅ clamscan disponible : $(clamscan --version 2>/dev/null | head -1)${NC}"
+python3 "$clamav_core" prepare "${SIGNATURE_ARGS[@]}" --log "$signature_log" || exit 1
+signature_lock=$(python3 "$clamav_core" lock-path) || exit 1
+exec {signature_fd}<>"$signature_lock" || exit 1
+flock -sn "$signature_fd" || { echo "ClamAV update in progress / Mise à jour ClamAV en cours." >&2; exit 1; }
+python3 "$clamav_core" verify-log "$signature_log" || exit 1
+CLAMSCAN=$(command -v clamscan) || exit 1
 echo ""
 
 # --- Lister les dossiers disponibles dans /investigation ---
@@ -330,23 +327,38 @@ if [ ! -d "$INVESTIGATION_DIR" ]; then
     exit 1
 fi
 
-# Collecter les sous-dossiers (et /investigation lui-même)
 SCAN_DIRS=()
-i=0
-while IFS= read -r -d '' dir; do
-    SCAN_DIRS+=("$dir")
-    i=$((i + 1))
-done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
-
-# Proposer aussi /investigation lui-même s'il contient des fichiers directement
-if [ -n "$(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type f -print -quit 2>/dev/null)" ]; then
-    SCAN_DIRS+=("$INVESTIGATION_DIR")
+if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
+    mount_list=$(mktemp) || exit 1
+    if ! python3 -I "$VIGIL_BASE/scripts/analyse/vigil_census_mount_guard.py" > "$mount_list"; then
+        rm -f -- "$mount_list"
+        exit 1
+    fi
+    mapfile -d '' -t SCAN_DIRS < "$mount_list"
+    rm -f -- "$mount_list"
+elif [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+    source "$(dirname "$0")/vigil_scan_mounts.sh" || exit 1
+    if ! read_investigation_mounts "$INVESTIGATION_DIR"; then
+        echo "Impossible de lire les montages à scanner." >&2
+        exit 1
+    fi
+    SCAN_DIRS=("${INVESTIGATION_MOUNTS[@]}")
+else
+    while IFS= read -r -d '' dir; do
+        SCAN_DIRS+=("$dir")
+    done < <(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
+    if [ -n "$(find "$INVESTIGATION_DIR" -maxdepth 1 -mindepth 1 -type f -print -quit 2>/dev/null)" ]; then
+        SCAN_DIRS+=("$INVESTIGATION_DIR")
+    fi
 fi
 
 if [ "${#SCAN_DIRS[@]}" -eq 0 ]; then
     echo -e "${YELLOW}ℹ️  Aucun dossier à scanner dans $INVESTIGATION_DIR.${NC}"
     echo -e "${YELLOW}     (le dossier est vide ou ne contient pas de sous-dossier)${NC}"
-    # Aucun dossier à scanner (information seulement, pas de custody).
+    # Le scan rapide ne peut pas produire de rapport sans montage.
+    if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+        ERRORS=$((ERRORS + 1))
+    fi
     final_pause
     exit 0
 fi
@@ -374,7 +386,7 @@ while true; do
     [ -z "$CHOICE" ] && continue
 
     if [ "$CHOICE" = "q" ]; then
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
         echo -e "${YELLOW}Scan annulé par l'utilisateur.${NC}"
         final_pause
         exit 0
@@ -541,13 +553,37 @@ for target in "${TARGETS[@]}"; do
     else
         USE_TTY=0
     fi
-    sudo clamscan --recursive --bell $CLAM_OPTS "$target" 2>&1 \
+    SCANNER=("$CLAMSCAN")
+    # Case analysis stays unprivileged. Only request sudo for a legacy scan
+    # when the mounted tree cannot be read by the operator.
+    if [ "${VIGIL_CASE_ANALYSIS:-}" != 1 ]; then
+        if ! unreadable=$(find "$target" \( -type f ! -readable -o -type d \( ! -readable -o ! -executable \) \) \
+                                  -print -quit 2>/dev/null) || [ -n "$unreadable" ]; then
+            if [ "$(realpath -- "$CLAMSCAN")" != /usr/bin/clamscan ]; then
+                echo "ClamScan privilégié requiert /usr/bin/clamscan / Elevated ClamScan requires /usr/bin/clamscan." >&2
+                ERRORS=$((ERRORS + 1))
+                continue
+            fi
+            SCANNER=(sudo -- /usr/bin/clamscan)
+        fi
+    fi
+    SCANNER+=(--database "$DB_DIR" --follow-dir-symlinks=0 --follow-file-symlinks=0 --cross-fs=no)
+    printf 'Vigil ClamAV metadata: ' >> "$LOG_FILE"
+    cat -- "$signature_log" >> "$LOG_FILE"
+    "${SCANNER[@]}" --recursive --bell $CLAM_OPTS "$target" 2>&1 \
         | progress_monitor "$LOG_FILE" "$TOTAL_FILES" "$USE_TTY"
     CLAM_RC=${PIPESTATUS[0]:-0}
+    if [ -n "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+        printf '%s %s\n' "$TOTAL_FILES" "$CLAM_RC" >> "$VIGIL_ANTIVIRUS_REPORT_RUN/scan-coverage.tsv"
+        printf '%s\n' "--recursive --bell $CLAM_OPTS" > "$VIGIL_ANTIVIRUS_REPORT_RUN/scan-options.txt"
+    fi
 
     if [ "$GEN_LOG" -eq 1 ]; then
-        cp "$RAPPORT.tmp" "$RAPPORT" 2>/dev/null || true
-        rm -f "$RAPPORT.tmp" 2>/dev/null || true
+        if mv -- "$RAPPORT.tmp" "$RAPPORT"; then
+            LOG_FILE="$RAPPORT"
+        else
+            ERRORS=$((ERRORS + 1))
+        fi
     fi
     # Extraire le nombre de fichiers infectés depuis le résumé
     INFECTED=$(grep -i "Infected files:" "$LOG_FILE" 2>/dev/null | awk -F: '{print $2}' | xargs || echo "0")
@@ -574,7 +610,7 @@ done
 # Mode multi-analyses : les journaux clamscan (persistants ou temporaires)
 # sont copies dans le dossier de collecte sous un nom previsible
 # (clamav_<dossier>.log) pour etre assembles par vigil_pdf.py --kind multi.
-if [ -n "$JSON_OUT_DIR" ] && [ "${#SCAN_LOGS[@]}" -gt 0 ]; then
+if [ -n "$JSON_OUT_DIR" ] && [ "$JSON_OUT_DIR" != "$RAPPORTS_DIR" ] && [ "${#SCAN_LOGS[@]}" -gt 0 ]; then
     mkdir -p "$JSON_OUT_DIR" 2>/dev/null || true
     for lf in "${SCAN_LOGS[@]}"; do
         [ -f "$lf" ] || continue
@@ -598,7 +634,10 @@ echo -e "Rapports : $RAPPORTS_DIR/clamav_*_${STAMP}.log"
 # scan (le scan lui-même a réussi ; le PDF est un rendu de présentation).
 echo ""
 echo -e "${BLUE}=== Génération du rapport PDF ===${NC}"
-if [ "$GEN_PDF" -eq 0 ]; then
+PDF_GENERATED=0
+if [ -n "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+    vigil_text "Le PDF consolidé sera généré après le démontage." "The consolidated PDF will be generated after unmounting."
+elif [ "$GEN_PDF" -eq 0 ]; then
     echo -e "${YELLOW}⏏️  Génération du rapport PDF désactivée (--no-pdf).${NC}"
 else
     PDF_SCRIPT="$(dirname "$0")/../pdf/vigil_pdf.py"
@@ -616,16 +655,36 @@ else
                 --kind clamav \
                 "${LOG_ARGS[@]}" \
                 --user "$ACTIVE_USER" \
-                --project "" \
+                --project "${VIGIL_LEGACY_PROJECT:-}" \
                 --action "$ACTION_LABEL" \
                 --options="--recursive --bell $CLAM_OPTS" \
                 --comment "$SCAN_COMMENT" \
                 --dir "$RAPPORTS_DIR" 2>&1)
             if [ $? -eq 0 ] && [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-                echo -e "${GREEN}✅ Rapport PDF généré : $PDF_OUT${NC}"
+                PDF_GENERATED=1
+                echo -e "${GREEN}✅ $(vigil_text "Rapport PDF généré :" "PDF report created:") $PDF_OUT${NC}"
+                if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+                    common_reports="$VIGIL_BASE/rapports"
+                    report_name="${PDF_OUT##*/}"
+                    published="$common_reports/${report_name%.pdf}_${VIGIL_LEGACY_SCAN_DIR##*/}.pdf"
+                    if [ "$(realpath -m -- "$common_reports")" = "$common_reports" ] &&
+                       mkdir -p -- "$common_reports" &&
+                       staged=$(mktemp "$common_reports/.clamav-pdf.XXXXXX"); then
+                        if cp -- "$PDF_OUT" "$staged" && ln -T -- "$staged" "$published"; then
+                            printf 'Copie PDF dans le dossier commun : %s\n' "$published"
+                        else
+                            echo "Copie PDF impossible. Original conservé : $PDF_OUT" >&2
+                            ERRORS=$((ERRORS + 1))
+                        fi
+                        rm -f -- "$staged"
+                    else
+                        echo "Dossier commun des rapports inaccessible. Original conservé : $PDF_OUT" >&2
+                        ERRORS=$((ERRORS + 1))
+                    fi
+                fi
                 # Copie du rapport PDF dans le dossier du projet actif (pour l'export).
                 _AP=""
-                [ -f "$VIGIL_BASE/data/active_project" ] && _AP=$(cat "$VIGIL_BASE/data/active_project" 2>/dev/null)
+                [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ] && [ -f "$VIGIL_BASE/data/active_project" ] && _AP=$(cat "$VIGIL_BASE/data/active_project" 2>/dev/null)
                 if [ -n "$_AP" ] && [ "$_AP" != "(no-project)" ] && [ -d "$VIGIL_BASE/data/projects/$_AP" ] && [ -w "$VIGIL_BASE/data/projects/$_AP" ]; then
                     cp -f "$PDF_OUT" "$VIGIL_BASE/data/projects/$_AP/" 2>/dev/null && \
                         echo -e "${GREEN}   Rapport copié dans le dossier du projet : $VIGIL_BASE/data/projects/$_AP/$(basename "$PDF_OUT")${NC}"
@@ -640,5 +699,9 @@ else
     else
         echo -e "${YELLOW}⚠️  Script de génération PDF introuvable ($PDF_SCRIPT).${NC}"
     fi
+fi
+if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ] && [ "$GEN_PDF" -eq 1 ] && [ "$PDF_GENERATED" -eq 0 ]; then
+    echo "Aucun PDF ClamAV consolidé n’a été produit. Journaux : $RAPPORTS_DIR" >&2
+    ERRORS=$((ERRORS + 1))
 fi
 final_pause

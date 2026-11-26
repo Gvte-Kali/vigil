@@ -1,12 +1,17 @@
 #!/bin/bash
 
+if [ -t 1 ]; then
+    . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+    vigil_banner 'Vigil · Montage / Mount'
+fi
+
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 # --- Couleurs ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+RED='\033[91m'
+GREEN='\033[92m'
+YELLOW='\033[93m'
+BLUE='\033[96m'
 NC='\033[0m'
 
 # --- Vérifier les arguments ---
@@ -85,7 +90,7 @@ log_action() {
 
 # --- Démontage automatique des périphériques existants ---
 if [[ "$NO_LOG" == false ]]; then
-    echo -e "${YELLOW}Démontage automatique des périphériques existants dans /investigation...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Démontage automatique des périphériques existants dans /investigation..." "Automatically unmounting existing devices under /investigation...")${NC}"
 fi
 
 while IFS= read -r -d '' dir; do
@@ -253,16 +258,16 @@ if [[ "$DEVICE_MODE" == "usb_storage" || "$DEVICE_MODE" == "all" ]]; then
 
             if [[ "$SELECTED_NUM" == "q" ]]; then
                 if [[ "$NO_LOG" == false ]]; then
-                    echo -e "${YELLOW}Annulé.${NC}"
+                    echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
                 fi
                 exit 0
             fi
 
             if ! [[ "$SELECTED_NUM" =~ ^[0-9]+$ ]] || [[ "$SELECTED_NUM" -lt 1 || "$SELECTED_NUM" -gt $DEVICE_NUM ]]; then
                 if [[ "$NO_LOG" == false ]]; then
-                    echo -e "${RED}❌ Numéro invalide. Veuillez entrer un numéro entre 1 et $DEVICE_NUM.${NC}"
+                    echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Veuillez entrer un numéro entre 1 et $DEVICE_NUM.${NC}"
                 else
-                    echo -e "❌ Numéro invalide. Veuillez entrer un numéro entre 1 et $DEVICE_NUM."
+                    echo -e "❌ $(vigil_text "Numéro invalide." "Invalid number.") Veuillez entrer un numéro entre 1 et $DEVICE_NUM."
                 fi
                 continue
             fi

@@ -1,0 +1,9 @@
+schema_version: 1
+api_version: 1
+id: vigil.crypto
+version: 1.0.0
+name: crypto
+category: analysis
+entrypoint: scripts/analyse/vigil_crypto.sh
+dependencies: [bash, file]
+capabilities: [evidence.read, results.write]

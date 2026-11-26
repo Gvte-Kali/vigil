@@ -33,16 +33,10 @@ GREY='\e[90m'
 BOLD='\e[1m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/lib/vigil-terminal.sh"
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 ERRORS=0
@@ -96,7 +90,7 @@ final_pause() {
     else
         echo -e "${GREEN}✅ Orchestration terminée : $SUCCES/$TOTAL analyse(s) réussie(s).${NC}"
     fi
-    echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
     read -r
 }
 
@@ -148,11 +142,11 @@ echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}  Vigil - Orchestrateur de scans complets   ${NC}"
 echo -e "${BLUE}============================================${NC}"
 if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
-    echo -e "${BLUE}Projet : (aucun)${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") $(vigil_text "(aucun)" "(none)")${NC}"
 else
-    echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
+    echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 fi
-echo -e "${BLUE}Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo -e "${BLUE}Rapport PDF consolide : $([ "$GEN_PDF" -eq 1 ] && echo "activé" || echo "désactivé")${NC}"
 echo -e "${BLUE}Analyses : recensement, antivirus, images, vidéos, audio, bureautique, archives, verrouillés, entropie, volumineux${NC}"
 echo ""

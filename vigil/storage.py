@@ -1,0 +1,708 @@
+"""Local case metadata and read-only integrity verification."""
+import hashlib
+import json
+import os
+import re
+import sqlite3
+import stat
+import tempfile
+import unicodedata
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
+
+from . import evidence_layout
+from .inspection import investigation_mounts, list_evidence_directory, open_evidence_path
+
+ANTIVIRUS_CASE_NAME = "Scan antivirus"
+SCHEMA_VERSION = 6
+APPLICATION_ID = 0x5649474C
+DELETED_CASES_DDL = """CREATE TABLE deleted_cases (
+    case_id TEXT PRIMARY KEY REFERENCES cases(id), deleted_at TEXT NOT NULL
+)"""
+CASE_DIRECTORIES_DDL = """CREATE TABLE case_directories (
+    case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE
+)"""
+CASE_DETAILS_DDL = """CREATE TABLE case_details (
+    case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
+    reference TEXT NOT NULL, description TEXT NOT NULL
+)"""
+ARCHIVE_DDL = (
+    """CREATE TABLE archive_operators (
+        operator_id TEXT PRIMARY KEY REFERENCES operators(id) ON DELETE CASCADE
+    )""",
+    """CREATE TABLE case_archives (
+        case_id TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
+        sha256 TEXT NOT NULL UNIQUE, provenance TEXT NOT NULL
+    )""",
+    """CREATE TABLE archive_events (
+        sequence INTEGER PRIMARY KEY REFERENCES audit(sequence) ON DELETE CASCADE,
+        provenance TEXT NOT NULL
+    )""",
+)
+EVIDENCE_COPIES_DDL = """CREATE TABLE evidence_copies (
+    evidence_id TEXT PRIMARY KEY REFERENCES evidence(id) ON DELETE CASCADE,
+    case_id TEXT NOT NULL REFERENCES cases(id),
+    relative_path TEXT NOT NULL,
+    source_key TEXT NOT NULL,
+    UNIQUE(case_id, relative_path)
+)"""
+SCHEMA = (
+    "CREATE TABLE operators (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE)",
+    """CREATE TABLE cases (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL, legacy_path TEXT UNIQUE,
+        legacy_info TEXT, created_at TEXT NOT NULL
+    )""",
+    DELETED_CASES_DDL,
+    CASE_DIRECTORIES_DDL,
+    CASE_DETAILS_DDL,
+    """CREATE TABLE evidence (
+        id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES cases(id),
+        path TEXT NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL
+    )""",
+    """CREATE TABLE audit (
+        sequence INTEGER PRIMARY KEY, timestamp TEXT NOT NULL,
+        operator_id TEXT NOT NULL REFERENCES operators(id),
+        case_id TEXT NOT NULL REFERENCES cases(id), action TEXT NOT NULL,
+        details TEXT NOT NULL
+    )""",
+    *ARCHIVE_DDL,
+    EVIDENCE_COPIES_DDL,
+)
+
+
+def default_database():
+    site_state = os.environ.get("VIGIL_STATE_DIR")
+    if site_state and Path(site_state).is_absolute():
+        return Path(site_state) / "cases.sqlite"
+    if Path(__file__).resolve().parents[1] == Path("/opt/vigil"):
+        return Path("/opt/vigil/data/state/cases.sqlite")
+    root = os.environ.get("XDG_STATE_HOME")
+    base = Path(root) if root and Path(root).is_absolute() else Path.home() / ".local/state"
+    return base / "vigil" / "cases.sqlite"
+
+
+def utc_now():
+    return datetime.now(UTC).isoformat()
+
+
+@contextmanager
+def database(path):
+    if path.resolve().is_relative_to(Path("/investigation").resolve()):
+        raise ValueError("database must be outside /investigation")
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    connection = sqlite3.connect(path)
+    connection.row_factory = sqlite3.Row
+    try:
+        connection.execute("PRAGMA foreign_keys = ON")
+        with connection:
+            connection.execute("BEGIN IMMEDIATE")
+            version = connection.execute("PRAGMA user_version").fetchone()[0]
+            app_id = connection.execute("PRAGMA application_id").fetchone()[0]
+            if version == app_id == 0 and not connection.execute(
+                "SELECT 1 FROM sqlite_schema LIMIT 1"
+            ).fetchone():
+                for statement in SCHEMA:
+                    connection.execute(statement)
+                connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
+                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5):
+                if version == 1:
+                    connection.execute(DELETED_CASES_DDL)
+                if version < 3:
+                    connection.execute(CASE_DIRECTORIES_DDL)
+                    for case_id, name in connection.execute("SELECT id, name FROM cases ORDER BY created_at, id"):
+                        assign_case_directory(connection, case_id, name)
+                if version < 4:
+                    connection.execute(CASE_DETAILS_DDL)
+                if version < 5:
+                    for statement in ARCHIVE_DDL:
+                        connection.execute(statement)
+                connection.execute(EVIDENCE_COPIES_DDL)
+                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            elif app_id != APPLICATION_ID or version != SCHEMA_VERSION:
+                raise ValueError("unsupported Vigil database or schema version")
+            if version != SCHEMA_VERSION:
+                # Persist directory assignments before a caller can rename a legacy folder.
+                connection.commit()
+                connection.execute("BEGIN IMMEDIATE")
+            yield connection
+    finally:
+        connection.close()
+
+
+def register_operator(connection, name):
+    if not name.strip():
+        raise ValueError("operator name required")
+    connection.execute(
+        "INSERT INTO operators VALUES (?, ?) ON CONFLICT(name) DO NOTHING",
+        (uuid4().hex, name),
+    )
+    return connection.execute("SELECT id FROM operators WHERE name = ?", (name,)).fetchone()[0]
+
+
+def list_operators(connection):
+    return list(connection.execute("""
+        SELECT id, name FROM operators WHERE id NOT IN (
+            SELECT operator_id FROM archive_operators
+        ) ORDER BY name COLLATE NOCASE, id
+    """))
+
+
+def require_active_case(connection, case_id):
+    row = connection.execute(
+        "SELECT * FROM cases WHERE id = ? AND id NOT IN (SELECT case_id FROM deleted_cases)",
+        (case_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError("unknown or deleted case")
+    return row
+
+
+def delete_case(connection, case_id, operator):
+    case = require_active_case(connection, case_id)
+    if case["name"] == ANTIVIRUS_CASE_NAME:
+        raise ValueError("the antivirus case cannot be deleted")
+    audit(connection, operator, case_id, "case.delete", {"name": case["name"]})
+    connection.execute("INSERT INTO deleted_cases VALUES (?, ?)", (case_id, utc_now()))
+
+
+def audit(connection, operator, case_id, action, details):
+    require_active_case(connection, case_id)
+    operator_id = register_operator(connection, operator)
+    connection.execute(
+        """INSERT INTO audit(timestamp, operator_id, case_id, action, details)
+           VALUES (?, ?, ?, ?, ?)""",
+        (utc_now(), operator_id, case_id, action, json.dumps(details)),
+    )
+
+
+def assign_case_directory(connection, case_id, name):
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^A-Za-z0-9]+", "_", ascii_name).strip("_")[:100] or "Affaire"
+    # A legacy directory name is reserved even when no directory currently exists.
+    if re.fullmatch(r"[0-9a-fA-F]{32}", base):
+        base = f"Affaire_{base}"
+    database_file = connection.execute("PRAGMA database_list").fetchone()[2]
+    root = Path(database_file).parent / "legacy-custody"
+    candidate = base
+    suffix = 2
+    while (os.path.lexists(root / candidate)
+           or connection.execute("SELECT 1 FROM case_directories WHERE name = ?", (candidate,)).fetchone()):
+        candidate = f"{base}_{suffix}"
+        suffix += 1
+    connection.execute("INSERT INTO case_directories VALUES (?, ?)", (case_id, candidate))
+
+
+def create_case(connection, name, operator, legacy_path=None, legacy_info=None, *, reference="", description=""):
+    if not name.strip():
+        raise ValueError("case name required")
+    case_id = uuid4().hex
+    result = connection.execute(
+        """INSERT INTO cases VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(legacy_path) DO NOTHING""",
+        (case_id, name, legacy_path, legacy_info, utc_now()),
+    )
+    if result.rowcount == 0:
+        existing = connection.execute(
+            "SELECT id FROM cases WHERE legacy_path = ?", (legacy_path,)
+        ).fetchone()[0]
+        require_active_case(connection, existing)
+        return existing
+    assign_case_directory(connection, case_id, name)
+    if reference or description:
+        connection.execute("INSERT INTO case_details VALUES (?, ?, ?)", (case_id, reference, description))
+    audit(connection, operator, case_id, "case.import" if legacy_path else "case.create",
+          {"legacy_path": legacy_path})
+    return case_id
+
+
+def case_manager_rows(state):
+    """Read case summaries without opening evidence, reports or census databases."""
+    with database(state) as connection:
+        return [dict(row) for row in connection.execute("""
+            WITH activity AS (
+                SELECT case_id, max(timestamp) AS latest,
+                       min(CASE WHEN action IN ('case.create', 'case.import') THEN sequence END) AS creation_event
+                FROM audit GROUP BY case_id
+            ), evidence_counts AS (
+                SELECT case_id, count(*) AS total FROM evidence GROUP BY case_id
+            )
+            SELECT c.id, c.name, c.created_at, d.reference, d.description,
+                   a.latest, n.name AS directory,
+                   coalesce(e.total, 0) AS evidence_count,
+                   coalesce(json_extract(p.provenance, '$.operator'), o.name) AS operator
+            FROM cases c JOIN case_directories n ON n.case_id = c.id
+            LEFT JOIN case_details d ON d.case_id = c.id
+            LEFT JOIN activity a ON a.case_id = c.id
+            LEFT JOIN audit v ON v.sequence = a.creation_event
+            LEFT JOIN operators o ON o.id = v.operator_id
+            LEFT JOIN archive_events p ON p.sequence = v.sequence
+            LEFT JOIN evidence_counts e ON e.case_id = c.id
+            WHERE c.name <> ? AND c.id NOT IN (SELECT case_id FROM deleted_cases)
+            """, (ANTIVIRUS_CASE_NAME,))]
+
+
+def case_evidence_rows(state, case_id):
+    with database(state) as connection:
+        require_active_case(connection, case_id)
+        rows = [dict(row) for row in connection.execute(
+            """SELECT evidence.id, path, size, sha256, relative_path FROM evidence
+               LEFT JOIN evidence_copies ON evidence_id = evidence.id
+               WHERE evidence.case_id = ? ORDER BY path, evidence.id""", (case_id,)
+        )]
+        for row in rows:
+            if row["relative_path"] is None:
+                copy = evidence_copy_path(state, case_id, row["id"], connection=connection)
+                if copy.is_file():
+                    row["relative_path"] = str(evidence_layout.legacy_path(row["id"]))
+        return rows
+
+
+def case_manager_artifacts(state, case_id, name):
+    """Read published case metadata without scanning a device or modifying the case."""
+    if not re.fullmatch(r"[0-9a-f]{32}", case_id) or not re.fullmatch(r"[A-Za-z0-9_]+", name):
+        raise ValueError("invalid case directory")
+    root = state.parent / "legacy-custody"
+    planned, previous = root / name, root / case_id
+    directory = previous if previous.exists() and not planned.exists() else planned
+    if directory.resolve() != directory.absolute() or directory.resolve().is_relative_to("/investigation"):
+        raise ValueError("invalid case directory")
+    metadata = {"path": str(directory), "inventory": None, "analyses": None, "reports": None}
+    if not directory.is_dir():
+        return metadata
+
+    def local(path):
+        return path.resolve() == path.absolute()
+
+    analyses = directory / "analyses"
+    runs = sorted(path for path in analyses.iterdir() if local(path) and path.is_dir()) if (
+        local(analyses) and analyses.is_dir()
+    ) else []
+    finished = []
+    for run in runs:
+        status = run / "exit-code"
+        if local(status) and status.is_file():
+            with status.open("rb") as stream:
+                finished.append(stream.read(16).strip())
+    metadata["analyses"] = finished.count(b"0")
+    reports = directory / "rapports"
+    if local(reports) and reports.is_dir():
+        metadata["reports"] = sum(
+            not (Path(folder) / filename).is_symlink() and (Path(folder) / filename).is_file()
+            for folder, _, files in os.walk(reports) for filename in files if filename.endswith(".pdf")
+        )
+    candidates = [
+        index for folder in [directory, *(run for run in runs if run.name.startswith("vigil.census-"))]
+        for index in folder.glob("census_*.sqlite") if local(index) and index.is_file()
+    ]
+    if candidates:
+        index = max(candidates, key=lambda path: path.stat().st_mtime_ns)
+        try:
+            connection = sqlite3.connect(index.as_uri() + "?mode=ro", uri=True, timeout=0.2)
+            try:
+                connection.execute("PRAGMA trusted_schema = OFF")
+                row = connection.execute("SELECT total_files FROM inventory_meta ORDER BY id DESC LIMIT 1").fetchone()
+                metadata["inventory"] = row[0] if row else None
+            finally:
+                connection.close()
+        except sqlite3.Error:
+            pass
+    return metadata
+
+
+def find_antivirus_case(connection):
+    existing = connection.execute(
+        "SELECT id FROM cases WHERE name = ? LIMIT 2", (ANTIVIRUS_CASE_NAME,),
+    ).fetchall()
+    if len(existing) > 1:
+        raise ValueError("more than one case named Scan antivirus")
+    return existing[0]["id"] if existing else None
+
+
+def antivirus_case(connection, operator):
+    return find_antivirus_case(connection) or create_case(connection, ANTIVIRUS_CASE_NAME, operator)
+
+
+def read_legacy_project(path):
+    with (path / "info.json").open("rb") as stream:
+        data = stream.read(1024 * 1024 + 1)
+    if len(data) > 1024 * 1024:
+        raise ValueError("legacy project metadata exceeds 1 MiB")
+    raw = data.decode("utf-8")
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("name", path.name), str):
+        raise ValueError("invalid legacy project metadata")
+    return parsed.get("name", path.name), raw
+
+
+def fingerprint(path, *, mount=None, copy_to=None):
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK
+    if mount is None:
+        return fingerprint_descriptor(os.open(path, flags), lambda: path.stat(follow_symlinks=False), copy_to)
+    with open_evidence_path(path, *mount) as source:
+        descriptor = os.open(f"/proc/self/fd/{source}", os.O_RDONLY | os.O_CLOEXEC)
+        return fingerprint_descriptor(descriptor, lambda: mounted_file_stat(path, mount), copy_to)
+
+
+def mounted_file_stat(path, mount):
+    with open_evidence_path(path, *mount) as descriptor:
+        return os.fstat(descriptor)
+
+
+def fingerprint_descriptor(descriptor, current_stat, copy_to):
+    with os.fdopen(descriptor, "rb") as stream:
+        before = os.fstat(stream.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            raise ValueError("evidence must be a regular file")
+        if copy_to is None:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        else:
+            sha = hashlib.sha256()
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                copy_to.write(chunk)
+                sha.update(chunk)
+            digest = sha.hexdigest()
+        after = os.fstat(stream.fileno())
+        if not (file_identity(before) == file_identity(after) == file_identity(current_stat())):
+            raise ValueError("evidence changed during hashing")
+    return before.st_size, digest
+
+
+def file_identity(info):
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def add_evidence(connection, case_id, path, size, digest, operator, evidence_id):
+    connection.execute(
+        "INSERT INTO evidence VALUES (?, ?, ?, ?, ?)",
+        (evidence_id, case_id, str(path), size, digest),
+    )
+    audit(connection, operator, case_id, "evidence.add",
+          {"evidence_id": evidence_id, "sha256": digest})
+    return evidence_id
+
+
+def case_storage_directory(state, case_id, *, connection=None):
+    if not re.fullmatch(r"[0-9a-f]{32}", case_id):
+        raise ValueError("invalid case ID")
+    if connection is None:
+        with database(state) as connection:
+            return case_storage_directory(state, case_id, connection=connection)
+    row = connection.execute("SELECT name FROM case_directories WHERE case_id = ?", (case_id,)).fetchone()
+    if row is None:
+        raise ValueError("unknown case")
+    name = row["name"]
+    if not re.fullmatch(r"[A-Za-z0-9_]+", name):
+        raise ValueError("invalid case directory name")
+    root = state.parent / "legacy-custody"
+    path, previous = root / name, root / case_id
+    for directory in (path, previous):
+        resolved = directory.resolve()
+        if resolved != directory.absolute() or resolved.is_relative_to("/investigation"):
+            raise ValueError("invalid case storage directory")
+        if directory.exists() and not directory.is_dir():
+            raise ValueError("case storage path is not a directory")
+    if previous.is_dir():
+        if path.exists():
+            raise ValueError(f"conflicting case directories: {previous} and {path}")
+        previous.rename(path)
+    return path
+
+
+def evidence_copy_path(state, case_id, evidence_id, *, connection=None):
+    if len(evidence_id) != 32 or any(char not in "0123456789abcdef" for char in evidence_id):
+        raise ValueError("invalid evidence ID")
+    if connection is None:
+        with database(state) as connection:
+            return evidence_copy_path(state, case_id, evidence_id, connection=connection)
+    row = connection.execute(
+        "SELECT relative_path FROM evidence_copies WHERE evidence_id = ? AND case_id = ?",
+        (evidence_id, case_id),
+    ).fetchone()
+    relative = row["relative_path"] if row else evidence_layout.legacy_path(evidence_id)
+    custody = case_storage_directory(state, case_id, connection=connection)
+    copy = evidence_layout.checked_copy(custody, relative)
+    try:
+        evidence_layout.require_readonly(copy)
+    except FileNotFoundError:
+        pass
+    return copy
+
+
+def record_copy(connection, case_id, evidence_id, relative, source_key):
+    connection.execute("INSERT INTO evidence_copies VALUES (?, ?, ?, ?)",
+                       (evidence_id, case_id, str(relative), source_key))
+
+
+def migrate_evidence_copies(state, case_id, operator):
+    """Publish verified copies and switch the SQLite pointers in one transaction."""
+    migrated, missing = [], []
+    try:
+        with database(state) as connection:
+            require_active_case(connection, case_id)
+            custody = case_storage_directory(state, case_id, connection=connection)
+            rows = connection.execute(
+                """SELECT id, path, size, sha256 FROM evidence WHERE case_id = ?
+                   AND id NOT IN (SELECT evidence_id FROM evidence_copies) ORDER BY id""", (case_id,)
+            ).fetchall()
+            for row in rows:
+                old = evidence_copy_path(state, case_id, row["id"], connection=connection)
+                try:
+                    evidence_layout.require_readonly(old)
+                except FileNotFoundError:
+                    missing.append(row["id"])
+                    continue
+                expected = (row["size"], row["sha256"])
+                if fingerprint(old) != expected:
+                    raise ValueError(f"legacy copy failed integrity check: {row['id']}")
+                layout = evidence_layout.source_layout(row["path"], historical=True)
+                relative = evidence_layout.allocate_copy(old, custody, layout, row["id"])
+                new = custody / relative
+                migrated.append((old, new))
+                if fingerprint(new) != expected:
+                    raise ValueError(f"migrated copy failed integrity check: {row['id']}")
+                record_copy(connection, case_id, row["id"], relative, layout[3])
+                audit(connection, operator, case_id, "evidence.migrate", {
+                    "evidence_id": row["id"], "sha256": row["sha256"], "relative_path": str(relative),
+                })
+    except BaseException:
+        for _, new in migrated:
+            new.unlink()
+        raise
+    retained = []
+    for old, new in migrated:
+        try:
+            old.unlink()
+        except OSError:
+            retained.append(str(old))
+        else:
+            try:
+                old.parent.rmdir()
+            except OSError:
+                pass
+    return {"migrated": len(migrated), "missing": missing, "legacy_paths_retained": retained}
+
+
+def find_evidence_copy(state, case_id, original, digest=None):
+    """Find the local copy for this exact recorded version of a case file."""
+    with database(state) as connection:
+        require_active_case(connection, case_id)
+        query = "SELECT id FROM evidence WHERE case_id = ? AND path = ?"
+        params = (case_id, str(original))
+        if digest is not None:
+            query += " AND sha256 = ?"
+            params += (digest,)
+        ids = connection.execute(query + " ORDER BY rowid DESC", params).fetchall()
+    for row in ids:
+        copy = evidence_copy_path(state, case_id, row["id"])
+        try:
+            evidence_layout.require_readonly(copy)
+        except FileNotFoundError:
+            continue
+        return copy
+    return None
+
+
+def register_file(state, case_id, path, operator, *, mount=None):
+    path = path.absolute()
+    if state.exists() and state.samefile(path):
+        raise ValueError("database and evidence must be separate files")
+    if mount is None and (path.is_relative_to("/investigation") or path.resolve().is_relative_to("/investigation")):
+        roots = investigation_mounts()
+        root = max((root for root in roots if path.is_relative_to(root)), key=len, default=None)
+        if root is None:
+            raise ValueError("no verified read-only mount covers this evidence path")
+        mount = root, roots[root]
+
+    with database(state) as connection:
+        require_active_case(connection, case_id)
+        custody = case_storage_directory(state, case_id, connection=connection)
+        custody.mkdir(mode=0o700, parents=True, exist_ok=True)
+    layout = evidence_layout.source_layout(path, mount)
+    new_id = uuid4().hex
+    published = None
+    try:
+        with tempfile.TemporaryDirectory(dir=custody) as staging:
+            with tempfile.NamedTemporaryFile(dir=staging, delete=False) as stream:
+                staged = Path(stream.name)
+                size, digest = fingerprint(path, mount=mount, copy_to=stream)
+                stream.flush()
+                os.fchmod(stream.fileno(), 0o400)
+                if stat.S_IMODE(os.fstat(stream.fileno()).st_mode) != 0o400:
+                    raise ValueError("evidence storage does not enforce mode 0400")
+                os.fsync(stream.fileno())
+            with database(state) as connection:
+                require_active_case(connection, case_id)
+                if case_storage_directory(state, case_id, connection=connection) != custody:
+                    raise ValueError("case storage changed during registration")
+                records = connection.execute(
+                    """SELECT evidence.id, relative_path, source_key FROM evidence
+                       LEFT JOIN evidence_copies ON evidence_id = evidence.id
+                       WHERE evidence.case_id = ? AND path = ? AND size = ? AND sha256 = ?
+                         AND (source_key = ? OR source_key IS NULL) ORDER BY evidence.rowid""",
+                    (case_id, str(path), size, digest, layout[3]),
+                ).fetchall()
+                for row in records:
+                    target = evidence_copy_path(state, case_id, row["id"], connection=connection)
+                    try:
+                        evidence_layout.require_readonly(target)
+                    except FileNotFoundError:
+                        continue
+                    if fingerprint(target) != (size, digest):
+                        raise ValueError("existing evidence copy failed integrity check")
+                    return {"id": row["id"], "size": size, "sha256": digest, "existing": True,
+                            "relative_path": str(target.relative_to(custody))}
+                reusable = records[0] if records else None
+                evidence_id = reusable["id"] if reusable else new_id
+                if reusable and reusable["relative_path"] is not None:
+                    relative = reusable["relative_path"]
+                    evidence_layout.publish_copy(staged, custody, relative)
+                else:
+                    relative = evidence_layout.allocate_copy(staged, custody, layout, evidence_id)
+                published = custody / relative
+                if reusable:
+                    audit(connection, operator, case_id, "evidence.copy",
+                          {"evidence_id": evidence_id, "sha256": digest})
+                else:
+                    add_evidence(connection, case_id, path, size, digest, operator, evidence_id)
+                if not reusable or reusable["relative_path"] is None:
+                    record_copy(connection, case_id, evidence_id, relative, layout[3])
+                audit(connection, operator, case_id, "evidence.copy.location",
+                      {"evidence_id": evidence_id, "relative_path": str(relative), "source": layout[3]})
+    except BaseException:
+        if published is not None:
+            published.unlink()
+        raise
+    return {"id": evidence_id, "size": size, "sha256": digest, "existing": bool(reusable),
+            "relative_path": str(relative)}
+
+
+def delete_evidence(state, case_id, evidence_id, operator):
+    staged = None
+    try:
+        with database(state) as connection:
+            require_active_case(connection, case_id)
+            record = connection.execute(
+                "SELECT path, sha256 FROM evidence WHERE id = ? AND case_id = ?",
+                (evidence_id, case_id),
+            ).fetchone()
+            if record is None:
+                raise ValueError("unknown evidence in this case")
+            source = evidence_copy_path(state, case_id, evidence_id, connection=connection)
+            try:
+                info = source.lstat()
+            except FileNotFoundError:
+                info = None
+            if info is not None:
+                if not stat.S_ISREG(info.st_mode):
+                    raise ValueError("invalid local evidence copy")
+                temporary = source.with_name(f".removed-{uuid4().hex}")
+                source.rename(temporary)
+                staged = temporary
+            connection.execute("DELETE FROM evidence WHERE id = ?", (evidence_id,))
+            audit(connection, operator, case_id, "evidence.delete", {
+                "evidence_id": evidence_id, "path": record["path"],
+                "sha256": record["sha256"], "had_local_copy": staged is not None,
+            })
+    except BaseException:
+        if staged is not None:
+            staged.rename(source)
+        raise
+    if staged is not None:
+        staged.unlink()
+        try:
+            source.parent.rmdir()
+        except OSError:
+            pass
+
+
+def is_archive_case(connection, case_id):
+    return connection.execute("SELECT 1 FROM case_archives WHERE case_id = ?", (case_id,)).fetchone() is not None
+
+
+def verify_file(state, evidence_id, operator, *, use_copy=False):
+    with database(state) as connection:
+        record = connection.execute(
+            "SELECT * FROM evidence WHERE id = ?", (evidence_id,)
+        ).fetchone()
+        restored = record is not None and is_archive_case(connection, record["case_id"])
+    if record is None:
+        raise ValueError("unknown evidence ID")
+    stored = evidence_copy_path(state, record["case_id"], evidence_id)
+    if (restored or use_copy) and not stored.is_file():
+        raise ValueError("referenced evidence content is unavailable")
+    path = stored if restored or use_copy else Path(record["path"])
+    if restored or use_copy:
+        evidence_layout.require_readonly(stored)
+    size, digest = fingerprint(path)
+    result = {
+        "id": evidence_id, "expected_sha256": record["sha256"], "sha256": digest,
+        "matches": size == record["size"] and digest == record["sha256"],
+    }
+    with database(state) as connection:
+        audit(connection, operator, record["case_id"], "evidence.verify", result)
+    return result
+
+
+def process_explorer_selection(state, case_id, operator, sources, *, register, use_saved_copy=False):
+    with database(state) as connection:
+        restored = is_archive_case(connection, case_id)
+    pending = [(Path(path), tuple(mount) if mount else None, directory)
+               for path, mount, directory in reversed(sources)]
+    seen = set()
+    results, errors = [], []
+    while pending:
+        path, mount, directory = pending.pop()
+        key = path, mount
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            if directory:
+                children = list_evidence_directory(path, *mount)
+                pending.extend((path / name, mount, is_dir) for name, is_dir in reversed(children))
+                continue
+            source = path
+            if not register and use_saved_copy and mount is None:
+                copy = find_evidence_copy(state, case_id, path)
+                if copy is None and restored:
+                    raise ValueError("referenced evidence content is unavailable")
+                source = copy or path
+            if source == path and path.is_relative_to("/investigation") and mount is None:
+                raise ValueError("no local copy or verified read-only mount for this evidence path")
+            if state.exists() and state.samefile(source):
+                raise ValueError("database and evidence must be separate files")
+            if register:
+                if restored and mount is None:
+                    raise ValueError("select a verified mounted source to register evidence")
+                result = register_file(state, case_id, path, operator, mount=mount)
+                results.append((str(path), result["sha256"], "existing" if result["existing"] else "added", []))
+                continue
+            size, digest = fingerprint(source, mount=mount)
+        except (OSError, ValueError) as error:
+            errors.append((str(path), str(error)))
+            continue
+        with database(state) as connection:
+            records = connection.execute(
+                "SELECT id, size, sha256 FROM evidence WHERE case_id = ? AND path = ?",
+                (case_id, str(path)),
+            ).fetchall()
+            if not records:
+                audit(connection, operator, case_id, "evidence.hash",
+                      {"path": str(path), "sha256": digest, "size": size})
+            for record in records:
+                audit(connection, operator, case_id, "evidence.verify", {
+                    "id": record["id"], "expected_sha256": record["sha256"], "sha256": digest,
+                    "matches": size == record["size"] and digest == record["sha256"],
+                })
+        expected = [record["sha256"] for record in records]
+        status = (
+            "calculated" if not records else
+            "matches" if all(size == row["size"] and digest == row["sha256"] for row in records)
+            else "changed"
+        )
+        results.append((str(path), digest, status, expected))
+    return results, errors

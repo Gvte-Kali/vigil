@@ -10,16 +10,12 @@ YELLOW='\e[93m'
 BLUE='\e[96m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 # --- Contexte actif (utilisateur + projet) : non bloquant pour le démontage ---
@@ -31,16 +27,18 @@ VIGIL_BASE="${VIGIL_BASE:-/opt/vigil}"
 ACTIVE_PROJECT_FILE="$VIGIL_BASE/data/active_project"
 ACTIVE_USER_FILE="$VIGIL_BASE/data/active_user"
 PROJECTS_DIR="$VIGIL_BASE/data/projects"
-CONFIG_FILE="$VIGIL_BASE/data/config/system.json"
+CONFIG_FILE="${VIGIL_DATA_DIR:-$VIGIL_BASE/data}/config/system.json"
 
 ERRORS=0
 
 ACTIVE_USER="(no-user)"
 [ -f "$ACTIVE_USER_FILE" ] && ACTIVE_USER=$(cat "$ACTIVE_USER_FILE" 2>/dev/null)
+[ -n "${VIGIL_LEGACY_CASE_DIR:-}" ] && ACTIVE_USER="${VIGIL_ACTIVE_USER:-}"
 [ -z "$ACTIVE_USER" ] && ACTIVE_USER="(no-user)"
 
 ACTIVE_PROJECT="(no-project)"
 [ -f "$ACTIVE_PROJECT_FILE" ] && ACTIVE_PROJECT=$(cat "$ACTIVE_PROJECT_FILE" 2>/dev/null || echo "")
+[ -n "${VIGIL_LEGACY_CASE_DIR:-}" ] && ACTIVE_PROJECT="${VIGIL_LEGACY_PROJECT:-}"
 [ -z "$ACTIVE_PROJECT" ] && ACTIVE_PROJECT="(no-project)"
 
 ACTIVE_ENTITY="(non configuree)"
@@ -49,7 +47,11 @@ if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
     [ -z "$ACTIVE_ENTITY" ] && ACTIVE_ENTITY="(non configuree)"
 fi
 
-if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
+PROJECT_TEE=(sudo tee)
+if [ -n "${VIGIL_LEGACY_CASE_DIR:-}" ]; then
+    PROJECT_TEE=(tee)
+    PROJECT_LOG_DIR="$VIGIL_LEGACY_CASE_DIR"
+elif [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
     PROJECT_LOG_DIR="/tmp"
 else
     PROJECT_LOG_DIR="$PROJECTS_DIR/$ACTIVE_PROJECT"
@@ -104,7 +106,7 @@ log_action() {
     local timestamp=$(date +"%Y-%m-%dT%H:%M:%S.%6NZ")
     local log_entry="[$timestamp] User:$ACTIVE_USER | Entity:$ACTIVE_ENTITY | Project:$ACTIVE_PROJECT | Action:$action | Device:$device | File:$file_path | Status:$status | Message:$message"
 
-    echo "$log_entry" | sudo tee -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
+    echo "$log_entry" | "${PROJECT_TEE[@]}" -a "$PROJECT_LOG_DIR/chain_of_custody.log" > /dev/null 2>&1 || true
 
     if command -v jq >/dev/null 2>&1; then
         local json_entry
@@ -119,7 +121,7 @@ log_action() {
             --arg status "$status" \
             --arg message "$message" \
             '{timestamp: $timestamp, user: $user, entity: $entity, project: $project, action: $action, device: $device, file_path: $file_path, status: $status, message: $message}' 2>/dev/null) || true
-        [ -n "$json_entry" ] && echo "$json_entry" | sudo tee -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
+        [ -n "$json_entry" ] && echo "$json_entry" | "${PROJECT_TEE[@]}" -a "$PROJECT_LOG_DIR/actions.log" > /dev/null 2>&1 || true
     fi
 }
 
@@ -134,14 +136,12 @@ log_action() {
 # /sys) si /proc/mounts est vide pour une raison inattendue.
 list_mounts_under_investigation() {
     local mounts
-    mounts="$(awk '$2 ~ "^/investigation/" {print $2}' /proc/mounts 2>/dev/null)"
-    if [ -z "$mounts" ] && command -v lsblk >/dev/null 2>&1; then
-        mounts="$(lsblk -J -o MOUNTPOINTS 2>/dev/null \
-            | grep -oE '"/investigation/[^"]*"' | tr -d '"')"
+    mounts=$(vigil_mounts_in_zone /investigation) || return 1
+    if [ -n "${VIGIL_DEVICE_TARGET:-}" ]; then
+        printf '%s\n' "$mounts" | grep -Fx -- "$VIGIL_DEVICE_TARGET" || true
+    else
+        printf '%s\n' "$mounts"
     fi
-    printf '%s\n' "$mounts" \
-        | awk -v base="/investigation/" 'index($0, base) == 1' \
-        | awk '{ print length($0), $0 }' | sort -rn | cut -d' ' -f2-
 }
 
 # --- Pause finale : ne jamais fermer sans que l'utilisateur ait vu ---
@@ -149,7 +149,7 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
@@ -160,8 +160,8 @@ final_pause() {
 # --- Nettoyer l'écran ---
 clear
 print_banner
-echo -e "${BLUE}Projet : ${ACTIVE_PROJECT}${NC}"
-echo -e "${BLUE}Entité : ${ACTIVE_ENTITY} | Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
+echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
 # S'assurer que /investigation existe
@@ -192,7 +192,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     [ "$CLEANED" -gt 0 ] && log_action "cleanup" "" "/investigation" "success" "$CLEANED dossiers vides supprimés"
 
     # Rien n'est monté : le contexte actif est incohérent -> nettoyage.
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    if [ "${VIGIL_DEVICE_MANAGED:-}" != 1 ] && [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ]; then rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE"; fi 2>/dev/null || true
     log_action "clear_active" "" "/investigation" "success" "Contexte actif efface (rien monte)"
     final_pause
     exit 0
@@ -209,7 +209,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo -e "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}"
 
     # --- 2.1. Récupérer le périphérique associé ---
-    DEVICE=$(mount | grep " ${MOUNT_POINT} " | awk '{print $1}' | head -n 1 || true)
+    DEVICE=$(findmnt --noheadings --output SOURCE --mountpoint "$MOUNT_POINT" || true)
 
     if [ -z "$DEVICE" ]; then
         echo -e "${YELLOW}⚠️  Impossible de déterminer le périphérique monté sur $MOUNT_POINT.${NC}"
@@ -218,7 +218,20 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     fi
 
     # --- 2.2. Calcul du hash actuel (vérification d'intégrité) ---
-    if [ -n "$DEVICE" ]; then
+    if [ "${VIGIL_CASE_INTEGRITY:-}" = "1" ]; then
+        echo "=== Vérification de l’intégrité de $MOUNT_POINT ==="
+        status=0
+        result=$(python3 "$VIGIL_BASE/scripts/analyse/vigil_mount_integrity.py" verify "$MOUNT_POINT" "$PROJECT_LOG_DIR" 2>&1) || status=$?
+        echo "$result"
+        case "$status" in
+            0) log_action "integrity_check" "$DEVICE" "$MOUNT_POINT" "success" "$result" ;;
+            2)
+                log_action "integrity_check" "$DEVICE" "$MOUNT_POINT" "mismatch" "$result"
+                ERRORS=$((ERRORS + 1))
+                ;;
+            *) log_action "integrity_check" "$DEVICE" "$MOUNT_POINT" "warning" "$result" ;;
+        esac
+    elif [ -n "$DEVICE" ]; then
         echo -e "${BLUE}=== Vérification de l'intégrité pour $DEVICE ($MOUNT_POINT) ===${NC}"
         CURRENT_HASH=$(find "$MOUNT_POINT" -type f -exec sha256sum {} + 2>/dev/null | sort | sha256sum | awk '{print $1}' 2>/dev/null || true)
         HASH_FILE="$PROJECT_LOG_DIR/device_$(basename "$DEVICE").sha256"
@@ -246,38 +259,18 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo -e "${YELLOW}Démontage de $MOUNT_POINT...${NC}"
     UMOUNT_OK=0
 
-    if sudo umount "$MOUNT_POINT" 2>/dev/null; then
+    if vigil_unmount_target /investigation "$MOUNT_POINT"; then
         UMOUNT_OK=1
     else
-        echo -e "${YELLOW}⚠️  Démontage normal échoué (périphérique occupé ?). Tentative de synchronisation...${NC}"
-        sync 2>/dev/null || true
-        # Retenter après sync
-        if sudo umount "$MOUNT_POINT" 2>/dev/null; then
-            UMOUNT_OK=1
-        else
-            echo -e "${YELLOW}⚠️  Toujours occupé. Démontage forcé (lazy umount)...${NC}"
-            if sudo umount -l "$MOUNT_POINT" 2>/dev/null; then
-                echo -e "${YELLOW}⚠️  Démontage lazy appliqué. Le périphérique sera libéré quand plus aucun fichier ne sera utilisé.${NC}"
-                log_action "umount_lazy" "$DEVICE" "$MOUNT_POINT" "warning" "Démontage forcé (lazy)"
-                UMOUNT_OK=1
-            else
-                echo -e "${RED}❌ Échec du démontage de $MOUNT_POINT.${NC}"
-                log_action "umount" "$DEVICE" "$MOUNT_POINT" "failed" "Échec du démontage"
-                ERRORS=$((ERRORS + 1))
-            fi
-        fi
+        log_action "umount" "$DEVICE" "$MOUNT_POINT" "failed" "Démontage refusé / Unmount refused"
+        ERRORS=$((ERRORS + 1))
     fi
 
     if [ "$UMOUNT_OK" -eq 1 ]; then
         echo -e "${GREEN}✅ Périphérique $DEVICE démonté avec succès.${NC}"
         log_action "umount" "$DEVICE" "$MOUNT_POINT" "success" "Périphérique démonté"
 
-        # --- 2.4. Remettre le block device en read-write s'il avait été forcé en RO ---
-        if [ -n "$DEVICE" ] && [ -b "$DEVICE" ]; then
-            sudo blockdev --setrw "$DEVICE" 2>/dev/null && \
-                echo -e "${GREEN}✅ Block device $DEVICE remis en lecture/écriture.${NC}" || true
-            log_action "set_rw" "$DEVICE" "" "success" "Block device remis en RW" 2>/dev/null || true
-        fi
+
     fi
 
     # --- 2.5. Nettoyage du répertoire vide (toujours, même si umount a échoué en lazy) ---
@@ -336,7 +329,7 @@ done < <(find /investigation -mindepth 1 -depth -type d -print0 2>/dev/null)
 # projet actifs pour éviter qu'une action suivante ne s'exécute par erreur
 # avec un contexte devenu incohérent.
 if [ ${#REMAINING_MOUNTS[@]} -eq 0 ]; then
-    rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE" 2>/dev/null || true
+    if [ "${VIGIL_DEVICE_MANAGED:-}" != 1 ] && [ -z "${VIGIL_LEGACY_CASE_DIR:-}" ]; then rm -f "$ACTIVE_USER_FILE" "$ACTIVE_PROJECT_FILE"; fi 2>/dev/null || true
     log_action "clear_active" "" "/investigation" "success" "Contexte actif (utilisateur/projet) effacé après démontage"
 fi
 

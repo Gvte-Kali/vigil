@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vigil-dfir"
+version = "2.0.0a1"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2,<3", "PyYAML>=6,<7", "typer>=0.12,<1", "textual>=3,<9", "Pillow>=10,<13"]
+
+[project.optional-dependencies]
+desktop = ["PySide6-Essentials>=6.7,<7"]
+
+[project.scripts]
+vigil = "vigil.cli:main"
+vigil-gui = "vigil.session:main"
+vigil-tui = "vigil.cli:tui_main"
+
+[tool.setuptools.packages.find]
+include = ["vigil"]
+
+[tool.setuptools.package-data]
+vigil = ["modules/*.yaml", "*.tcss"]
+
+[tool.setuptools.data-files]
+"share/vigil" = ["data/icons/vigil.svg"]
+
+"share/vigil/scripts" = ["scripts/analyse/vigil_census_query.py", "scripts/lib/vigil-terminal.sh"]
+
+"share/vigil/icons" = [
+  "data/icons/shield.svg", "data/icons/upload.svg", "data/icons/hard-drive.svg", "data/icons/folder.svg",
+  "data/icons/home.svg", "data/icons/database.svg", "data/icons/settings.svg", "data/icons/play.svg",
+  "data/icons/folder-tree.svg", "data/icons/flask-conical.svg", "data/icons/list.svg", "data/icons/search.svg",
+  "data/icons/image.svg", "data/icons/plug.svg", "data/icons/circle-dot.svg",
+  "data/icons/folder-plus.svg", "data/icons/import.svg", "data/icons/archive.svg", "data/icons/folder-input.svg",
+  "data/icons/trash.svg", "data/icons/x.svg", "data/icons/LICENSE-lucide",
+  "data/icons/folder-open.svg", "data/icons/external-link.svg", "data/icons/copy.svg",
+]

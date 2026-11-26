@@ -2,6 +2,8 @@
 # util-linux : mount, umount, blkid, findmnt, blockdev, lsblk, dmesg, logger
 util-linux
 coreutils
+# chafa : rendu du logo SVG dans les terminaux interactifs
+chafa
 # jq : parsing JSON des peripheriques (lsblk, descripteurs USB, chantiers GUI)
 jq
 eject
@@ -9,11 +11,8 @@ cryptsetup
 clamav
 clamav-daemon
 clamav-freshclam
-# xrdp : acces distant RDP (optionnel, active interactivement par le post-install)
-xrdp
-xorgxrdp
+udev
 udisks2
-ufw
 
 # --- Terminal et dialogues systeme ---
 # konsole : la GUI lance les scripts d'analyse dans un terminal Konsole
@@ -53,7 +52,7 @@ ldmtool
 
 # --- Analyse de fichiers ---
 # exiftool : metadonnees EXIF des fichiers image
-exiftool
+libimage-exiftool-perl
 # ffmpeg : ffprobe (duree, resolution, debits des videos et fichiers audio)
 ffmpeg
 # p7zip-full : 7za (contenu et chiffrement des archives 7z/zip dans vigil_archives.sh et vigil_crypto.sh)
@@ -83,6 +82,7 @@ feh
 
 # --- Python (GUI tkinter, rapports PDF, audit de format) ---
 python3
+python3-venv
 python3-tk
 # python3-pil : miniatures du logo (GUI, page de garde des rapports)
 python3-pil
@@ -98,3 +98,12 @@ libcairo2
 # python3-opencv : bindings OpenCV pour Python (fallback detection visages)
 facedetect
 python3-opencv
+
+# Bibliothèques hôtes utilisées par les plugins Qt X11/XWayland et Wayland.
+libegl1
+libxkbcommon-x11-0
+libxcb-cursor0
+libxcb-icccm4
+libxcb-keysyms1
+libxcb-xinerama0
+libqt6waylandclient6

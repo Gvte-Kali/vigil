@@ -24,22 +24,18 @@ GREY='\e[90m'
 BOLD='\e[1m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 print_options_table() {
     echo -e "${BOLD}  Récapitulatif${NC}"
     echo -e "${GREY}  ---------------------------------${NC}"
-    echo -e "  Utilisateur : ${BOLD}${ACTIVE_USER}${NC}"
+    echo -e "  $(vigil_text "Utilisateur :" "Operator:") ${BOLD}${ACTIVE_USER}${NC}"
     echo -e "  Archives    : ${BOLD}contenu scanné${NC}"
     echo -e "  Taille max  : ${BOLD}$([ "$SIZE_MODE" = "limit" ] && echo "limitée (512 Mo max)" || echo "illimitée (2047 Mo max)")${NC}"
     echo -e "  Chiffrées   : ${BOLD}signalées${NC}"
@@ -64,12 +60,21 @@ ERRORS=0
 # --log/--no-log : conserver/ne pas conserver le fichier journal clamscan
 # --user NOM     : utilisateur passe directement (pas de sélection interactive)
 SCAN_ARGS=()
+GEN_PDF=1
+CUSTOM_REPORT_NAME=
+REPORT_NAME_SET=0
 SIZE_SET=0
 SIZE_MODE="unlimited"
 while [ $# -gt 0 ]; do
     case "$1" in
-        --pdf)    SCAN_ARGS+=(--pdf) ;;
-        --no-pdf) SCAN_ARGS+=(--no-pdf) ;;
+        --pdf)    GEN_PDF=1 ;;
+        --no-pdf) GEN_PDF=0 ;;
+        --report-name)
+            if [ "$#" -lt 2 ]; then echo "Nom de rapport manquant / Missing report name" >&2; exit 1; fi
+            shift
+            CUSTOM_REPORT_NAME="$1"
+            REPORT_NAME_SET=1
+            ;;
         --log)    SCAN_ARGS+=(--log) ;;
         --no-log) SCAN_ARGS+=(--no-log) ;;
         --user)
@@ -79,6 +84,7 @@ while [ $# -gt 0 ]; do
         --user=*)
             SELECTED_USER="${1#--user=}"
             ;;
+        --offline)     SCAN_ARGS+=(--offline) ;;
         --archives)    SCAN_ARGS+=(--archives) ;;
         --no-archives) SCAN_ARGS+=(--no-archives) ;;
         --size-unlimited) SCAN_ARGS+=(--size-unlimited); SIZE_SET=1; SIZE_MODE="unlimited" ;;
@@ -125,7 +131,7 @@ else
         echo "Créez un utilisateur via la page Configuration de la GUI"
         echo "(Configuration du système → Utilisateurs)."
         echo ""
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     fi
@@ -153,7 +159,7 @@ else
             read -r CHOICE
             [ -z "$CHOICE" ] && continue
             if [ "$CHOICE" = "q" ]; then
-                echo -e "${YELLOW}Annulé.${NC}"
+                echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
                 exit 0
             fi
             if ! [[ "$CHOICE" =~ ^[0-9]+$ ]] || [ "$CHOICE" -lt 1 ] || [ "$CHOICE" -gt "${#USERS_LIST[@]}" ]; then
@@ -167,6 +173,46 @@ else
 fi
 
 echo ""
+
+# Managed callers pass the profile explicitly. Direct launches resolve it in Core.
+VIGIL_CLAMAV_DB_DIR=$(python3 "$SCRIPT_DIR/../vigil/clamav.py" directory) || exit 1
+export VIGIL_CLAMAV_DB_DIR
+
+if [ "$GEN_PDF" = 1 ]; then
+    report_tool="$SCRIPT_DIR/../vigil/antivirus_reports.py"
+    report_started=$(date -Iseconds)
+    report_default=$(python3 "$report_tool" name "$report_started" "") || exit 1
+    while true; do
+        if [ "$REPORT_NAME_SET" = 0 ]; then
+            printf '%s [%s] : ' "$(vigil_text "Nom du rapport final" "Final report name")" "$report_default"
+            IFS= read -r CUSTOM_REPORT_NAME || exit 1
+        fi
+        if report_name=$(python3 "$report_tool" name "$report_started" -- "$CUSTOM_REPORT_NAME"); then
+            break
+        fi
+        [ "$REPORT_NAME_SET" = 0 ] || exit 1
+    done
+    if [ -z "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+        mkdir -p -- "$VIGIL_BASE/rapports" || exit 1
+        VIGIL_LEGACY_SCAN_DIR=$(mktemp -d -- "$VIGIL_BASE/rapports/scan-XXXXXXXX") || exit 1
+        export VIGIL_LEGACY_SCAN_DIR
+    fi
+    export VIGIL_ANTIVIRUS_REPORT_RUN="$VIGIL_LEGACY_SCAN_DIR"
+    export VIGIL_MOUNT_TRIAGE_JSON_OUT="$VIGIL_ANTIVIRUS_REPORT_RUN/usb-triage.json"
+    _scan_rc=125
+    finalize_report() {
+        local workflow_status="$?" report_status=0
+        trap - EXIT
+        python3 "$report_tool" publish "$VIGIL_ANTIVIRUS_REPORT_RUN" "$report_name" "$report_started" \
+            "$ACTIVE_USER" "${VIGIL_LEGACY_PROJECT:-}" "$_scan_rc" "$workflow_status" || report_status=$?
+        if [ "$workflow_status" -eq 0 ]; then exit "$report_status"; fi
+        exit "$workflow_status"
+    }
+    trap finalize_report EXIT
+    SCAN_ARGS+=(--no-pdf --log)
+else
+    SCAN_ARGS+=(--no-pdf)
+fi
 
 # --- Plus aucune question après le choix de l'utilisateur ---
 # Le scan du contenu des archives, le signalement des archives chiffrées et
@@ -185,9 +231,21 @@ if [ ! -f "$MOUNT_SCRIPT" ]; then
     ERRORS=$((ERRORS + 1))
     echo ""
     echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s).${NC}"
-    echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
     read -r
     exit 1
+fi
+
+source "$SCRIPT_DIR/clamav/vigil_scan_mounts.sh" || exit 1
+if [ -n "${VIGIL_LEGACY_CASE_DIR:-}" ]; then
+    if ! read_investigation_mounts /investigation; then
+        echo "Impossible de vérifier les montages sous /investigation." >&2
+        exit 1
+    fi
+    if [ "${#INVESTIGATION_MOUNTS[@]}" -ne 0 ]; then
+        echo "Scan annulé : /investigation contient déjà un montage." >&2
+        exit 1
+    fi
 fi
 
 bash "$MOUNT_SCRIPT"
@@ -197,28 +255,30 @@ if [ "$_mount_rc" -ne 0 ]; then
     ERRORS=$((ERRORS + 1))
     echo ""
     echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s).${NC}"
-    echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
     read -r
     exit 1
 fi
 
-# Verifier qu'au moins un peripherique est monte dans /investigation
-_mounted=0
-while IFS= read -r -d '' dir; do
-    if mountpoint -q "$dir" 2>/dev/null; then
-        _mounted=1
-        break
-    fi
-done < <(find /investigation -maxdepth 1 -mindepth 1 -type d -print0 2>/dev/null)
-
-if [ "$_mounted" -eq 0 ]; then
+# Un disque peut être monté directement ou via une arborescence disque/partition.
+if ! read_investigation_mounts /investigation || [ "${#INVESTIGATION_MOUNTS[@]}" -eq 0 ]; then
     echo -e "${YELLOW}⚠️  Aucun périphérique monté dans /investigation. Scan antivirus ignoré.${NC}"
     ERRORS=$((ERRORS + 1))
     echo ""
     echo -e "${RED}❌ Scan terminé avec $ERRORS erreur(s).${NC}"
-    echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
     read -r
     exit 1
+fi
+
+if [ "$GEN_PDF" = 1 ]; then
+    for target in "${INVESTIGATION_MOUNTS[@]}"; do
+        findmnt -n --mountpoint "$target" -o SOURCE,FSTYPE,OPTIONS,TARGET
+        source_device=$(findmnt -n --mountpoint "$target" -o SOURCE)
+        if [ -b "$source_device" ]; then
+            lsblk -dn -P -o MODEL,SERIAL,WWN,UUID,SIZE -- "$source_device" || true
+        fi
+    done > "$VIGIL_ANTIVIRUS_REPORT_RUN/support.txt"
 fi
 
 # --- Etape 2 : Scan antivirus ---
@@ -265,11 +325,13 @@ fi
 echo ""
 if [ "$ERRORS" -gt 0 ]; then
     echo -e "${RED}❌ Scan antivirus complet terminé avec $ERRORS erreur(s).${NC}"
-else
-    echo -e "${GREEN}✅ Scan antivirus complet terminé avec succès.${NC}"
+elif [ "$GEN_PDF" = 0 ]; then
+    echo -e "${GREEN}✅ Scan antivirus terminé.${NC}"
 fi
-echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
-read -r
+if [ "$GEN_PDF" = 0 ]; then
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+    read -r
+fi
 if [ "$ERRORS" -gt 0 ]; then
     exit 1
 fi

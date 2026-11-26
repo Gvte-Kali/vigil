@@ -23,16 +23,12 @@ GREY='\e[90m'
 BOLD='\e[1m'
 NC='\e[0m'
 
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+vigil_device_begin
+
 print_banner() {
-    echo -e "${BLUE}"
-    cat <<'VIGILART'
-█   █ ███  ███  ███ █     
-█   █  █  █      █  █     
-█   █  █  █  ██  █  █     
- █ █   █  █   █  █  █     
-  █   ███  ███  ███ █████ 
-VIGILART
-    echo -e "${NC}"
+    vigil_logo
 }
 
 clear_banner() {
@@ -55,7 +51,7 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
-        echo -e "${YELLOW}Appuyez sur Entrée pour fermer ce terminal...${NC}"
+        echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
@@ -144,7 +140,7 @@ if [ "$MISSING_DEPS" -gt 0 ]; then
 fi
 
 echo ""
-echo -e "${BLUE}Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 echo -e "${YELLOW}⚠️  CLONAGE DE DISQUE${NC}"
 echo -e "${GREY}Copie bit-à-bit d'un disque source vers un disque cible.${NC}"
@@ -156,7 +152,7 @@ echo ""
 # 1. SELECTION DU DISQUE SOURCE
 # ============================================================================
 clear_banner
-echo -e "${BLUE}Utilisateur : ${ACTIVE_USER}${NC}"
+echo -e "${BLUE}$(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 log_action "disk_clone" "start" "Début du clonage forensique" ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -229,12 +225,12 @@ while true; do
     echo -ne "${BOLD}${YELLOW}Entrez le numéro du disque source à cloner (ou \"q\" pour quitter) : ${NC}"
     read -r SOURCE_CHOICE
     if [ "$SOURCE_CHOICE" = "q" ]; then
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
         final_pause
         exit 0
     fi
     if ! [[ "$SOURCE_CHOICE" =~ ^[0-9]+$ ]] || [ "$SOURCE_CHOICE" -lt 1 ] || [ "$SOURCE_CHOICE" -gt "$SOURCE_NUM" ]; then
-        echo -e "${RED}❌ Numéro invalide. Entrez un numéro entre 1 et $SOURCE_NUM.${NC}"
+        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $SOURCE_NUM.${NC}"
         continue
     fi
     SOURCE_DEV="/dev/${SOURCE_DEVICES[$((SOURCE_CHOICE-1))]}"
@@ -332,12 +328,12 @@ while true; do
     read -r TARGET_CHOICE
     if [ "$TARGET_CHOICE" = "q" ]; then
         sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
-        echo -e "${YELLOW}Annulé.${NC}"
+        echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
         final_pause
         exit 0
     fi
     if ! [[ "$TARGET_CHOICE" =~ ^[0-9]+$ ]] || [ "$TARGET_CHOICE" -lt 1 ] || [ "$TARGET_CHOICE" -gt "$TARGET_NUM" ]; then
-        echo -e "${RED}❌ Numéro invalide. Entrez un numéro entre 1 et $TARGET_NUM.${NC}"
+        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $TARGET_NUM.${NC}"
         continue
     fi
     TARGET_DEV="/dev/${TARGET_DEVICES[$((TARGET_CHOICE-1))]}"
@@ -397,7 +393,7 @@ echo -ne "${BOLD}${YELLOW}Confirmer le clonage de $SOURCE_DEV vers $TARGET_DEV ?
 read -r CONFIRM
 if [ "$CONFIRM" != "oui" ] && [ "$CONFIRM" != "o" ] && [ "$CONFIRM" != "O" ]; then
     sudo blockdev --setrw "$SOURCE_DEV" 2>/dev/null || true
-    echo -e "${YELLOW}Annulé.${NC}"
+    echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
     final_pause
     exit 0
 fi

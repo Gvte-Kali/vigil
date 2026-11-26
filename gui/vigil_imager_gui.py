@@ -8,7 +8,7 @@ disque source, format de sortie, cible, acquisition).
 """
 
 import os
-import subprocess
+from vigil_terminal import MISSING_TERMINAL, launch_script
 import tkinter as tk
 from tkinter import messagebox
 
@@ -38,24 +38,16 @@ from vigil_gui_base import (
 )
 
 
-def _run_script_in_konsole(script_path, user, project):
+def _run_script_in_terminal(script_path, user, project):
     if not os.path.exists(script_path):
         messagebox.showerror("Erreur", f"Script introuvable : {script_path}")
         return
     vigil_data.set_active(user, project if project else "(no-project)")
     try:
-        subprocess.Popen([
-            "konsole", "-e", "bash", "-c",
-            f"bash {script_path}; rc=$?; "
-            f"if [ $rc -eq 0 ]; then echo -e '\\n\\e[92m"
-            f"\u2713 Outil terminé. Appuyez sur Entrée pour fermer...\\e[0m'; "
-            f"else echo -e '\\n\\e[91m"
-            f"\u2715 Outil terminé avec une erreur. Appuyez sur Entrée pour fermer...\\e[0m'; fi; "
-            f"read"
-        ])
+        launch_script(script_path)
     except FileNotFoundError:
         messagebox.showerror("Erreur",
-                             "Konsole absent. Installez-le : sudo apt install konsole")
+                             MISSING_TERMINAL)
     except Exception as exc:
         messagebox.showerror("Erreur", f"Échec du lancement : {exc}")
 
@@ -138,7 +130,7 @@ def show_imager_view():
             return
         script = os.path.join(vigil_data.SCRIPTS_DIR,
                               "imager", "vigil_disk_imager.sh")
-        _run_script_in_konsole(script, user or "(no-user)",
+        _run_script_in_terminal(script, user or "(no-user)",
                                project if project else "(no-project)")
 
     accent_button(

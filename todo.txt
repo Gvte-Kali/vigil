@@ -1,4 +1,140 @@
 ================================================================================
+VIGIL 2.0 — ROADMAP ACTIVE CORE-FIRST / TUI-FIRST
+================================================================================
+Branche vigil-2.0. [ ] à faire, [x] validé avec preuve. Livrer par lots,
+avec tests de non-régression et validation humaine entre les phases.
+
+La GUI Qt existante reste maintenue comme référence de parité. Textual devient
+l’interface principale au fil de la validation des parcours et de leurs services
+Core. Les phases 01 à 10 se développent et se valident en installation Linux
+native. Garder des contrats d’exécution découplés du système de lancement,
+avec un adaptateur natif. Docker et Podman sont reportés à la phase 11.
+
+PHASE 01 — AUDIT ET MATRICE DE PARITÉ
+[ ] Inventorier la GUI, la CLI et les scripts. Relier chaque parcours à ses
+    services Core, sa traduction et une preuve de non-régression.
+[ ] Reprendre les acquis et éléments ouverts des archives ci-dessous.
+
+PHASE 02 — CONSOLIDATION DU CORE
+[ ] Mutualiser affaires, périphériques, sources, preuves, exécution, modules,
+    rapports, audit, sessions, entité et opérateurs. Typer, Textual et la GUI
+    consomment les mêmes services.
+[ ] Formaliser les contextes, événements, résultats et limites de privilèges.
+    Réutiliser le runner PTY et les adaptateurs natifs.
+[ ] Commencer chaque parcours Textual dès que ses services sont prêts.
+
+PHASE 03 — SÉCURITÉ, PORTABILITÉ ET INSTALLATION NATIVES
+[x] Installer en venv utilisateur, préparer la recette isolée GUI/TUI et
+    proposer les profils minimal, forensic et complet avec simulation.
+[x] Valider le plan APT Debian 13 amd64 sur une base dpkg vierge,
+    l’installation du profil complet dans un venv neuf et les trois lanceurs.
+[ ] Rejouer le post-install privilégié, la purge et la réinstallation
+    sur VM Parrot/Debian avec la documentation de remise à zéro.
+[ ] Valider les paquets réellement installés sur les distributions cibles.
+[ ] Utiliser XDG, détecter les dépendances et adapter l’installation native
+    à Debian, Ubuntu, Kali, Parrot, Fedora, Arch et openSUSE.
+[ ] Valider l’usage local, SSH et headless, les privilèges limités, l’absence
+    de daemon permanent et la restauration vérifiée après interruption.
+
+PHASE 04 — PÉRIPHÉRIQUES ET SOURCES
+[x] Clarifier le choix USB/interne en acquisition RAW et le diagnostic des
+    permissions du répertoire /stockage. Sélection explicite du rendu
+    classique GUI ou des événements de progression pour la TUI.
+[ ] Valider les commandes et les parcours privilégiés via la GUI avant la
+    recette TUI. Conserver un même contrat de lancement pour les deux.
+[ ] Mutualiser le triage selon la référence d’« Affaire en cours ». Transmettre
+    des contextes vérifiés et empêcher le démontage pendant une opération.
+[ ] Maintenir /investigation RO et /stockage RW. Gérer plusieurs sources par
+    affaire, physiques ou images RAW, DD, IMG, ISO, E01 et autres formats pris
+    en charge. Préserver l’accès bloc direct pour le RAW.
+[ ] Conserver les mécanismes de copie, de synchronisation et de SHA-256.
+
+PHASE 05 — AFFAIRES, PREUVES ET ARCHIVES
+[x] Mise à jour ClamAV en ligne (paquets et signatures) et import USB
+    signé sans affaire. Actions rapides GUI/TUI avec cartes sémantiques.
+[ ] Recette des gestionnaires de paquets natifs et d’une clé de mise à jour
+    officielle en VM jetable.
+[x] Base de signatures Vigil commune à FreshClam et ClamScan, sans
+    repli système. Contrôle de chargement et de révision après mise à jour,
+    confirmation hors ligne et état des signatures dans les rapports.
+[x] Rapport antivirus complet avec nom choisi, PDF unique, relevé USB
+    et journaux ClamAV conservés. Catalogue commun GUI/TUI avec états
+    incomplet, échec et résultat historique inconnu.
+[x] Arborescence des preuves locales avec provenance, nom exact, chemin
+    relatif en SQLite et variantes immuables. Migration vérifiée par affaire,
+    conservation du format TAR et affichage du chemin en GUI, TUI et CLI.
+[ ] Consolider migrations, preuves locales, imports et exports. Vérifier
+    l’intégrité, la chaîne de custody et les restaurations entre postes.
+
+PHASE 06 — TUI TEXTUAL ET MIGRATION FONCTIONNELLE
+[x] Premier lot Textual : tableau de bord, sélection de l’opérateur, création
+    et activation d’une affaire, enregistrement et vérification de preuves,
+    état des montages et catalogue. Lanceurs vigil tui et vigil gui.
+    Test Textual hors écran avec création et audit SHA-256.
+[x] Shell Textual aligné sur la GUI 5644a978 : en-tête, navigation latérale,
+    onglets d’affaire, thèmes TCSS et terminal intégré pour les commandes Core.
+    Lanceurs supervisés vigil, vigil tui et vigil-tui.
+[x] Thème TUI compact et cartes adaptatives. Progression intégrée par étape.
+    Bilan de restitution accessible depuis l’activation de la protection USB.
+[x] Sélecteur natif Textual pour dossiers, fichiers et enregistrement.
+    Les destinations RAW locales sont revérifiées avant écriture.
+[x] Gestionnaire d’affaires maître-détail et catégories d’actions ordonnées.
+[x] Fermeture Textual après confirmation et actualisation automatique du
+    tableau de bord. Logo Chafa agrandi dans l’en-tête.
+[ ] Recette matérielle et fin de la parité : voir docs/development/tui-parity.md.
+[ ] Migrer Dashboard, Investigation (Affaire en cours, Actions rapides) et
+    Système (Entité, Catalogue). Intégrer Sources, Explorateur, Preuves,
+    Analyses, Rapports, Historique et Export à l’affaire active.
+[ ] Couvrir la matrice complète, dont RAW/clonage, images forensiques,
+    métadonnées/HEX/ASCII, presets et multi-scans, antivirus, signatures,
+    listes USB, catalogue et diagnostic.
+[ ] Conserver logo, Graphite/Cyan, couleurs sémantiques et FR/EN. Rendre
+    menus, formulaires, tableaux, arborescences et fenêtres modales utilisables
+    au clavier et à la souris dans un terminal redimensionnable.
+[ ] Intégrer sorties, progression, confirmations, erreurs et résultats dans
+    Textual, sans émulateur externe obligatoire.
+[ ] Après validation, vigil et vigil tui lancent Textual, vigil gui ouvre
+    la GUI. Préserver --help, --version et les sorties JSON de Typer.
+
+PHASE 07 — PARITÉ ET STABILISATION NATIVES
+[x] Navigation GUI/TUI commune, onglets Entité, Système et Catalogue
+    sous Configuration, diagnostic hors du tableau de bord et préférence
+    de terminal partagée.
+[x] Vérifier le shell Qt, les dialogues, les lanceurs et les intégrations
+    Core sur fixtures. Documenter la recette Parrot/Debian et Arch/Omarchy
+    et consigner les backends réellement testés dans tests.txt.
+[ ] Rejouer la recette interactive complète sous Hyprland/Omarchy et tester
+    les parcours privilégiés en VM sur supports jetables.
+[ ] Valider chaque parcours de la matrice avec et sans affaire active selon
+    le parcours. Rejouer conflits, débranchements, interruptions et restitution
+    sur les distributions cibles.
+[ ] Faire valider la parité avant tout retrait d’un composant historique.
+
+PHASE 08 — MODULES ET FONCTIONS FORENSIQUES SUPPLÉMENTAIRES
+[ ] Reprendre les modules et formats du backlog via le catalogue et le Core.
+
+PHASE 09 — ADAPTATION DE LA GUI AU CORE
+[ ] Raccorder la GUI au même Core après validation de la TUI. Limiter les
+    évolutions Qt aux corrections et à la compatibilité durant la transition.
+
+PHASE 10 — INDUSTRIALISATION ET RELEASE NATIVES
+[ ] Valider installation, mise à jour, reprise et diagnostic sur les
+    distributions cibles. Publier la release native et valider stabilité,
+    parité TUI et protections forensiques avant la dernière phase.
+
+PHASE 11 — DERNIÈRE PHASE : DOCKER ET PODMAN FACULTATIFS
+[ ] Commencer après validation de la release native multi-Linux. Définir les
+    usages de portabilité, de reproductibilité et d’isolation supplémentaire,
+    puis l’empaquetage, les tests et la documentation facultatifs.
+[ ] Vérifier l’isolation et l’accès aux périphériques. Garder l’installation,
+    les tests et toutes les fonctionnalités natives sans Docker ni Podman.
+
+================================================================================
+ROADMAP PRÉCÉDENTE, RECETTES ET BACKLOG — ARCHIVES INTÉGRALES
+================================================================================
+L’ordre des phases actives ci-dessus s’applique à la reprise de ces tâches.
+
+================================================================================
 VIGIL 2.0 — ROADMAP PRINCIPALE
 ================================================================================
 [ ] à faire / [x] validé avec preuve. Une phase à la fois, validation humaine
@@ -9,37 +145,168 @@ GitHub officiel séparé (Gvte-Kali/vigil-modules, nom proposé).
 Les anciennes règles d'intégration GUI statique ci-dessous sont historiques :
 la cible utilise des manifestes et adaptateurs, sans supprimer les acquis.
 
+CHANTIER INTERFACE ET TERMINAUX — RECETTE CIBLÉE
+[x] Contexte autonome du stockage et sélection explicite de l’opération.
+[x] Présentation commune RAW/clonage et statut de synchronisation en TTY.
+[x] Terminal externe avec préférence et résultat de la commande enregistré.
+[x] Centre des tâches retiré de la GUI. Runner PTY conservé dans le Core.
+[x] Palette partagée, logo intact, onglets horizontaux et zones défilantes.
+[x] Bannière des scripts avec Chafa et le SVG original. Paquet déclaré au post-install.
+[ ] Recette visuelle de la bannière Chafa sur Parrot après installation.
+[x] Acquisition RAW et clonage : triage USB HID avant sélection et contrôle de l’identité USB avant accès bloc.
+[x] Stockage rapide : contrôle HID et blacklist du support sélectionné avant le passage RW.
+[ ] Recette VM du triage d’acquisition et de stockage, y compris support composite et rendu Chafa après sudo.
+[x] En-tête du montage sur une ligne, terminaux plus hauts et aperçu des preuves locales par identifiant.
+[ ] Recette Parrot de la hauteur du terminal et du double-clic hors support.
+[x] Ouverture du dossier local de l’affaire et affichage des chemins des copies. Terminaux compatibles à 44 lignes.
+[x] Nom lisible des dossiers d’affaires et migration vérifiée par fixture SQLite. Activation explicite dans le sélecteur.
+[x] Gestionnaire d’affaires Qt avec modèle filtrable, inspecteur, création et suppression contextualisée.
+[x] Archives d’affaires v3 vérifiables et restaurables par Qt et CLI, lecture v2 et migration SQLite 5.
+[x] Commande officielle vigil, migration des lanceurs connus et séparation de la GUI.
+[x] Lanceur système vigil-gui publié par le post-install et la mise à jour des lanceurs.
+[x] Bilan de sortie Qt normal et anormal, reçu hotplug et nouvelle tentative ciblée. Tests synthétiques.
+[ ] Recette VM de la restauration udev et du terminal après arrêt inattendu.
+[x] Supervision des opérations suivies, bilan détaché avec repli et journal des sessions interrompues.
+[x] Explorateur Qt avec aperçu au clic, ouverture externe sur copie et journalisation.
+[ ] Recette VM des fermetures d’environnement graphique et de la récupération udev concurrente.
+[ ] Recette de transfert entre deux postes et de reprise après arrêt brutal en VM.
+[x] Le texte d’attente de l’inspecteur disparaît dès la sélection d’une affaire, sans attendre le prochain cycle Qt.
+[x] Gestionnaire d’affaires sans défilement des actions, avec menu d’import unique et validation séparée.
+[ ] Recette native du gestionnaire sous Parrot, X11, Wayland et Hyprland.
+[x] Langue de la GUI transmise aux terminaux et à l’acquisition après sudo. Premiers messages FR/EN.
+[ ] Traduire les messages spécifiques des scripts historiques, les outils de maintenance et les PDF. Recette FR/EN complète.
+[x] Accueil, explorateur, catalogue, entité et actions rapides remaniés.
+[ ] Recette manuelle des terminaux sous Parrot, Hyprland, Wayland et X11.
+[ ] Recette opérateur non destructive des montages et de l’acquisition.
+Voir docs/development/cahier-des-charges-interface.md.
+
 PHASE 00 — AUDIT
-[ ] Inventaire scripts, GUI, CLI, dépendances, privilèges, formats, logo/hash.
-[ ] Matrice de parité et 27 exigences, risques, architecture, migration.
-[ ] Baseline de tests sûrs, décisions recensement/index/formats inconnus.
-[ ] Plan catalogue communautaire, signature et isolation ; plan phase 01.
+[x] Inventaire scripts, GUI, CLI, dépendances, privilèges, formats, logo/hash.
+[x] Matrice de parité et 27 exigences, risques, architecture, migration.
+[x] Baseline de tests sûrs, décisions recensement/index/formats inconnus.
+[x] Plan catalogue communautaire, signature et isolation ; plan phase 01.
 [ ] Validation humaine.
 
 PHASE 01 — SECURITE
 [ ] Broker privilégié limité ; suppression NOPASSWD générique.
-[ ] Remplacer pickle checksafe ; protection bloc/montage et MTP distinct.
+    Post-install sans génération NOPASSWD. Transition manuelle administrateur
+    documentée. Helper candidat ext4 avec sélection USB et verrouillage RO
+    dans le terminal Qt sous sudo interactif. Erreurs bloc et montage
+    distinguées. Le helper reste expérimental ; Qt lance provisoirement
+    les scripts de montage/démontage 1.0 dans le terminal par défaut,
+    avec contexte affaire/opérateur. Le scan rapide 1.0 utilise une
+    affaire technique Scan antivirus masquée et un dossier de résultats
+    par exécution. Détection des montages directs et imbriqués, accès aux
+    rapports consolidés depuis Actions rapides.
+    Depuis Affaire en cours, recensement automatique après montage
+    réussi et vérification d’identité et des protections RO. Le montage
+    d’affaire verrouille et vérifie aussi le disque parent avant une
+    partition, et refuse un disque déjà monté. Aucun index
+    de recensement dans le parcours antivirus rapide. Les erreurs de lecture
+    sont conservées dans l’index partiel avec les entrées accessibles.
+    Au démontage depuis Qt, comparaison SHA-256 par montage des chemins
+    relatifs et des contenus lisibles. Une lecture incomplète ou une
+    référence d’un autre montage donne un résultat non vérifiable.
+    Actions rapides : montage et démontage du stockage 1.0 dans le
+    terminal par défaut avec opérateur Qt et journal local. Confirmation
+    avant montage RW et refus d’un disque déjà utilisé. Préparation ciblée
+    de /stockage en root:root 0755, réutilisée par le post-install.
+    Actions rapides : clonage bloc vérifié et image RAW locale ou sur
+    partition USB montée temporairement dans un espace de montage privé.
+    Bannière Vigil et groupes de disques et partitions en couleurs, avec
+    la palette et les séparateurs des scripts de montage.
+    Accueil regroupe ressources, périphériques, zones de montage, activité
+    de l’affaire et diagnostic des outils. Ressources à 5 s, inventaire à 2 s.
+    Les actions rapides sont regroupées en panneaux adaptatifs.
+    Le choix du dossier RAW local se fait dans la boîte de dialogue système.
+    Acquisition : invite de branchement après sélection de la source,
+    inventaire renouvelé et RW temporaire sur la destination confirmée.
+    Progression en pourcentage et en octets pour la copie et la relecture.
+    Étapes de synchronisation, de relecture et de démontage affichées
+    avec rappel périodique si la destination tarde à répondre.
+    Protection à chaud des disques physiques via udev pendant une session
+    autorisée au démarrage. Restauration des modes bloc et de l’automontage
+    après la dernière session, avec vérification d’identité.
+    Bannière et explication FR/EN avant l’autorisation sudo au démarrage.
+    Recette Parrot du verrouillage avant UDisks et de sa restauration ouverte.
+    Recette en VM ouverte.
+    Revue des accès dans docs/development/permissions-audit.md.
+    Le post-install prépare /investigation vide et démonté en root:root 0755.
+[x] Remplacer pickle checksafe par du TSV borné (c5dc118 ; fixtures unittest).
+[ ] Protection bloc/montage et MTP distinct.
 [ ] Validation des destinations et identités ; contexte immuable par run.
 [ ] Préserver custody, résultats et exports ; tests négatifs et rollback.
+    Recensements antérieurs conservés et noms distincts. Isolation des chasses
+    et publication vérifiée des exports ouvertes.
 [ ] Validation humaine.
 
 PHASE 02 — CORE
 [ ] Package Python indépendant de Qt ; contrats résultats/événements.
 [ ] Registre, manifestes YAML validés, capabilities et dépendances.
+    Registre initial de neuf analyses, validation et diagnostic PATH
+    disponibles (381b98f). Schéma complet et contrôle des capacités ouverts.
 [ ] Runner local automatique, adaptateurs scripts, CLI Typer.
+    CLI installable (381b98f) et transport PTY interactif testé sur fixture.
+    Premier adaptateur Qt pour la consultation census SQLite en lecture seule,
+    avec affaire/opérateur et événements d’audit. Autres adaptateurs et
+    contrat d’exécution commun ouverts.
 [ ] Préserver presets, multi-scans et recherche autonome ; tests de parité.
 [ ] Validation humaine.
 
 PHASE 03 — AFFAIRES ET PREUVES
 [ ] SQLite migrations, affaires, opérateurs, preuves, runs et audit.
+    Base v1 initialisée transactionnellement, affaires, opérateurs, preuves
+    et audit disponibles (381b98f). Choix explicite de l’opérateur au
+    lancement de Qt, fixé pour la session. Persistance des runs ouverte.
 [ ] Import anciens projets sans perte, SHA-256 et contrôle intégrité.
 [ ] RAW/E01 existants RO, partitions et nettoyage ; AFF selon capacité.
+    Inspection RAW MBR primaire et SHA-256 testés sur image synthétique,
+    sans montage. GPT, E01, AFF et ouverture de partition restent ouverts.
 [ ] Validation humaine.
 
 PHASE 04 — WORKSPACE QT ET MODULES
 [ ] QMainWindow, navigation, logo original, FR/EN, Graphite/Cyan, densité.
+    Workspace PySide6, logo original, Graphite/Cyan et bascule FR/EN persistante
+    testés hors écran. Actions principales mises en évidence et sélecteur
+    à deux boutons avec drapeaux. Densité et recette graphique sur Parrot ouvertes.
 [ ] Dashboard, Cases, Evidence, Modules, Settings ; migration progressive.
+    Affaires, preuves de type fichier, diagnostic et registre en lecture seule
+    accessibles en Qt. Accueil avec inventaire bloc et état des deux zones
+    de montage, cartes système pleine largeur, recherche locale et affaire
+    activée par confirmation explicite au cours de chaque session. Vigil
+    démarre sans affaire active et ignore les anciennes sélections enregistrées.
+    Navigation verticale groupée, fenêtre initiale élargie selon l’écran
+    et cartes du tableau de bord en grille.
+    Les détails de partition sont repliés par défaut et l’inventaire
+    distingue disques, partitions et états de montage par couleur.
+    Fermeture confirmée et sauvegarde contrôlée. Instantané des modes bloc
+    au lancement, blocage si une zone est montée et confirmation explicite
+    si le mode bloc diffère de l’instantané. Le dialogue
+    précise disque/partition et vérifie le mode RO/RW choisi. Les futurs modules
+    doivent enregistrer leurs modifications dans leur affaire avant fermeture.
+    La fermeture vérifie les montages directs et imbriqués dans /investigation
+    et /stockage sans comparer les modes bloc au démarrage.
+    Menus dépliants cyan avec hauteur des titres vérifiée en Qt, Affaire en cours et page Actions rapides
+    avec cartes compactes, icônes et descriptions Antivirus et Stockage.
+    Le terminal du scan affiche son code de sortie avant fermeture.
+    Terminaux système pour les opérations ClamAV, FreshClam et stockage.
+    Diagnostic AppArmor documenté pour la configuration FreshClam
+    locale sur Parrot. Post-install Qt, données de travail et signatures sous
+    /opt/vigil, exception AppArmor limitée aux signatures. Le démarrage
+    éditable sous /opt et les préférences Qt utilisent aussi data/state.
+    Copie des PDF antivirus vers le dossier commun. Recette cible à faire.
+    Lecture de l’état RO bloc au démarrage. Montage via le broker
+    et migration des autres modules interactifs restent ouverts.
+    Accueil centré sur les données réelles de l’affaire avec inventaire.
+    Affaire en cours utilise des onglets horizontaux pour Explorateur,
+    Preuves, Analyses, Journal, Rapports et Export. L’état de /investigation
+    reste visible et les opérations de montage utilisent le terminal externe.
+    Configuration d’entité Qt compatible avec system.json et les PDF 1.0.
+    Création explicite d’un opérateur depuis la fenêtre de démarrage.
+    Checklist de recette à la racine dans tests.txt.
 [ ] Gestionnaire local : import, activation, désactivation, versions.
+    Catalogue des modules intégrés avec fiches et création d’un squelette
+    local. Installation, versions et activation restent ouvertes.
 [ ] Catalogue officiel séparé : index, recherche, cache, revue et CI.
 [ ] Téléchargement vérifié, signature, staging, rollback, isolation ;
     aucune exécution communautaire tant que les protections sont absentes.
@@ -47,12 +314,38 @@ PHASE 04 — WORKSPACE QT ET MODULES
 
 PHASE 05 — TACHES
 [ ] File persistante, progression réelle ou indéterminée, logs, annulation.
+    Centre intégré pour les commandes PTY de la session, sortie en direct,
+    codes retour et annulation. File durable et relance restent ouvertes.
 [ ] Historique, reprise/checkpoints ou nouvelle tentative, crash recovery.
+    Journal d’audit Qt filtrable et paginé par affaire. Historique complet
+    des runs, tentatives et reprise après interruption à réaliser.
 [ ] CPU/RAM/I/O/espace disque ; fermeture contrôlée sans daemon.
 [ ] Validation humaine.
 
 PHASE 06 — INVESTIGATION
 [ ] Explorer paginé, index census validé, aperçu inerte, export contrôlé.
+    Explorateur Qt : fichiers enregistrés et montages système RO sous
+    /investigation, dossiers chargés à l’ouverture et aperçus inertes.
+    Sélection multiple et menu contextuel pour enregistrer les preuves
+    ou calculer et comparer leur SHA-256, y compris dans les dossiers montés.
+    Lorsqu’un montage est visible, une preuve enregistrée y apparaît une
+    seule fois dans l’explorateur et reste listée dans Preuves.
+    L’explorateur conserve l’arborescence et la sélection après ajout.
+    Copies privées mode 0400, SHA-256, aperçu hors ligne depuis la copie,
+    export complet tar.gz et manifestes.
+    La recherche et la gestion des affaires sont dans le sélecteur du titre.
+    Retrait de la liste avec trace d’audit ou suppression intégrale des
+    données locales, avec deux validations dans les deux parcours.
+    Export partiel signalé pour les preuves anciennes sans copie locale.
+    L’index census reste consultable séparément dans Analyses.
+    Suppression ciblée des copies de preuve avec confirmation et audit.
+    Preuves en arborescence avec colonne SHA-256 et état vide explicite.
+    Ouverture du dossier local dans le gestionnaire de fichiers et accès
+    direct à l’aperçu. Copie publiée après fermeture du descripteur d’écriture.
+    Vérification et copie du résultat depuis le menu de l’explorateur.
+    Les analyses intégrées, dont le scan ClamAV, lancent les scripts
+    historiques en lecture seule et écrivent dans un dossier par exécution.
+    Les PDF sont copiés sous rapports/ et triables par date, analyse ou nom.
 [ ] Recherche FTS5, tags, annotations, favoris, collections.
 [ ] Tableaux avancés, filtres, tri, colonnes, export.
 [ ] Validation humaine.
@@ -60,11 +353,16 @@ PHASE 06 — INVESTIGATION
 PHASE 07 — ARTEFACTS
 [ ] Registre, USB, EVTX, MFT, USN, LNK, thumbs, PE, BOOTSTAT.
 [ ] Timeline interactive, provenance, fuseaux et corrélation explicable.
+    Les événements de custody UTC sont consultables dans le Journal d’affaire.
 [ ] Carving guidé séparé, destination contrôlée, hashes, custody.
 [ ] Validation humaine.
 
 PHASE 08 — RAPPORTS ET RELEASE
 [ ] Rapports personnalisables module/preuve/affaire ; manifeste SHA-256.
+    Export JSON de l’affaire, des métadonnées et de l’audit avec SHA256SUMS
+    validé. Les PDF historiques sont accessibles dans la vue Rapports PDF
+    de l’affaire. Le générateur ClamAV a été vérifié sur un journal
+    synthétique. PDF personnalisables et périmètre complet encore ouverts.
 [ ] Export figé et vérifié ; tests intégration, sécurité, GUI et installation.
 [ ] Vérifier F01–F27, parité, logo, docs, migration et rollback.
 [ ] Retirer Tkinter seulement après parité et accord ; release sur accord.

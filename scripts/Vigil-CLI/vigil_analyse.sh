@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # --- Couleurs ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+RED='\033[91m'
+GREEN='\033[92m'
+YELLOW='\033[93m'
+BLUE='\033[96m'
 NC='\033[0m'
 
 # --- Vérifier qu'un projet, une entité et un utilisateur sont actifs ---
@@ -54,6 +54,10 @@ log_action() {
 }
 
 clear
+if [ -t 1 ]; then
+    . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
+    vigil_banner 'Vigil · Analyse / Analysis'
+fi
 echo -e "${BLUE}=== Scan Antivirus (ClamAV) ===${NC}\n"
 echo -e "${YELLOW}Note : Un périphérique doit être monté dans /investigation pour cette option.${NC}\n"
 
@@ -82,12 +86,12 @@ echo -ne "\nEntrez le numéro du périphérique à analyser (ou \"q\" pour annul
 read -r SELECTED_NUM
 
 if [[ "$SELECTED_NUM" == "q" ]]; then
-    echo -e "Annulé."
+    echo -e "$(vigil_text "Annulé." "Cancelled.")"
     exit 0
 fi
 
 if ! [[ "$SELECTED_NUM" =~ ^[0-9]+$ ]] || [[ "$SELECTED_NUM" -lt 1 || "$SELECTED_NUM" -gt ${#MOUNT_POINTS[@]} ]]; then
-    echo -e "${RED}❌ Numéro invalide.${NC}"
+    echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.")${NC}"
     log_action "analysis_attempt" "" "" "failed" "Numéro de périphérique invalide"
     exit 1
 fi

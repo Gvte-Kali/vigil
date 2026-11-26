@@ -1,0 +1,561 @@
+VIGIL 2.0 — STABILISATION NATIVE
+=================================
+
+Exécuté le 25 novembre 2026 sur Debian 13, Python 3.12, PySide6 6.12.
+Point de départ : 47c4c5f sur vigil-2.0.
+
+[x] Venv dédié créé depuis zéro avec le profil complet sans paquets système.
+[x] 144 tests sur la suite complète avec Qt offscreen, sans test ignoré.
+[x] 25 tests Qt sous X11, serveur Xorg avec sortie virtuelle.
+[x] 25 tests Qt sous Wayland, compositeur Weston sans moniteur physique.
+[x] vigil gui et vigil-gui : ouverture réelle via les points d’entrée du
+    venv sous X11 et Wayland. Lanceur système et publication couverts par
+    les tests avec chemins et commandes substitués.
+[x] Plans dry-run des trois profils vérifiés sur des fixtures os-release
+    Debian/Parrot, Arch/Omarchy, Fedora et openSUSE. Aucun plan exécuté
+    contre le gestionnaire de paquets du poste.
+[x] TUI lancée dans un pseudo-terminal depuis le venv, avec choix de
+    l’opérateur et fermeture confirmée via Ctrl+Q.
+[x] Fixture RAW inspectée via le CLI : table MBR, partition à l’octet 512.
+[x] Dossiers isolés, refus des opérations système et adaptation Ghostty
+    vérifiés par tests. Ghostty n’a pas été lancé sur cette machine.
+
+[ ] Recette interactive complète sur une VM Parrot/Debian et une VM Arch.
+[ ] Hyprland/Omarchy et intégration avec le bureau et ses terminaux natifs.
+[ ] Disponibilité réelle des paquets sur chaque distribution.
+[ ] Montages, protection USB, acquisition et restitution sur supports
+    jetables dans une VM dédiée, après autorisation.
+Voir docs/development/native-recette.md. Les tests graphiques automatisés
+ne couvrent pas chaque interaction ni tous les modules externes.
+
+VIGIL 2.0 — RECETTE SUR PARROT OS
+================================
+
+Noter pour chaque essai le commit, la version de Parrot, X11 ou Wayland,
+et le résultat avec le message d’erreur s’il y en a un. [ ] = à tester.
+Utiliser uniquement un dossier de test, des projets copiés et des fichiers
+synthétiques. La procédure ci-dessous n’exige ni sudo, ni montage réel.
+
+A. Installation et mises à jour
+[ ] cd /opt/vigil
+    git status --short --branch
+    git pull --ff-only
+    git rev-parse --short HEAD
+    Vérifier que la branche active est vigil-2.0.
+[ ] Installer une fois les dépendances Qt dans un environnement utilisateur.
+    python3 -m venv "$HOME/.venvs/vigil"
+    "$HOME/.venvs/vigil/bin/python" -m pip install -e '.[desktop]'
+[ ] Lancer la suite depuis /opt/vigil.
+    QT_QPA_PLATFORM=offscreen "$HOME/.venvs/vigil/bin/python" -m unittest discover -s tests -v
+    Vérifier qu’aucun test Qt n’est marqué skipped.
+[ ] Préparer une session isolée depuis le même terminal.
+    recette=$(mktemp -d)
+    export XDG_STATE_HOME="$recette/state"
+    export XDG_CONFIG_HOME="$recette/config"
+    printf 'Session de recette : %s\n' "$recette"
+    Fermer puis relancer depuis ce terminal pour tester la persistance.
+[ ] Lancer "$HOME/.venvs/vigil/bin/vigil-gui" dans la session graphique.
+    Vérifier le logo, l’affichage du thème et les onglets.
+[ ] Après un nouveau pull, relancer la même commande. Réinstaller avec pip
+    si les dépendances ou le point d’entrée changent.
+
+B. Langue et navigation Qt
+[ ] Vérifier la navigation verticale et les groupes Espace de travail,
+    Investigation et Système. Parcourir les pages au clavier et vérifier
+    que la page active reste en surbrillance cyan lors de la bascule FR/EN.
+    Vérifier que les trois titres de groupe tiennent en hauteur et que
+    leurs chevrons et libellés sont visibles sur ton thème Qt.
+
+[ ] Vérifier le français sur un profil de recette neuf.
+[ ] Vérifier que les deux boutons FR et EN affichent leurs drapeaux entiers
+    et que la langue active est mise en évidence. Cliquer sur EN. Les onglets, boutons, champs, messages et dialogues
+    s’affichent en anglais. Vérifier au clavier avec Tab puis Espace.
+[ ] Fermer puis rouvrir. Vérifier que l’anglais reste actif. Revenir au
+    français et vérifier sa persistance après un second redémarrage.
+[ ] Changer de langue sur chaque onglet avec une affaire sélectionnée.
+    Les noms d’affaires, chemins et empreintes restent identiques.
+[ ] Vérifier le contraste des actions principales en cyan et des actions
+    secondaires, ainsi que le focus clavier et les onglets sélectionnés.
+[ ] Tester petite fenêtre, agrandissement, navigation clavier et écrans HiDPI.
+[ ] Si disponibles, comparer un lancement X11 et un lancement Wayland.
+    Indiquer la session utilisée et noter les erreurs de plugin Qt.
+
+[ ] Dans Diagnostic, vérifier les lignes cyan des disques et les lignes
+    violettes des partitions. Déplier chaque partition pour afficher ses
+    détails. Au lancement, seules les synthèses doivent être visibles.
+[ ] Dans Diagnostic, comparer disques, tailles, tables, types de partitions
+    et systèmes de fichiers avec lsblk. Vérifier que le bandeau est
+    affiché sur toute la largeur et que le bouton Actualiser relit
+    les informations. Vérifier les quatre cartes système et les barres
+    de défilement cyan avec une liste assez longue.
+[ ] Comparer les zones /investigation et /stockage à /proc/self/mountinfo.
+    Vérifier les états sans montage, avec montage direct et sous-montage
+    à partir des fixtures ou dans une VM dédiée. Lecture seule pour ce test.
+[ ] Rechercher une affaire par fragment et avec une casse différente.
+    Vérifier que le filtre ne change pas l’affaire active. Sélectionner
+    un résultat en cliquant ou avec Entrée. Refuser puis confirmer la
+    première activation. Vérifier le nom près de Vigil 2.0. Cliquer sur
+    l’affaire active puis sur une autre et vérifier la confirmation à
+    chaque clic. Après relance, vérifier qu’aucune affaire n’est active.
+
+[ ] Avec une affaire active, fermer Vigil et annuler la confirmation.
+    Vérifier que la fenêtre et l’affaire restent ouvertes. Fermer à
+    nouveau et confirmer. Après relance, vérifier opérateur et langue,
+    puis confirmer à nouveau l’affaire et vérifier ses preuves. Refaire la confirmation sans affaire active.
+[ ] Pendant un calcul, tenter de fermer. Vérifier que Vigil demande
+    d’attendre, puis affiche la confirmation après la fin du calcul.
+
+C. Affaires et fichiers de preuve
+[ ] Dans la pop-up de lancement, créer Alice puis, à la relance, un second opérateur. Vérifier
+    que les deux apparaissent dans le sélecteur et que recréer Alice
+    sélectionne la fiche existante. Changer d’opérateur puis relancer Qt.
+[ ] Créer une affaire avec l’opérateur sélectionné et un nom contenant des accents.
+    Tester séparément les champs vides et la traduction de l’erreur.
+[ ] Importer deux fois un projet synthétique contenant un info.json valide.
+    Vérifier que la liste n’affiche qu’une affaire et que le projet source
+    est intact. Tester aussi un dossier sans info.json et un JSON invalide.
+[ ] Dans Preuves, sélectionner une affaire et ajouter un fichier synthétique.
+    Vérifier que le SHA-256 affiché correspond à sha256sum.
+[ ] Ajouter un fichier à une seconde affaire et vérifier la séparation.
+[ ] Vérifier l’empreinte, modifier uniquement le fichier synthétique, puis
+    relancer la vérification. Vérifier que l’écart est signalé en FR et EN.
+[ ] Tester un fichier disparu, un lien symbolique et une boîte de dialogue
+    annulée. Vérifier que la GUI récupère et que la liste reste cohérente.
+[ ] Pendant le calcul d’un fichier synthétique volumineux, changer d’onglet
+    et de langue. Vérifier que le calcul aboutit et que fermer affiche
+    l’état en cours. Vérifier la réactivation des boutons ensuite.
+[ ] Inspecter une image RAW MBR synthétique. Comparer taille, décalage et
+    SHA-256. Vérifier le refus d’une partition hors limites et d’un GPT.
+    Le test automatisé tests/test_raw_image.py fabrique ces fixtures.
+
+D. Registre, CLI et compatibilité
+[ ] Dans Modules, utiliser Consulter un index de recensement avec une
+    affaire et un opérateur choisis. Sur une fixture SQLite contenant la
+    table files, vérifier les extensions discordantes, le refus d’une base
+    sans cette table et l’absence de modification du fichier.
+    Le test tests/test_vigil_core.py fabrique une fixture et vérifie l’audit.
+[ ] Dans Modules, vérifier les neuf analyses du registre. Dans Diagnostic,
+    vérifier la session et les outils détectés ou signalés indisponibles.
+[ ] Lancer "$HOME/.venvs/vigil/bin/vigil" doctor et
+    "$HOME/.venvs/vigil/bin/vigil" modules list. Comparer avec Qt.
+[ ] Lancer "$HOME/.venvs/vigil/bin/vigil" cases list depuis la même
+    session de recette. Vérifier que les affaires créées dans Qt y figurent.
+[ ] Vérifier la lecture d’un index census synthétique, le rejet des bases
+    checksafe mal formées et la saisie PTY avec la suite automatisée.
+[ ] Lancer l’ancien point d’entrée /usr/bin/python3
+    /opt/vigil/gui/vigil_main_gui.py pour contrôler la coexistence Tk.
+    Utiliser VIGIL_DATA_DIR vers une copie de données de recette si tu
+    comptes créer des projets ou modifier des réglages historiques.
+[ ] Comparer filtres et presets historiques, sans lancer de scan réel.
+    Les libellés Tk et les messages bruts des scripts suivent leur
+    localisation historique. Le bouton FR/EN agit dans Qt.
+
+[ ] Replier et déplier chaque groupe de navigation. Dans Investigation,
+    ouvrir Affaire en cours et tenter la requête census avec puis sans
+    affaire active.
+[ ] Vérifier que les titres des groupes sont en cyan. Ouvrir l’entrée
+    Actions rapides et vérifier les sections Antivirus et Stockage dans
+    la même page, en FR et EN. Replier Système et vérifier que l’entrée
+    Actions rapides est masquée, puis réapparaît en dépliant Système.
+[ ] Dans Actions rapides, tester ClamAV en VM avec un support synthétique.
+    Comparer le code de sortie et le résultat dans le terminal externe.
+    Vérifier aussi le traitement de ClamAV absent.
+[ ] Pour FreshClam, annuler la confirmation puis, sur un environnement
+    de test connecté, vérifier que les signatures restent dans le profil
+    utilisateur Vigil. Comparer le scan avant et après la mise à jour.
+[ ] En VM, avec un support USB de travail, vérifier que les Actions rapides
+    ouvrent le montage historique dans le terminal par défaut. Essayer
+    l’annulation, la confirmation, un essai d’écriture dans /stockage, puis
+    Démonter le stockage. Vérifier l’opérateur et les journaux avec et sans
+    affaire active. Refuser un disque dont une partition est déjà montée.
+[ ] Dans Affaire en cours, vérifier que le nom apparaît dans le titre et que
+    « Affaire verrouillée » ne figure plus dans les sous-pages.
+[ ] Au démarrage, comparer la synthèse de protection bloc avec lsblk
+    et distinguer cet état des options de montage dans Zones Vigil.
+
+[ ] Dans Investigation → Affaire en cours → Actions et journal, filtrer par opérateur puis
+    action, charger une page précédente et ouvrir les détails d’un événement.
+    Changer d’affaire et vérifier l’absence des événements de la précédente.
+[ ] Exporter le journal et les métadonnées, puis vérifier le dossier indiqué
+    par Vigil avec sha256sum -c SHA256SUMS depuis ce dossier. Réexporter
+    et vérifier que le premier dossier reste disponible.
+
+[ ] Au démarrage sur un profil neuf, vérifier que l’accueil affiche
+    aucun compteur de preuve inventé. Confirmer une affaire, enregistrer
+    un fichier synthétique et vérifier compteurs et événements. Comparer
+    l’inventaire disque et les zones dans Diagnostic.
+[ ] Depuis plusieurs pages, afficher puis masquer le terminal avec le bouton
+    en bas, intitulé Afficher/Masquer le centre des tâches. Vérifier
+    l’absence de croix et de bouton de détachement. Lancer une commande
+    de test, masquer le panneau, naviguer,
+    le rouvrir et contrôler la sortie et les codes dans Tâches.
+[ ] Relancer la mise à jour FreshClam sur Parrot. Vérifier que le fichier
+    généré est vigil-freshclam.conf et que les signatures restent dans le
+    profil utilisateur. Si la configuration système est lisible et celle de
+    Vigil refusée, vérifier le diagnostic dans le terminal et demander les
+    entrées AppArmor à l’administrateur.
+[ ] En VM, vérifier le titre Affaire en cours avec et sans affaire, en FR
+    et EN. Monter un support RO synthétique, déplier ses dossiers dans
+    Explorateur, ouvrir un fichier puis vérifier que l’arbre disparaît
+    après démontage. Vérifier le refus d’un lien et d’un montage RW.
+[ ] Simuler des erreurs de lecture pendant le census. Vérifier que
+    l’index partiel conserve les entrées lisibles et que inventory_errors
+    contient les diagnostics, y compris si aucune entrée n’est lisible.
+[ ] Dans Explorateur, essayer Ctrl+clic, Maj+clic et le clic droit sur la
+    sélection. Ajouter un dossier et un fichier qu’il contient aux preuves
+    et vérifier une seule référence par fichier. Un fichier enregistré
+    sous le montage apparaît une seule fois dans l’arborescence active. Calculer l’intégrité d’un
+    fichier enregistré, d’un fichier inconnu et d’un fichier illisible.
+[ ] Dans Explorateur, ouvrir un fichier enregistré et comparer métadonnées,
+    hex et chaînes ASCII. Vérifier la limite 4 Kio et le refus d’un lien.
+[ ] Dans Intégrité, comparer un fichier inchangé puis modifié et exporter
+    l’audit. Vérifier que les empreintes enregistrée et calculée sont visibles.
+[ ] Dans Catalogue de modules, rechercher un module intégré, ouvrir sa fiche
+    et créer un brouillon local. Vérifier les quatre fichiers du squelette
+    et le refus d’un identifiant déjà existant.
+
+[ ] Dans Affaire en cours, parcourir les vues à droite : Explorateur,
+    Preuves, Analyses, Actions et journal, Intégrité. Vérifier que ces
+    vues utilisent l’affaire confirmée, que les analyses 1.0 ont un
+    libellé lisible et que le catalogue reste accessible séparément.
+
+[ ] Au démarrage, vérifier que la fenêtre est maximisée et que le centre
+    des tâches est déjà affiché. Le masquer puis le rouvrir.
+[ ] Dans Affaire en cours, vérifier l’état /investigation sur toutes les
+    vues. En VM synthétique, comparer une source montée et démontée,
+    le point de montage, le système de fichiers et le mode ro/rw.
+    Les boutons demandent le helper administrateur sur un poste non équipé.
+    En VM uniquement, tester le helper ext4, sudo interactif, la sélection
+    USB et son actualisation, l’annulation, le verrouillage RO et les traces
+    dans l’audit et syslog. Vérifier que le démontage ne remet pas en RW. Vérifier la mise à jour de l’état en trois secondes environ.
+
+[ ] Sur une VM cible avec AppArmor, exécuter le post-install depuis
+    /opt/vigil. Vérifier le venv, le lanceur Qt, les données dans data/state,
+    l’exception limitée à data/state/clamav et l’absence de doublons après
+    une deuxième installation. Tester FreshClam --version puis la mise à
+    jour dans Qt.
+
+[ ] En VM, vérifier que le post-install prépare /investigation en
+    root:root 0755, puis qu’il refuse un point occupé, un sous-montage,
+    un ancrage non vide ou un lien symbolique. Vérifier que le helper
+    affiche le chemin, l’UID et le mode si l’ancrage est mal configuré.
+
+[ ] En VM, reproduire un échec bloc et un échec de montage ext4. Vérifier
+    que la sortie du terminal nomme l’opération et le support ou la cible.
+
+[ ] Dans une VM avec uniquement des supports synthétiques, lancer le montage
+    et le démontage depuis Affaire en cours. Vérifier le terminal externe,
+    les invites historiques et le dossier legacy-custody de l’affaire.
+    Les observations du terminal restent la source du résultat.
+[ ] Vérifier que les actions rapides ouvrent le terminal externe et que
+    le centre des tâches reste masqué au démarrage.
+
+[ ] À la relance, vérifier l’invite opérateur et annuler une fois.
+    Valider un opérateur, vérifier qu’il est fixé pour la session et
+    qu’aucune affaire n’est active. Vérifier son attribution dans les logs.
+[ ] En VM synthétique, lancer deux scans rapides. Vérifier le parcours
+    montage/scan/démontage, affaire Scan antivirus masquée, deux dossiers
+    de résultats distincts et aucune modification de l’affaire affichée.
+    Vérifier le refus si /investigation contient déjà un montage.
+
+[ ] Au lancement, cliquer sur Créer un opérateur, saisir son nom et
+    continuer. Relancer et choisir le même opérateur dans la liste.
+[ ] Dans Système → Configuration de l’entité, vérifier les champs hérités
+    puis modifier et enregistrer sur une copie de data de recette. Choisir
+    un logo PNG/JPEG et vérifier l’aperçu, la persistance et le retrait.
+    Vérifier les valeurs dans config/system.json et un PDF de test.
+    Modifier un champ puis confirmer la fermeture pour tester sa sauvegarde.
+
+[ ] En VM synthétique, confirmer la fermeture avec un montage direct ou
+    imbriqué sous /investigation ou /stockage. Vérifier le blocage et la
+    source indiquée. Après démontage, vérifier que la fermeture aboutit
+    même si le mode bloc RO/RW a changé pendant la session.
+[ ] Vérifier la fenêtre de contrôle à la fermeture, la sauvegarde de
+    l’affaire et la présence du JSON system-snapshots créé au lancement.
+
+[ ] Vérifier les cartes compactes, icônes et descriptions des actions
+    rapides. Provoquer un échec de scan en VM et vérifier que le terminal
+    affiche l’erreur et le code puis attend Entrée.
+[ ] Après un scan de recette, ouvrir Actions rapides → Rapports antivirus. Vérifier que le PDF produit par le générateur historique
+    est listé et que son dossier s’ouvre. Vérifier aussi un projet 1.0 importé.
+
+[ ] En VM, tester le scan rapide avec /investigation monté directement,
+    puis avec des partitions imbriquées. Vérifier la production d’un
+    rapport ClamAV consolidé distinct du PDF de triage.
+[ ] Simuler un changement de numéro de séquence bloc avec un mode
+    identique. La fermeture doit fonctionner si les zones sont démontées.
+
+[ ] Sur une installation /opt/vigil, comparer le lanceur installé et
+    le lanceur éditable. Vérifier la même base et les préférences sous
+    data/state, et l’original du PDF dans le run plus une copie distincte
+    sous /opt/vigil/rapports. Répéter pour vérifier l’absence d’écrasement.
+
+[ ] En VM synthétique, monter depuis Affaire en cours, terminer les
+    invites du terminal et vérifier que disque parent et partition sont
+    verrouillés avant montage, puis que le recensement démarre. Vérifier
+    census_*.sqlite dans legacy-custody/<id-affaire> et le PDF.
+[ ] Tester le refus avec un montage déjà présent, un montage RW, un bloc
+    parent RW ou une source dont l’identité ne se vérifie pas. Dans le
+    scan antivirus rapide, vérifier l’absence d’index census.
+[ ] En VM, monter une autre partition du même disque hors de /investigation.
+    Vérifier que le montage depuis l’affaire refuse de modifier ce disque.
+
+E. Recette à reprendre quand les parcours correspondants seront livrés
+[ ] Sorties et PDF sur corpus synthétique : census SQLite/TSV, checksafe,
+    doublons, médias, Office, archives, formats inconnus, chiffrement,
+    entropie, gros fichiers et limites ClamAV.
+[ ] Parité GUI/CLI et terminal externe : tâche interactive, saisie, annulation,
+    redimensionnement, navigation et fermeture, états après interruption.
+[ ] En VM dédiée : permissions du broker, identité bloc et montage RO,
+    alias/symlinks, refus d’une destination sur la source, et MTP simulé.
+[ ] En VM dédiée : partitions GPT, RAW/E01/AFF, SHA-256 et nettoyage.
+[ ] Sur projets synthétiques : conservation de la custody, historique,
+    export atomique, validation du manifeste et résultats partiels.
+[ ] Gestionnaire de modules : version, rollback, cache hors ligne,
+    signatures invalides, archives rejetées et isolation.
+[ ] Avant livraison : installation fraîche et mise à niveau sur les
+    distributions cibles. Tester les exigences F01–F27 de la matrice.
+
+Les cases de ce fichier sont la recette opérateur. Voir todo.txt pour
+l’état d’avancement et todo_tests.txt pour les scénarios historiques.
+
+
+[ ] Ajouter un fichier à l’affaire depuis Preuves et depuis Explorateur.
+    Vérifier le maintien des dossiers ouverts, de la sélection et du filtre.
+    Vérifier la copie privée dans legacy-custody/<id>/preuves et son mode 0400.
+[ ] Depuis le titre Affaire en cours, ouvrir Choisir l’affaire. Tester la
+    recherche, la confirmation, l’annulation, la création et l’import.
+[ ] Depuis Exporter l’affaire, publier l’archive complète. Vérifier l’empreinte
+    externe puis SHA256SUMS après extraction, le dossier preuves et le mode
+    0400 de son contenu. Débrancher le support et exporter une preuve
+    ancienne sans copie. Vérifier l’avertissement et le statut partiel
+    du manifeste. Vérifier qu’une copie altérée bloque l’export.
+[ ] Dans Choisir l’affaire, tester les deux modes de suppression et annuler
+    à chacune des deux validations. Vérifier le refus si le nom saisi est
+    incorrect. Comparer le retrait de la liste avec conservation des données
+    et la suppression intégrale des données locales de la seule affaire.
+
+
+[ ] En VM, monter un disque de test à deux partitions et vérifier deux
+    références distinctes. Démonter et vérifier deux résultats concordants.
+    Simuler une référence absente, une erreur de lecture et un changement
+    réel de contenu. Vérifier les trois diagnostics et le démontage.
+[ ] Vérifier que la recherche, la création et l’import restent accessibles
+    via Affaire en cours → Choisir l’affaire après le retrait de l’onglet.
+
+[ ] Dans Preuves, annuler puis confirmer la suppression d’une preuve.
+    Vérifier la disparition de sa copie locale, la présence de l’original,
+    la trace d’audit et l’absence de la preuve dans un nouvel export.
+[ ] Dans Analyses, tester chaque module intégré sur un support synthétique
+    monté en lecture seule. Vérifier la sélection, le terminal, les
+    dépendances, le code de sortie et le dossier isolé de résultats.
+    Vérifier le refus sans montage et le signalement d’une lecture incomplète.
+
+
+[ ] Dans Analyses, lancer Scan antivirus sur un montage RO. Vérifier
+    l’absence de démontage, l’utilisation des signatures Vigil si présentes
+    et le PDF consolidé. Vérifier que les anciens PDF et les nouveaux sont
+    copiés dans rapports/ par exécution, sans écrasement.
+[ ] Dans Rapports PDF, vérifier l’ordre du plus récent au plus ancien,
+    les dates, les noms d’analyse et la présence des copies dans l’export.
+
+
+[ ] Après avoir enregistré une preuve avec copie locale, démonter et
+    débrancher le support. Rouvrir l’affaire et ouvrir la preuve depuis
+    Explorateur. Vérifier l’aperçu et la mention « copie locale ». Pour une
+    preuve ancienne sans copie, vérifier le message de remontage.
+
+
+[ ] Ajouter des preuves de plusieurs dossiers. Vérifier l’arborescence
+    et la colonne SHA-256. Dans Explorateur, clic droit → Vérifier
+    l’intégrité, copier le SHA-256 et le comparer. Retirer la dernière
+    preuve et vérifier que Vigil reste ouvert et affiche la liste vide.
+
+
+[ ] Dans Preuves, tester Ouvrir le dossier avec la clé débranchée, puis
+    Ouvrir le fichier et le double-clic. Vérifier que l’aperçu est inerte
+    et que la copie est en mode 0400 sans droit d’exécution.
+[ ] Dans Rapports PDF, cliquer sur les en-têtes Date, Analyse et Nom du
+    rapport. Vérifier les deux sens de tri et l’ouverture du bon dossier.
+
+
+[ ] En VM dédiée avec disques USB de test, vérifier Cloner un disque :
+    refus d’une cible occupée/trop petite, confirmation nominative,
+    relecture SHA-256 et état RO de la source après sortie. Vérifier la
+    bannière Vigil, le modèle, la série, la capacité, la table de partitions,
+    le mode bloc et les détails des volumes dans les menus d’acquisition.
+    Vérifier les couleurs, les retours à la ligne et le contraste en terminal.
+[ ] En VM, créer une image RAW en local puis en USB externe. Vérifier
+    l’absence d’écrasement, le fichier .sha256 et le démontage temporaire.
+    Simuler une lecture courte et un espace insuffisant.
+
+
+[ ] Dans Accueil, vérifier le tableau de bord, les ressources CPU/RAM toutes
+    les cinq secondes, les disques et zones de montage toutes les deux
+    secondes, et le maintien des détails de partition ouverts.
+    Vérifier que Session et outils remplace l’onglet Diagnostic et que
+    l’accueil ne comporte plus de boutons d’actualisation.
+[ ] Créer une image RAW, choisir Dossier local puis un chemin avec des
+    espaces dans le sélecteur système. Vérifier que le terminal utilise
+    le dossier choisi et qu’annuler le sélecteur ne lance rien.
+
+
+[ ] Ouvrir Actions rapides à deux tailles de fenêtre. Vérifier les panneaux
+    en colonnes puis empilés, les libellés FR/EN et les sept boutons.
+
+
+[ ] Choisir la seule clé USB comme source d’une image vers USB externe.
+    Vérifier que le message identifie la source et propose un second
+    support USB démonté ou une destination locale.
+
+
+[ ] Sur une VM avec bureau et udev, installer la règle, ouvrir Vigil et
+    authentifier sudo. Brancher un support de test et vérifier RO sur
+    le disque et les partitions avant tout montage, puis UDISKS_IGNORE=1.
+    Vérifier l’absence de changement sur les supports déjà présents.
+[ ] En acquisition, choisir la source puis brancher la cible à l’invite.
+    Vérifier qu’elle apparaît après Entrée, qu’elle ne passe en RW qu’après
+    confirmation, puis que son mode initial est restauré à la sortie.
+
+
+[ ] Vérifier que la copie et la vérification SHA-256 affichent le
+    pourcentage et les octets, avec 100 % seulement en fin de chaque étape.
+
+
+[ ] Après les derniers octets de l’acquisition, vérifier les annonces de
+    synchronisation, de relecture et, sur USB, de démontage. En cas
+    d’attente prolongée, vérifier le rappel d’étape.
+
+
+[ ] Sur Parrot, brancher une clé RW après activation de la règle et constater
+    son passage en RO. Démonter toute zone Vigil et quitter. Vérifier la
+    restauration RW, puis le comportement normal au prochain branchement.
+    Vérifier qu’un support initialement RO reste RO et qu’une autre session
+    Vigil active conserve la protection.
+
+
+Recette interface et terminaux
+[ ] Vérifier FR/EN, navigation latérale repliable, onglets d’affaire
+    horizontaux, défilement et contraste avec une police plus grande.
+[ ] Vérifier les filtres d’outils et de modules, l’inspecteur des modules
+    et la configuration de l’entité avec des données synthétiques.
+[ ] Démarrer un terminal depuis Hyprland/Wayland puis X11. Tester le choix
+    de l’émulateur, les chemins avec espaces, une erreur et Ctrl+C.
+    Confirmer le code de sortie de l’opération et le blocage de fermeture
+    pendant l’exécution. Vérifier que le centre des tâches est absent.
+[ ] Monter puis démonter un stockage de recette sans affaire active.
+    Vérifier les confirmations et que le contexte autonome est journalisé.
+[ ] En TTY, vérifier la barre, le débit et l’ETA lorsque calculables, puis
+    le message de synchronisation et le temps écoulé actualisé sur place.
+    En sortie redirigée, vérifier le texte uni et les lignes espacées.
+    Vérifier que le résumé n’annonce le SHA-256 conforme qu’après comparaison.
+
+
+[ ] En VM, tester prepare-storage.sh avec /stockage démonté et confirmer
+    root:root 0755. Vérifier le refus si /stockage est un lien ou contient
+    un montage. Vérifier que le post-install complet continue de refuser
+    une règle sudoers Vigil historique encore installée.
+
+
+[ ] Au démarrage de Vigil, vérifier que le terminal affiche la bannière,
+    l’explication FR/EN et le périmètre de la protection avant le mot de
+    passe sudo. Tester l’activation et l’annulation en VM.
+[ ] Vérifier la bannière des scripts de maintenance et l’absence de
+    décoration dans les sorties techniques consommées par Vigil.
+[ ] Après le post-install sur Parrot, vérifier « command -v chafa » et
+    tester « chafa --format symbols --colors 256 --size 40x20 /opt/vigil/data/icons/vigil.svg ».
+    Comparer le rendu avec les terminaux Vigil et vérifier qu’avec NO_COLOR=1
+    ou une sortie redirigée, la bannière reste en texte simple.
+
+[ ] En VM, ouvrir l’acquisition RAW locale, RAW externe et le clonage.
+    Vérifier la bannière Chafa après sudo. Tester le branchement guidé de
+    la source USB puis, si nécessaire, de la destination. Vérifier le
+    refus d’un support composite HID et d’un support déjà branché avant
+    le relevé initial. Vérifier le mode bloc RO de la source et le SHA-256.
+[ ] En VM, vérifier le triage HID existant du montage de stockage rapide
+    et le refus d’un support composite avant le passage en RW. Tester le démontage depuis les actions rapides.
+
+[ ] Dans le montage d’affaire, vérifier que projet, entité et opérateur
+    figurent une seule fois sur la même ligne avant le triage.
+[ ] Sur Parrot avec Konsole, vérifier que le terminal s’ouvre plus haut et
+    garde la largeur du profil. Tester aussi le terminal choisi en Wayland.
+[ ] Dans Preuves, double-cliquer sur un fichier après retrait du support.
+    Vérifier l’aperçu de la copie locale. Pour une ancienne preuve sans
+    copie locale, vérifier le message et que Vigil reste ouvert.
+
+[ ] Basculer Vigil de FR à EN puis ouvrir un montage d’affaire, un montage
+    de stockage, une analyse et une acquisition RAW. Vérifier les titres,
+    les invites de triage et la fin de terminal dans chaque langue.
+    Confirmer que le terminal de protection au démarrage affiche FR et EN.
+
+[ ] Après retrait du support, vérifier que Preuves affiche le chemin relatif
+    dans l’affaire et que l’aperçu indique le chemin local et la provenance.
+    Vérifier que « Ouvrir le dossier de l’affaire » ouvre la racine locale.
+[ ] Vérifier le lancement du terminal à 44 lignes avec Konsole ou un autre
+    émulateur compatible. Vérifier le comportement du gestionnaire de fenêtres.
+
+[ ] Fermer Vigil, sauvegarder data/state, mettre à jour puis ouvrir une
+    affaire existante. Vérifier que son ancien dossier UUID a été renommé,
+    que les preuves locales et rapports s’ouvrent et que l’export fonctionne.
+[ ] Créer « Équipe / 42 » et « Equipe 42 ». Vérifier les dossiers distincts
+    Equipe_42 et Equipe_42_2. Dans le sélecteur, vérifier la surbrillance
+    au clic simple, puis la confirmation au double-clic et via le bouton.
+
+[ ] Ouvrir le Gestionnaire d’affaires en FR et EN. Vérifier les états vides,
+    la recherche insensible à la casse, les quatre tris et la conservation
+    de la sélection. Activer par Entrée, double-clic et « Ouvrir l’affaire ».
+[ ] Créer une affaire avec référence et description, puis en importer une.
+    Vérifier la sélection sans activation, le retour d’import et les
+    métadonnées, y compris celles provenant d’un index de recensement.
+[ ] Sélectionner une affaire distincte de l’affaire active et vérifier les
+    deux confirmations de suppression. Vérifier le blocage pendant une
+    opération et l’absence d’altération des preuves originales.
+[ ] Vérifier le redimensionnement du séparateur et les zones de défilement
+    sur X11, Wayland et Hyprland, avec une mise à l’échelle de 150 %.
+
+[ ] Exporter une affaire synthétique et l’importer depuis le Gestionnaire
+    d’affaires sur une base vierge. Contrôler la prévisualisation, le journal,
+    l’ouverture des copies sans support, les PDF, le recensement et le réexport.
+[ ] Refaire l’import en CLI puis avec une archive partielle et un checksum
+    externe incorrect. Vérifier le JSON, les diagnostics et l’absence d’affaire
+    invalide. Tester aussi un dossier Vigil 1.0 contenant info.json.
+
+[ ] Dans un venv neuf, installer le paquet puis exécuter vigil --help,
+    vigil --version et vigil --show-completion. Vérifier le lanceur graphique.
+[ ] Sur un poste de recette avec les anciens lanceurs, exécuter update-cli.sh
+    deux fois. Contrôler command -v vigil, le raccourci Qt et la conservation
+    des données. Vérifier le diagnostic face à un exécutable tiers homonyme.
+
+[ ] Dans le Gestionnaire d’affaires FR et EN, réduire la fenêtre au minimum.
+    Vérifier que les actions restent visibles, que les deux imports sont
+    accessibles sous « Importer » et que la suppression reste dans l’inspecteur.
+
+[ ] En VM, fermer normalement Vigil et vérifier le logo, les montages, le
+    reçu hotplug et la pause sur Entrée. Refaire sans activation sudo.
+[ ] En VM, arrêter le processus Qt par signal. Vérifier que le superviseur
+    affiche le bilan, puis simuler une restauration non confirmée et
+    vérifier la tentative ciblée avec R. Vérifier qu’un volume restant
+    monté est signalé et qu’une autre session conserve sa protection.
+
+[ ] En VM, lancer Vigil depuis le paquet et depuis python -m vigil.desktop.
+    Vérifier le terminal au bout des deux parcours et simuler un premier
+    émulateur en échec. Refaire après SIGTERM et SIGKILL de Qt uniquement.
+[ ] Fermer le terminal pendant l’attente d’une opération synthétique.
+    Vérifier le rapport persistant et la restitution après la fin du suivi.
+    Refaire avec arrêt du superviseur puis vérifier le diagnostic au lancement.
+[ ] Sur fixtures, cliquer rapidement deux fichiers et vérifier HEX, ASCII
+    et métadonnées. Double-cliquer un dossier puis un document autorisé.
+    Vérifier la copie de consultation, le refus d’un exécutable et les
+    actions de dossier et de chemin avec et sans FileManager1.
+
+
+Déploiement natif depuis zéro
+[x] Debian 13 amd64, venv utilisateur neuf avec le profil complet.
+    Versions et aides des trois lanceurs, Qt offscreen initialisé.
+[x] Simulation APT avec l’index Debian trixie main amd64 et une base dpkg
+    vierge. Toutes les dépendances du post-install ont été résolues.
+[x] Syntaxe Bash et --dry-run du post-install sans sudo.
+[ ] Post-install privilégié puis désinstallation et réinstallation sur
+    Parrot Echo ou Debian avec systemd, sudo et udev réels.
+[ ] Vérifier AppArmor/FreshClam, les lanceurs desktop et la protection d’un
+    support synthétique pendant la session et après fermeture.

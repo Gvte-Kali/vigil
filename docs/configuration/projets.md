@@ -27,3 +27,13 @@ Un nouveau recensement remplace le précédent : exporter le projet avant de le 
 
 L’[export](../actions/export.md) produit une archive et des fichiers de contrôle SHA-256.
 La [recherche de menaces](../actions/menaces.md) fonctionne séparément, sans modifier de projet.
+
+## Importer une affaire Vigil 2.0
+
+Dans le Gestionnaire d’affaires, choisir **Importer → Importer une archive Vigil 2.0**.
+Choisir le fichier TAR.GZ. Après contrôle, la prévisualisation indique les
+copies disponibles et la couverture de l’archive. Confirmer pour restaurer
+l’affaire puis l’ouvrir avec la validation habituelle. Pour un dossier avec
+`info.json`, choisir **Importer → Importer un ancien projet Vigil 1.0**.
+
+Voir [Exporter et restaurer une affaire](../actions/export.md).
