@@ -8,38 +8,42 @@ has_children: true
 
 # Analyser un support
 
-Examiner les fichiers d’un support monté dans `/investigation` et rattacher les résultats à un projet.
+Le parcours principal passe par **Investigation → Affaire en cours** dans la GUI Qt, puis par les vues d'exploration, de preuves et d'analyses.
 
-## Prérequis
+## Avant de lancer
 
-- Un utilisateur et un projet créés dans la configuration.
-- Un support à examiner et de l’espace pour les résultats.
-- Konsole disponible pour les scripts interactifs.
+- Choisir un **opérateur** et créer ou activer une **affaire**.
+- Identifier le support, vérifier les protections RO et prévoir une destination distincte pour les résultats.
+- Vérifier les dépendances des modules proposés.
 
-## Procédure
+## Parcours GUI Qt
 
-1. Ouvrir **Analyser un périphérique**, puis sélectionner l’utilisateur et le projet.
-2. Cliquer sur **Monter** et suivre le [montage en lecture seule](montage-lecture-seule.md).
-3. Choisir le type de périphérique pour filtrer les outils disponibles.
-4. Lancer le [recensement](recensement.md), puis les analyses utiles, seules ou en multi-scan.
-5. Consulter les PDF dans `/opt/vigil/rapports/` et les données du projet dans `data/projects/<projet>/`.
-6. [Démonter](demontage.md) le support, puis [exporter](export.md) le projet.
+1. Ouvrir **Affaire en cours** et activer l'affaire choisie.
+2. Depuis les actions de montage, suivre le [triage et le montage RO](montage-lecture-seule.md) dans `/investigation`.
+3. Explorer les dossiers et consulter les aperçus et métadonnées.
+4. Enregistrer les fichiers utiles comme preuves, avec leur empreinte SHA-256.
+5. Ouvrir **Analyses** et lancer le [recensement](recensement.md) ou un autre module disponible.
+6. Lire le résultat et les [rapports PDF](../rapports-pdf/README.md).
+7. [Démonter](demontage.md) puis [exporter](export.md) l'affaire.
 
-## Choisir une analyse
+## Choisir un module
 
-| Besoin | Outil |
+| Besoin | Module |
 |---|---|
-| Inventaire, doublons, extensions trompeuses | [Recensement](recensement.md) |
-| Métadonnées et repérage de visages | [Images](images.md), [visages](visages.md) |
-| Durée et caractéristiques des médias | [Vidéos](videos.md), [audio](audio.md) |
-| Documents et conteneurs | [Bureautique](bureautique.md), [archives](archives.md) |
-| Protection ou contenu peu identifiable | [Fichiers chiffrés](crypto.md), [entropie](entropie.md) |
-| Fichiers de grande taille | [Fichiers volumineux](volumineux.md) |
-| Chaîne prédéfinie avec rapport unique | [Orchestrateur](orchestrateur.md) |
+| Inventaire, doublons et extensions trompeuses | [Recensement](recensement.md) |
+| Images et métadonnées | [Images](images.md), [Visages](visages.md) |
+| Médias | [Vidéos](videos.md), [Audio](audio.md) |
+| Documents et conteneurs | [Bureautique](bureautique.md), [Archives](archives.md) |
+| Protection et données binaires | [Fichiers chiffrés](crypto.md), [Entropie](entropie.md) |
+| Gros fichiers | [Fichiers volumineux](volumineux.md) |
+| Suite automatisée | [Orchestrateur](orchestrateur.md) |
+
+## Scripts historiques
+
+Les pages de modules décrivent souvent la page Vigil 1.0 **Analyser un périphérique**, qui demandait un utilisateur et un projet et écrivait dans `data/projects/<projet>/`. Les adaptateurs Qt actuels utilisent aussi les services de la branche 2.0 ; ne supposez pas que tous les chemins historiques sont ceux d'une nouvelle affaire.
+
+Le recensement et les analyses ciblées peuvent écrire dans des formats SQLite/TSV/PDF. Les résultats d'un scan autonome ClamAV ou d'une [recherche de menaces](menaces.md) n'impliquent pas nécessairement une affaire active.
 
 ## Traçabilité
 
-Les analyses ciblées exigent un projet actif et journalisent leurs actions dans
-`chain_of_custody.log`. Le recensement possède aussi un mode autonome technique.
-Le [scan ClamAV](antivirus.md) fonctionne sans projet ; la
-[recherche de menaces](menaces.md) utilise son propre journal.
+Vérifiez les journaux liés à l'opérateur et à l'affaire. Un SHA-256 compare des contenus ; il n'authentifie pas l'auteur de l'acquisition.

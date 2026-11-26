@@ -1,3 +1,10 @@
+---
+layout: default
+title: Exécution sous Qt
+parent: Développement
+nav_order: 21
+---
+
 # Parcours d’exécution dans le workspace Qt
 
 L’opérateur est une fiche SQLite identifiée, créée avec **Opérateurs…**

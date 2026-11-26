@@ -1,3 +1,10 @@
+---
+layout: default
+title: Cahier des charges UI/UX
+parent: Développement
+nav_order: 11
+---
+
 # Vigil 2.0 — Refonte UI/UX, terminaux externes, présentation des acquisitions et correction du stockage
 
 ## 1. Contexte et objectifs

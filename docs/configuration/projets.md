@@ -1,39 +1,31 @@
 ---
 layout: default
 parent: Configuration
-title: Projets
+title: Affaires et projets
 nav_order: 12
 ---
 
-# Projets
+# Affaires et projets
 
-Un projet regroupe les résultats d’une analyse et son journal de traçabilité
-(`chain_of_custody.log`). Il est partagé entre les opérateurs.
+Une **affaire Vigil 2.0** regroupe un contexte d'investigation, des preuves, leurs empreintes, les analyses, les rapports et la traçabilité.
 
-## Créer et utiliser un projet
+## Créer une affaire (GUI Qt)
 
-1. Ouvrir **Gérer les projets** depuis l’accueil.
-2. Cliquer sur **Créer** et saisir un nom unique ; la description est facultative.
-3. Sélectionner le projet et l’utilisateur dans la page d’analyse.
+1. Ouvrir **Investigation → Affaire en cours** puis le gestionnaire d'affaires.
+2. Cliquer sur **Créer une affaire** et saisir son nom (et les métadonnées proposées).
+3. Sélectionner l'affaire puis l'activer explicitement.
+4. Conserver des preuves et consulter les résultats dans les onglets de l'affaire.
 
-Le gestionnaire permet aussi de modifier, exporter et supprimer un projet.
-La suppression retire son dossier après confirmation.
+La liste des affaires et les actions de création, importation et suppression sont distinctes des actions sur une affaire active.
 
-## Données conservées
+## Importer et exporter
 
-Le dossier `data/projects/<projet>/` contient le journal, les empreintes des supports,
-le recensement SQLite/TSV et les rapports qui y sont copiés.
-Un nouveau recensement remplace le précédent : exporter le projet avant de le relancer si l’ancien doit être conservé.
+Pour une archive Vigil 2.0, choisir **Importer → Importer une archive Vigil 2.0** et sélectionner le `tar.gz`. Le contrôle affiche le niveau de couverture et les copies disponibles. Confirmer pour restaurer, puis activer l'affaire.
 
-L’[export](../actions/export.md) produit une archive et des fichiers de contrôle SHA-256.
-La [recherche de menaces](../actions/menaces.md) fonctionne séparément, sans modifier de projet.
+Pour un projet historique avec `info.json`, utiliser **Importer un ancien projet Vigil 1.0**. Voir [Export](../actions/export.md).
 
-## Importer une affaire Vigil 2.0
+## Projets historiques Vigil 1.0
 
-Dans le Gestionnaire d’affaires, choisir **Importer → Importer une archive Vigil 2.0**.
-Choisir le fichier TAR.GZ. Après contrôle, la prévisualisation indique les
-copies disponibles et la couverture de l’archive. Confirmer pour restaurer
-l’affaire puis l’ouvrir avec la validation habituelle. Pour un dossier avec
-`info.json`, choisir **Importer → Importer un ancien projet Vigil 1.0**.
+L'ancien gestionnaire **Gérer les projets** conserve résultats et `chain_of_custody.log` sous `data/projects/<projet>/`. Les projets sont partagés entre opérateurs. Un nouveau recensement peut remplacer les sorties précédentes : exporter avant de relancer si leur conservation est nécessaire.
 
-Voir [Exporter et restaurer une affaire](../actions/export.md).
+La [recherche de menaces](../actions/menaces.md) dispose d'un parcours autonome sans affaire.

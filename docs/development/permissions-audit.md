@@ -1,3 +1,10 @@
+---
+layout: default
+title: Audit des autorisations
+parent: Développement
+nav_order: 18
+---
+
 # Autorisations des scripts Vigil
 
 Revue du code autour de `886ce03`. Inventaire reproductible avec

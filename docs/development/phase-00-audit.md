@@ -1,3 +1,10 @@
+---
+layout: default
+title: Audit initial — phase 00
+parent: Développement
+nav_order: 19
+---
+
 # Phase 00 — Audit de Vigil 2.0
 
 Référence `a2553bada827cd0e521541b51a4bbc853d416788`. Nouveau clone, `git status -sb` initial `## main...origin/main`. `git branch -a` recensait main, anylinux et deux branches vibe, aucune vigil-2.0. Livrables sur vigil-2.0. `git ls-files` et `find .. -name AGENTS.md` confirment la structure et l'absence d'AGENTS.md racine ou imbriqué dans le clone. AGENTS.md et SPECIFICATIONS.md joints cadrent la méthode et la cible. Le todo.txt suivi est la feuille de route et conserve l'historique. Licence GPL version 3 (`LICENSE:1`).

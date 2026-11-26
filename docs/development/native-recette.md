@@ -1,3 +1,10 @@
+---
+layout: default
+title: Recette native
+parent: Développement
+nav_order: 17
+---
+
 # Recette native de Vigil 2.0
 
 Utiliser un compte ordinaire et un dépôt sur `vigil-2.0`. Prévoir deux VM avec instantané initial. La première peut être Parrot ou Debian. La seconde doit démarrer Arch Linux, idéalement dans une session Hyprland avec la configuration Omarchy à vérifier. Noter le commit, l’OS, le noyau, le compositeur et les versions Python et Qt avec les résultats.

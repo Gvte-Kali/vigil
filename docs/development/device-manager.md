@@ -1,3 +1,10 @@
+---
+layout: default
+title: Device Manager
+parent: Développement
+nav_order: 15
+---
+
 # Gestion des périphériques dans Vigil Core
 
 Le Device Manager utilise l’inventaire Linux et les montages du noyau. Les commandes de montage s’appuient sur le menu d’« Affaire en cours », également utilisé par le stockage. Les opérations Qt de montage, démontage, antivirus et analyse utilisent le même verrou que la CLI. Le RAW et le clonage prennent ce verrou dans leur espace de montage privé. Les analyses reçoivent un instantané des montages RO vérifiés et le recensement revérifie leur identité.

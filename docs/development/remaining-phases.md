@@ -1,3 +1,10 @@
+---
+layout: default
+title: Critères restant à valider
+parent: Développement
+nav_order: 22
+---
+
 # Critères restant à valider
 
 Cette vue résume les cases encore ouvertes du [todo](../../todo.txt) après

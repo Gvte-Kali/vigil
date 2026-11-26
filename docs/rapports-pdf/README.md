@@ -1,47 +1,41 @@
 ---
 layout: default
-title: Rapports
+title: Rapports PDF
 nav_order: 30
 ---
 
-# Rapports PDF
+# Lire les rapports Vigil
 
-Les analyses utilisent le générateur commun `scripts/pdf/vigil_pdf.py`, basé sur
-ReportLab. Les PDF sont écrits par défaut dans `/opt/vigil/rapports/`.
+Les analyses utilisent le générateur commun `scripts/pdf/vigil_pdf.py` fondé sur ReportLab. Sur une installation de site, les PDF se trouvent généralement sous `/opt/vigil/rapports/`. Certains rapports sont également rattachés au dossier de l'affaire ou à une exécution.
 
-## Lire un rapport
+## Comment lire un rapport ?
 
-La couverture reprend l’entité, le logo, l’opérateur, le projet ou le contexte,
-et la date. Les pages suivantes présentent les statistiques puis les résultats,
-avec les chemins et les empreintes disponibles.
+1. **Page de garde :** vérifier l'entité, le logo, l'opérateur, le contexte et la date.
+2. **Périmètre :** identifier le support et les opérations effectivement effectuées.
+3. **Statistiques :** distinguer fichiers examinés, ignorés, erreurs et détections.
+4. **Résultats détaillés :** examiner les chemins et empreintes disponibles.
+5. **Conclusion :** ne pas confondre « aucune détection » et preuve d'innocuité.
 
-- Les analyses ciblées décrivent les fichiers retenus.
-- Le recensement résume l’inventaire ; le détail est dans SQLite et TSV.
-- Un rapport consolidé réunit plusieurs sections avec un sommaire.
-- Une section en erreur ou un fichier ignoré doit être examiné avant de conclure.
+Un rapport consolidé regroupe plusieurs sections avec sommaire. Les inventaires volumineux ont leur détail dans SQLite/TSV ; le PDF en présente généralement un résumé.
 
-## Types disponibles
+## Types de rapports
 
-| Usage | Valeurs de `--kind` |
+| Usage | Argument `--kind` |
 |---|---|
 | Fichiers | `images`, `videos`, `audio`, `office`, `archives`, `crypto`, `entropy`, `bigfiles` |
-| Inventaire et audit | `census`, `formataudit` |
+| Inventaire | `census`, `formataudit` |
 | Antivirus et USB | `clamav`, `usbhid` |
 | Traçabilité | `custody` |
-| Rapport consolidé | `multi` |
+| Rapport multi-sections | `multi` |
 
-## Génération technique
+## Pour les utilisateurs avancés
 
-Depuis un résultat JSON existant :
+Le générateur peut créer un PDF depuis un JSON déjà produit :
 
 ```bash
-python3 /opt/vigil/scripts/pdf/vigil_pdf.py   --kind images --json /chemin/resultat.json   --user "Operateur" --project "Dossier" --dir /chemin/rapports
+python3 /opt/vigil/scripts/pdf/vigil_pdf.py \
+  --kind images --json /chemin/resultat.json \
+  --user "Operateur" --project "Affaire" --dir /chemin/rapports
 ```
 
-ClamAV accepte `--log` ; les rapports consolidés utilisent des arguments `--section`
-répétés. Consulter `python3 /opt/vigil/scripts/pdf/vigil_pdf.py --help` pour le format
-et les options (`--comment`, `--config-dir`, `--fname-prefix`, etc.).
-
-La charte des PDF est définie dans le générateur. Le thème **Graphite** concerne
-le site de documentation ; la [charte de l’application](../interface-graphique/theme.md)
-est définie séparément.
+Utilisez `--log` pour les données ClamAV et `--section` répété pour un rapport multi-sections. Consultez `--help` pour les options `--comment`, `--config-dir`, `--fname-prefix` et autres. Le thème Graphite du site web ne modifie pas les rapports.

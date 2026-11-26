@@ -1,3 +1,10 @@
+---
+layout: default
+title: Baseline de tests
+parent: Développement
+nav_order: 24
+---
+
 # Baseline de tests — phase 00
 
 Référence `a2553ba`, Debian 13 trixie x86_64, Git 2.56.1, Bash 5.2.37, Python 3.12.14, SQLite 3.53.1. Aucun montage, accès à une preuve, sudo ou installation. Les essais exécutables utilisent uniquement une base SQLite synthétique temporaire.

@@ -72,3 +72,53 @@ a:focus-visible, button:focus-visible, input:focus-visible {
     .search, .aux-nav { display: none; }
   }
 }
+
+/* Vigil bilingual documentation shell and onboarding cards. */
+.main-header .vigil-language-menu {
+  display: inline-flex; gap: .3rem; align-items: center; flex-shrink: 0;
+  padding: .35rem .7rem; margin-left: auto;
+}
+.vigil-language-menu a {
+  display: inline-flex; align-items: center; gap: .3rem;
+  padding: .35rem .55rem; border: 1px solid $border-color;
+  border-radius: .45rem; color: $body-text-color; font-size: .82rem;
+  font-weight: 650; text-decoration: none; white-space: nowrap;
+}
+.vigil-language-menu a:hover, .vigil-language-menu a:focus-visible {
+  border-color: $link-color; background: $feedback-color;
+}
+.vigil-language-menu a[aria-current="page"] {
+  border-color: $link-color; color: $link-color;
+  box-shadow: inset 0 -2px 0 $link-color;
+}
+.vigil-hero {
+  padding: 1.6rem 1.8rem; border: 1px solid $border-color;
+  border-radius: .8rem; background: $sidebar-color; margin: .9rem 0 1.6rem;
+}
+.vigil-hero h1 { margin-top: .25rem; }
+.vigil-hero p { max-width: 46rem; }
+.vigil-pill {
+  display: inline-block; margin: .3rem .4rem .3rem 0;
+  border: 1px solid $border-color; border-radius: 999px;
+  padding: .2rem .65rem; font-size: .8rem; color: $body-text-color;
+}
+.vigil-card-grid {
+  display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr));
+  gap: .9rem; margin: 1.4rem 0;
+}
+.vigil-card {
+  border: 1px solid $border-color; border-radius: .65rem;
+  padding: 1.1rem; background: $sidebar-color;
+}
+.vigil-card h3 { margin-top: 0; }
+.vigil-card p { margin-bottom: 0; font-size: .92rem; }
+.vigil-card:hover { border-color: $link-color; }
+.vigil-note {
+  border-left: 3px solid $link-color; padding: .8rem 1rem;
+  background: $sidebar-color; margin: 1.2rem 0;
+}
+@media (max-width: 49.99rem) {
+  .main-header .vigil-language-menu { margin: .2rem .25rem; padding: .15rem; }
+  .vigil-language-menu a { padding: .3rem .4rem; }
+  .vigil-hero { padding: 1rem; }
+}

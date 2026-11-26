@@ -1,3 +1,10 @@
+---
+layout: default
+title: Portabilité Linux
+parent: Développement
+nav_order: 16
+---
+
 # Vigil 2.0 sur Linux
 
 Le socle CLI requiert Linux et Python 3.11+ et s'installe dans un

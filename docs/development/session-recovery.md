@@ -1,3 +1,10 @@
+---
+layout: default
+title: Supervision et restauration
+parent: Développement
+nav_order: 23
+---
+
 # Supervision, restitution et consultation externe
 
 ## Diagnostic et architecture

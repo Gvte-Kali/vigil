@@ -1,3 +1,10 @@
+---
+layout: default
+title: Architecture Vigil 2.0
+parent: Développement
+nav_order: 10
+---
+
 # Architecture cible Vigil 2.0
 
 Proposition issue de SPECIFICATIONS.md joint (§2–9) et de l'[audit de référence](phase-00-audit.md). La phase 00 s'arrête à la conception.

@@ -5,6 +5,9 @@ title: Thème
 nav_order: 42
 ---
 
+
+> **Référence historique Vigil 1.0 (Tkinter).** La GUI Qt actuelle utilise d'autres composants. Voir le [guide de l'interface](README.md).
+
 # Thème et charte graphique
 
 ## Site de documentation : Graphite

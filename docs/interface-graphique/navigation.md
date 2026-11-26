@@ -5,6 +5,9 @@ title: Navigation
 nav_order: 41
 ---
 
+
+> **Référence historique Vigil 1.0 (Tkinter).** La GUI Qt actuelle utilise d'autres composants. Voir le [guide de l'interface](README.md).
+
 # Navigation
 
 La navigation est centralisée dans `gui/vigil_gui_base.py`.

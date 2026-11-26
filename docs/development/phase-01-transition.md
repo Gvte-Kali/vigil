@@ -1,3 +1,10 @@
+---
+layout: default
+title: Transition des privilèges
+parent: Développement
+nav_order: 20
+---
+
 # Transition des privilèges Vigil
 
 Sur un poste existant, l'administrateur examine `/etc/sudoers.d/vigil`

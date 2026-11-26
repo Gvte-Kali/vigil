@@ -5,16 +5,15 @@ nav_order: 10
 has_children: true
 ---
 
-# Configuration
+# Configurer Vigil
 
-Préparer le poste une fois, puis sélectionner le contexte adapté à chaque opération.
+Avant la première investigation, vérifiez l'entité, les opérateurs et les protections du poste. La GUI Qt regroupe les paramètres sous **Système → Configuration**.
 
-| Réglage | Utilité |
+| Rubrique | Pourquoi la consulter ? |
 |---|---|
-| [Système et utilisateurs](systeme.md) | Entité, coordonnées, logo et profils des opérateurs |
-| [Projets](projets.md) | Dossiers d’analyse et journal de traçabilité |
-| [Périphériques USB](peripheriques-usb.md) | Inventaire et listes de confiance ou de blocage |
-| [Mise à jour ClamAV](clamav.md) | Signatures antivirus, en ligne ou par clé USB |
+| [Système et utilisateurs](systeme.md) | Identité de l'entité, logo, opérateurs, préférences et outils |
+| [Affaires et projets](projets.md) | Créer, activer, archiver et retrouver une investigation |
+| [Périphériques USB](peripheriques-usb.md) | Inventaire, confiance, blocage et protection HID |
+| [Signatures ClamAV](clamav.md) | Mettre à jour et vérifier les signatures avant un scan |
 
-Pour une première analyse, renseigner l’entité, créer un utilisateur et un projet,
-puis les sélectionner dans la page **Analyser un périphérique**.
+**Pour un premier essai**, suivez plutôt le tutoriel [Ma première investigation](../getting-started.md). Les réglages USB et les montages doivent être vérifiés sur un support de test autorisé.

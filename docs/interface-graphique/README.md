@@ -5,39 +5,30 @@ nav_order: 40
 has_children: true
 ---
 
-# Interface graphique
+# Guide de l'interface graphique
 
-Vigil 2.0 ouvre la GUI Qt avec `vigil gui` ou `vigil-gui`. La navigation
-regroupe Espace de travail, Investigation et Système. La TUI Textual se lance
-avec `vigil tui` ou `vigil-tui`. Voir [Installation](../installation/README.md)
-pour les lanceurs et [Recette native](../development/native-recette.md) pour les essais.
+La **GUI PySide6/Qt** constitue le parcours principal pour découvrir Vigil sur la branche `main`.
 
-Les repères détaillés ci-dessous concernent la GUI Tkinter de Vigil 1.0,
-conservée dans `gui/`.
+## Se repérer
 
-## Pages et modules
-
-| Module dans `gui/` | Rôle |
+| Navigation principale | Utilité |
 |---|---|
-| `vigil_main_gui.py` | Accueil et lancement des actions |
-| `vigil_config_gui.py` | Entité et utilisateurs |
-| `vigil_project_manager.py` | Gestion et export des projets |
-| `vigil_usb_gui.py` | Inventaire et listes USB |
-| `vigil_clamav_update_gui.py` | Mise à jour antivirus |
-| `vigil_tools_gui.py` | Contexte, montage et analyses |
-| `vigil_stockage_gui.py` | Supports de travail en lecture/écriture |
-| `vigil_imager_gui.py` | Acquisition d’images disque |
-| `vigil_data.py` | Données partagées et journal de traçabilité |
-| `vigil_gui_base.py` | Fenêtre, navigation et widgets communs |
-| `vigil_icons.py` | Chargement des icônes |
+| **Espace de travail → Tableau de bord** | Activité, inventaire et état des supports |
+| **Investigation → Affaire en cours** | Gestion des affaires, explorateur, preuves, analyses, rapports et export |
+| **Investigation → Actions rapides** | Antivirus, stockage, acquisition RAW et clonage |
+| **Système → Configuration** | Entité, session, terminal et catalogue de modules |
 
-La recherche de menaces et le clonage se lancent directement dans Konsole.
+L'en-tête donne accès à l'opérateur et au choix de langue. La barre d'état rappelle les protections et les zones de montage. Les opérations matérielles restent soumises aux contrôles de Vigil.
 
-## Repères pour contribuer
+Pour une démonstration complète, consultez [Ma première investigation](../getting-started.md).
 
-- [Navigation](navigation.md) : fenêtre partagée et retour aux pages parentes.
-- [Thème](theme.md) : palette et composants de l’application ; charte Graphite du site.
-- [Icônes](icones.md) : SVG Lucide, cache et solution de secours.
+## GUI et TUI
 
-En développement, utiliser `VIGIL_BASE` et `VIGIL_DATA_DIR` pour isoler les données.
-Voir [Installation](../installation/README.md).
+- **GUI Qt :** `vigil gui` ou `vigil-gui`, pour les sessions graphiques.
+- **TUI Textual :** `vigil tui` ou `vigil-tui` existent comme points d'entrée expérimentaux, mais l'interface est **non fonctionnelle à ce stade**. Ne pas l'utiliser pour des investigations.
+
+## Documentation de l'interface historique
+
+Les sous-pages [Navigation](navigation.md), [Thème](theme.md) et [Icônes](icones.md) décrivent en partie **la GUI Tkinter de Vigil 1.0**, conservée sous `gui/`. Ces informations sont utiles aux contributeurs, mais ne représentent pas nécessairement les composants Qt actuels.
+
+Le développement Qt se trouve notamment dans `vigil/desktop.py`, `vigil/desktop_theme.py` et les panneaux associés. Voir la [documentation d'architecture](../development/architecture-v2.md) et le [parcours d'exécution Qt](../development/qt-execution.md).

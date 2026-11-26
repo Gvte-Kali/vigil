@@ -5,6 +5,9 @@ title: Icônes
 nav_order: 43
 ---
 
+
+> **Référence historique Vigil 1.0 (Tkinter).** La GUI Qt actuelle utilise d'autres composants. Voir le [guide de l'interface](README.md).
+
 # Icônes
 
 Les SVG Lucide sont stockés dans `data/icons/` et chargés par `gui/vigil_icons.py`.

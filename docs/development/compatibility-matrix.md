@@ -1,3 +1,10 @@
+---
+layout: default
+title: Matrice de compatibilité
+parent: Développement
+nav_order: 14
+---
+
 # Matrice de compatibilité Vigil 2.0
 
 État statique au commit `a2553ba`. « Partiel » signifie qu'un composant existe et qu'il reste un écart de recette. « Absent » désigne la capacité cible non identifiée dans les sources suivies. Les tests effectivement exécutés figurent dans la [baseline](test-baseline.md). Les chemins relatifs des scripts sont explicités dans l'[inventaire](phase-00-audit.md).

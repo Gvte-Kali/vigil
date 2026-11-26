@@ -5,17 +5,23 @@ nav_order: 20
 has_children: true
 ---
 
-# Actions
+# Choisir une opération dans Vigil
 
-Choisir l’opération selon le résultat attendu.
+La GUI Qt organise les fonctionnalités autour des **Affaires en cours** et des **Actions rapides**.
 
-| Action | Usage | Contexte |
+| Objectif | Point de départ | Précaution |
 |---|---|---|
-| [Recherche de menaces](menaces.md) | Triage USB, audit de format et antivirus | Opérateur, sans projet |
-| [Analyse](analyse.md) | Examiner et documenter les fichiers | Utilisateur et projet dans l’interface |
-| [Stockage](stockage.md) | Déposer ou récupérer des fichiers de travail | Lecture/écriture |
-| [Copie forensique](copie-forensique.md) | Créer une image RAW, E01 ou AFF | Source protégée en lecture seule |
-| [Clonage](clonage.md) | Copier un disque vers un autre | Cible entièrement écrasée |
+| Examiner et conserver des fichiers | [Analyser un support](analyse.md) | Source protégée en lecture seule |
+| Rechercher des menaces | [Antivirus](antivirus.md) et [recherche de menaces](menaces.md) | Résultats limités au contenu réellement examiné |
+| Déposer des résultats | [Stockage](stockage.md) | Zone RW séparée des sources |
+| Créer une image | [Copie forensique](copie-forensique.md) | Vérifier le format et la destination |
+| Copier un disque vers un autre | [Clonage](clonage.md) | **La destination sera écrasée** |
+| Lire les résultats | [Rapports PDF](../rapports-pdf/README.md) | Vérifier les erreurs et avertissements |
 
-Les analyses et les opérations sur les supports sont interactives dans **Konsole**.
-Lire le bilan du terminal avant de le fermer.
+## Analyses de fichiers
+
+[Recensement](recensement.md) · [Images](images.md) · [Vidéos](videos.md) · [Audio](audio.md) · [Bureautique](bureautique.md) · [Archives](archives.md) · [Chiffrement](crypto.md) · [Entropie](entropie.md) · [Volumineux](volumineux.md) · [Visages](visages.md) · [Orchestrateur](orchestrateur.md).
+
+Certaines sous-pages décrivent les **scripts hérités de Vigil 1.0**. Ils restent documentés à titre technique, mais leurs intitulés d'écran peuvent différer de la GUI Qt actuelle.
+
+Pour une première utilisation, commencez par [Ma première investigation](../getting-started.md).

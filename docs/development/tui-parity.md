@@ -1,4 +1,13 @@
+---
+layout: default
+title: Parité Textual
+parent: Développement
+nav_order: 25
+---
+
 # Parité du workspace Textual
+
+> **Avertissement : TUI expérimentale et non fonctionnelle actuellement.** Ce document décrit l'implémentation et des tests partiels, et non une interface validée pour les investigations.
 
 Référence visuelle et ergonomique : workspace PySide6 du commit
 `5644a9781c68b63811dc23183493ddf41cddb0c6`. Les données, les commandes

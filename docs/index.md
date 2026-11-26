@@ -2,43 +2,51 @@
 layout: default
 title: Accueil
 nav_order: 1
+has_toc: false
 ---
 
-<p class="eyebrow">Documentation / Vigil</p>
+<div class="vigil-hero" markdown="1">
 
-# Examiner. Comprendre. Tracer.
+<p class="eyebrow">Vigil · Documentation utilisateur</p>
 
-Vigil est une application Linux d’analyse de supports numériques. Elle réunit
-montage en lecture seule, analyses de fichiers, recherche de menaces et rapports PDF.
+# Examinez. Préservez. Documentez.
 
-[Commencer l’installation](installation/README.md){: .btn .btn-primary }
-[Analyser un support](actions/analyse.md){: .btn }
+Vigil est un environnement d'investigation numérique pour Linux : examen des supports, accès en lecture seule, analyse de fichiers, conservation des preuves et rapports PDF.
 
-## Première utilisation
+<span class="vigil-pill">Interface graphique Qt</span><span class="vigil-pill">Preuves et SHA-256</span><span class="vigil-pill">Linux · Debian et dérivés testés</span>
 
-1. Lancer `vigil` sur le poste installé.
-2. Renseigner l’[entité et les utilisateurs](configuration/systeme.md).
-3. Créer un [projet](configuration/projets.md), puis sélectionner l’utilisateur et le projet dans la page d’analyse.
-4. Monter le support, lancer les analyses et consulter les rapports dans `/opt/vigil/rapports/`.
-5. Démonter le support, puis [exporter le projet](actions/export.md).
+[Commencer en 10 étapes](getting-started.md){: .btn .btn-primary }
+[Installer Vigil](installation/README.md){: .btn }
 
-## Choisir son parcours
+</div>
 
-| Besoin | Point d’entrée |
-|---|---|
-| Préparer le poste | [Installation](installation/README.md) |
-| Régler l’entité, les projets et les périphériques | [Configuration](configuration/README.md) |
-| Chercher des menaces sans projet | [Recherche de menaces](actions/menaces.md) |
-| Examiner des fichiers dans un projet | [Analyse](actions/analyse.md) |
-| Créer une image ou cloner un disque | [Actions](actions/README.md) |
-| Comprendre les résultats | [Rapports PDF](rapports-pdf/README.md) |
-| Contribuer à l’interface | [Interface graphique](interface-graphique/README.md) |
+## Que souhaitez-vous faire ?
 
-## Repères essentiels
+<div class="vigil-card-grid">
+  <div class="vigil-card"><h3><a href="getting-started.html">Première investigation</a></h3><p>Un parcours guidé de l'ouverture de Vigil jusqu'à l'export d'une affaire.</p></div>
+  <div class="vigil-card"><h3><a href="actions/README.html">Découvrir les outils</a></h3><p>Acquisition, montage, recherche de menaces, analyses et rapports.</p></div>
+  <div class="vigil-card"><h3><a href="configuration/README.html">Configurer Vigil</a></h3><p>Entité, opérateurs, signatures ClamAV et protections USB.</p></div>
+  <div class="vigil-card"><h3><a href="faq.html">Aide et dépannage</a></h3><p>Questions fréquentes, erreurs courantes et bonnes pratiques.</p></div>
+</div>
 
-- **Analyse** : support monté en lecture seule dans `/investigation` ; utilisateur et projet requis dans l’interface.
-- **Recherche de menaces** : parcours autonome avec opérateur et journal de traçabilité propres, sans projet.
-- **Stockage** : support monté en lecture/écriture dans `/stockage`, pour les fichiers de travail.
-- **Intégrité** : les empreintes SHA-256 permettent de comparer les contenus ; elles ne constituent pas une signature numérique authentifiée.
+## Comprendre l'essentiel
 
-Vigil applique des protections logicielles. Leur portée dépend du support et du protocole : le verrouillage bloc d’un disque ne s’applique pas à un téléphone MTP.
+1. **Source d'investigation :** un support examiné sous `/investigation` avec des protections logicielles de lecture seule.
+2. **Affaire :** le contexte qui rassemble opérateur, preuves, analyses et traçabilité.
+3. **Preuve conservée :** une copie contrôlée et rattachée à l'affaire, avec une empreinte de référence.
+4. **Stockage de travail :** `/stockage`, destiné aux fichiers écrits et aux supports de destination.
+5. **Rapports :** les résultats sont consignés en PDF et, selon l'analyse, en SQLite, TSV ou journaux.
+
+## Quelle version est documentée ?
+
+<div class="vigil-note"><strong>Référence : branche <code>main</code>.</strong> La GUI Qt est le parcours utilisateur principal. La TUI Textual est expérimentale et non fonctionnelle à ce stade ; elle ne doit pas être utilisée pour des investigations. Certaines capacités du Core restent en développement ou en recette. Les essais documentés portent principalement sur Debian et ses dérivés. Aucune compatibilité matérielle ou multi-distribution non vérifiée n'est garantie.</div>
+
+Consultez la [matrice de compatibilité](compatibility.md) et les [limites de sécurité](faq.md#les-sources-sont-elles-vraiment-protegees) avant de travailler sur de véritables preuves.
+
+## Aller plus loin
+
+- [Installation](installation/README.md) et [désinstallation](installation/desinstallation.md)
+- [Guide de l'interface](interface-graphique/README.md)
+- [Rapports PDF](rapports-pdf/README.md)
+- [Références techniques et développement](development/architecture-v2.md)
+- [Code source GitHub](https://github.com/Gvte-Kali/vigil)

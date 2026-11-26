@@ -1,3 +1,10 @@
+---
+layout: default
+title: Migration des commandes
+parent: Développement
+nav_order: 13
+---
+
 # Transition de la commande Vigil
 
 ## Inventaire initial

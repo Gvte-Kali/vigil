@@ -2,162 +2,103 @@
 layout: default
 title: Installation
 nav_order: 50
+has_children: true
 ---
 
-# Installation
+# Installer Vigil
 
-Vigil cible un poste dédié sous ParrotOS, avec une base Debian.
-Le script de post-installation configure le système et nécessite les droits administrateur.
+Cette page décrit les procédures connues pour **`main`**, avec une GUI Qt comme parcours utilisateur principal. Les installations système qui manipulent les périphériques requièrent un administrateur et sont à réaliser d'abord dans une VM de test.
 
-## Installation native dans un venv utilisateur
+## Quel mode choisir ?
 
-L’installateur détecte Debian et ses dérivés, Arch, Fedora et openSUSE.
-Pour une validation sans privilèges sur Parrot/Debian ou Arch/Omarchy,
-suivre la [recette native GUI et TUI](../development/native-recette.md).
+| Mode | Public | Modifications |
+|---|---|---|
+| **Développement utilisateur** | Essayer la GUI, les affaires et les données de démonstration | Venv et fichiers locaux ; pas de configuration de montage privilégié |
+| **Installation de site** | Poste Debian/Parrot dédié aux opérations forensiques | Paquets APT, `/opt/vigil`, lanceurs, règles udev et protections contrôlées |
+| **Autres Linux** | Développeurs et testeurs | Recette `install_native.py --dry-run` ; opérations matérielles à valider |
 
-    python3 scripts/post-install/install_native.py --profile complet --dry-run
-    python3 scripts/dev/workspace.py setup
-    python3 scripts/dev/workspace.py doctor
+## Prérequis
 
-## Installer et lancer
+- Debian, Parrot ou dérivé pour l'installation de site documentée.
+- Compte utilisateur ordinaire avec `sudo` pour les modifications système.
+- Git, Python **3.11+**, espace disque suffisant et une sauvegarde des affaires existantes.
+- Support de test pour la première recette ; ne pas utiliser de preuve irremplaçable.
 
-Sur Parrot/Debian, partir d’un compte opérateur avec sudo, Git et
-Python 3.11 ou plus récent. La procédure suivante suppose que `/opt/vigil`
-est absent ou vient d’être sauvegardé. Sur un site existant, consulter
-[la transition des privilèges](../development/phase-01-transition.md).
+## Essayer la GUI sans post-installation
+
+Dans un dossier utilisateur :
+
+```bash
+git clone --branch main https://github.com/Gvte-Kali/vigil.git
+cd vigil
+python3 -m venv .venv
+.venv/bin/python -m pip install -e '.[desktop]'
+.venv/bin/vigil doctor
+.venv/bin/vigil-gui
+```
+
+Cette installation **ne configure pas** les protections système, les règles udev ou les zones de montage privilégiées. Les opérations matérielles nécessitant ces composants peuvent être indisponibles. Pour des tests sans privilèges et avec des fixtures, voir la [recette native](../development/native-recette.md).
+
+## Installation de site sur Debian/Parrot
+
+**Attention : cette procédure modifie le système.** Faites-la d'abord dans une VM avec instantané. Vérifiez le plan avant de confirmer l'installation.
 
 ```bash
 sudo apt-get update
 sudo apt-get install -- git python3
 sudo mkdir -- /opt/vigil
 sudo chown -- "$(id -u):$(id -g)" /opt/vigil
-git clone --branch vigil-2.0 --single-branch https://github.com/Gvte-Kali/vigil.git /opt/vigil
+git clone --branch main --single-branch https://github.com/Gvte-Kali/vigil.git /opt/vigil
 cd /opt/vigil
 install -d -m 0700 logs rapports
 bash scripts/post-install/post_install_vigil.sh --dry-run
-bash scripts/post-install/post_install_vigil.sh &&
-  hash -r && command -v vigil vigil-gui vigil-tui &&
-  vigil --version && vigil --help && vigil doctor && vigil gui
 ```
 
-Le post-install met à jour les index APT, simule la résolution des paquets,
-puis les installe. Il enregistre les paquets nouvellement installés dans
-`/opt/vigil/data/apt-installed-by-vigil.txt`. Pour refaire l’installation depuis
-zéro, suivre la [procédure de remise à zéro](desinstallation.md).
-
-Le post-install place le venv dans `/opt/vigil/.venv`. En terminal interactif,
-`vigil`, `vigil tui` et `vigil-tui` ouvrent le workspace Textual supervisé.
-Les sous-commandes CLI restent automatisables. Le raccourci graphique appelle `/usr/local/bin/vigil-gui`, qui démarre Qt
-avec les données de travail dans `/opt/vigil/data/state`.
-La configuration des signatures se trouve dans le sous-dossier `clamav`.
-Un lancement éditable depuis le code dans /opt/vigil utilise aussi cet
-emplacement pour la base, la custody historique, les signatures, les
-instantanés et les préférences Qt de chaque UID. Hors de /opt/vigil,
-le mode développement continue à utiliser XDG ou ~/.local/state, sauf
-si VIGIL_STATE_DIR désigne un chemin absolu. Les scans rapides conservent
-l’original PDF par exécution et publient une copie distincte dans
-/opt/vigil/rapports.
-
-Les anciennes données utilisateur ne sont pas déplacées automatiquement.
-Fermer toutes les sessions Vigil et leurs scripts, sauvegarder les deux
-arbres et vérifier si les deux contiennent déjà une base cases.sqlite.
-S’il existe deux bases, choisir laquelle ouvrir pour organiser la
-migration des affaires. Ne pas superposer les deux. Si le dossier cible
-ne contient aucune donnée de travail, copier l’arbre d’état utilisateur
-vers /opt/vigil/data/state. Qt reprend la langue de l’ancienne configuration
-au premier démarrage si le nouveau fichier de préférences est absent.
-
-Après installation, [configurer l’entité et les utilisateurs](../configuration/systeme.md).
-Dans Actions rapides, lancer la mise à jour des signatures avant le premier
-scan. Pendant la recette, ouvrir aussi `vigil tui` et vérifier la protection
-et sa restitution à la fermeture avec un support synthétique.
-
-## Reprendre le post-install
-
-Si le post-install s’arrête sur `/etc/sudoers.d/vigil`, les lanceurs sont
-encore absents. Garder le clone dans `/opt/vigil` et examiner le fichier
-depuis un compte administrateur dont les droits sont indépendants de ce fichier.
+Après examen du plan APT, des modifications système, de vos sauvegardes et des règles sudoers éventuelles :
 
 ```bash
-sudo visudo -c
-sudo cat -- /etc/sudoers.d/vigil
+bash scripts/post-install/post_install_vigil.sh
+hash -r
+vigil --version
+vigil doctor
+vigil gui
 ```
 
-Si le fichier contient uniquement la règle héritée de Vigil, déplacer la
-sauvegarde hors de `/etc/sudoers.d`. Si le fichier contient aussi des règles
-utiles à d’autres opérations, demander à l’administrateur de les conserver
-dans un fichier distinct validé avec `visudo` avant de retirer l’ancien fichier.
+Le post-install prépare `/opt/vigil/.venv`, `/investigation`, `/stockage`, les lanceurs, les règles udev et l'intégration FreshClam/AppArmor lorsque pertinente. Les paquets ajoutés par APT sont consignés dans `/opt/vigil/data/apt-installed-by-vigil.txt`.
 
-```bash
-sudo install -d -m 0700 /root/vigil-sudoers-backup
-sudo mv -- /etc/sudoers.d/vigil "/root/vigil-sudoers-backup/vigil-$(date +%Y%m%d-%H%M%S)"
-sudo visudo -c
-sudo -l
-```
+## Démarrer les interfaces
 
-Depuis le compte opérateur, relancer le post-install. La suite s’exécute
-uniquement si le post-install réussit.
+- `vigil gui` / `vigil-gui` : GUI Qt, parcours principal.
+- `vigil` / `vigil tui` / `vigil-tui` : lanceurs expérimentaux de la TUI, **non fonctionnelle actuellement**. Utiliser `vigil gui` pour les investigations.
+- `vigil doctor` : diagnostic des dépendances.
 
-```bash
-cd /opt/vigil && bash scripts/post-install/post_install_vigil.sh &&
-  hash -r && command -v vigil vigil-gui vigil-tui &&
-  vigil --version && vigil gui
-```
+Une installation de site utilise normalement `/opt/vigil/data/state`. En développement, Vigil peut utiliser les chemins XDG. Si plusieurs `cases.sqlite` existent, **ne les superposez pas** : sauvegardez et vérifiez leur provenance.
 
-## Mettre à jour les lanceurs d’une installation existante
+## Mettre à jour une installation existante
 
-Fermer Vigil, puis lancer depuis la session opérateur.
+Fermer Vigil et les opérations actives, vérifier que les supports sont démontés et sauvegarder les données, puis :
 
 ```bash
 cd /opt/vigil
 git pull --ff-only
 bash scripts/post-install/update-cli.sh
 hash -r
-command -v vigil vigil-tui
-vigil --version
-vigil --help
+vigil doctor
 ```
 
-Cette mise à jour réinstalle le paquet, prépare les lanceurs reconnus et réapplique l’accès FreshClam au dossier de signatures du site.
-Un conflit de commande est signalé avec son chemin. Le détail des
-emplacements gérés, du retour arrière et des raccourcis personnalisés
-figure dans [la transition CLI](../development/cli-command-transition.md).
+L'outil met à jour les lanceurs et la configuration autorisée de FreshClam. Un conflit de lanceur doit être examiné, pas écrasé.
 
-## Lancer le workspace Textual
+## Erreurs et restauration
 
-Sur un poste Parrot déjà installé dans `/opt/vigil`, fermer les sessions et
-mettre à jour les lanceurs avec la procédure précédente. Le script publie
-`/usr/local/bin/vigil-tui` et installe les dépendances dans le venv du site.
-Lancer ensuite `vigil`, `vigil tui` ou `vigil-tui` depuis un terminal local
-ou une session SSH interactive. Ces trois commandes ouvrent la même TUI
-supervisée. `vigil-gui` et `vigil gui` ouvrent Qt.
+Si l'installateur signale `/etc/sudoers.d/vigil`, **ne supprimez pas de règle à l'aveugle**. Depuis un compte administrateur indépendant :
 
-La TUI utilise la base du site et se lance depuis le compte opérateur.
-Les opérations privilégiées demandent une autorisation dans le terminal
-intégré. Options utiles : `vigil-tui --lang en` pour l’anglais et
-`vigil-tui --db /chemin/vers/vigil-dev.sqlite` pour une base de test.
+```bash
+sudo visudo -c
+sudo cat -- /etc/sudoers.d/vigil
+```
 
-La [matrice de parité](../development/tui-parity.md) détaille les parcours
-raccordés et les recettes encore ouvertes.
+L'administrateur doit sauvegarder et migrer les règles utiles, puis valider `visudo -c`. En cas de retour arrière, suivez la [procédure de remise à zéro avec sauvegarde](desinstallation.md).
 
-## Modifications du poste
+## Premier lancement
 
-- Installation APT des paquets de `scripts/post-install/requirements.txt`, avec les hooks habituels de la distribution.
-- Préparation des zones démontées `/investigation` et `/stockage`, et des dossiers de travail.
-- Publication des trois lanceurs, du raccourci et de l’icône.
-- Installation de l’assistant et de la règle udev. L’autorisation sudo à l’ouverture active la protection des nouveaux périphériques pendant la session.
-- Ajout des règles AppArmor ciblées si le profil FreshClam est présent.
-- La politique UDisks2, le bureau et l’accès RDP relèvent de l’administration du poste. Sur une machine dédiée, configurer ces options séparément si nécessaire.
-
-Les dépendances système comprennent notamment Chafa et Konsole, les
-bibliothèques Qt hôtes, ClamAV, les outils d’imagerie et ReportLab pour les
-rapports historiques. PySide6, Textual et les dépendances Core sont installés
-par pip dans le venv.
-
-## Développement local
-
-Utiliser la [recette native GUI et TUI](../development/native-recette.md)
-pour un venv, des données de test et des fixtures isolés. Le post-install de
-site vise la famille Debian. Sur les autres distributions, utiliser
-`install_native.py --profile complet --dry-run` pour contrôler le plan
-utilisateur et les paquets proposés.
+[Ma première investigation](../getting-started.md) · [ClamAV](../configuration/clamav.md) · [Compatibilité](../compatibility.md).
