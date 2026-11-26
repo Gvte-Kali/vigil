@@ -11,14 +11,6 @@ vigil_prepare_freshclam() {
     fi
     mkdir -p -m 0700 -- "$(dirname -- "$signature_dir")" "$signature_dir" || return 1
     [ -f "$profile" ] || return 0
-    if [ -x /usr/sbin/apparmor_parser ]; then
-        parser=/usr/sbin/apparmor_parser
-    elif [ -x /sbin/apparmor_parser ]; then
-        parser=/sbin/apparmor_parser
-    elif ! parser=$(command -v apparmor_parser); then
-        printf '%s\n' 'apparmor_parser indisponible / unavailable. Voir / See docs/configuration/clamav.md.' >&2
-        return 1
-    fi
     if ! grep -Eq '^[[:space:]]*#?include([[:space:]]+if exists)?[[:space:]]+<local/usr.bin.freshclam>' "$profile"; then
         printf 'FreshClam : inclusion locale manquante / missing local include: %s\n' "$profile" >&2
         return 1
@@ -31,6 +23,14 @@ vigil_prepare_freshclam() {
         fi
     done
     if [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null || true)" = Y ]; then
+        if [ -x /usr/sbin/apparmor_parser ]; then
+            parser=/usr/sbin/apparmor_parser
+        elif [ -x /sbin/apparmor_parser ]; then
+            parser=/sbin/apparmor_parser
+        elif ! parser=$(command -v apparmor_parser); then
+            printf '%s\n' 'apparmor_parser indisponible / unavailable. Voir / See docs/configuration/clamav.md.' >&2
+            return 1
+        fi
         sudo "$parser" -r "$profile" || return 1
     fi
 }

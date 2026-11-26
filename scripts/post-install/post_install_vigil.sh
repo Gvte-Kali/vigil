@@ -4,13 +4,35 @@ set -euo pipefail
 script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 . "$script_directory/../lib/vigil-terminal.sh"
 . "$script_directory/../lib/vigil-launchers.sh"
+requirements="$script_directory/requirements.txt"
+mapfile -t packages < <(awk 'NF && $1 !~ /^#/ { print $1 }' "$requirements")
+if [ "${#packages[@]}" -eq 0 ]; then
+    echo "Liste APT absente ou vide : $requirements" >&2
+    exit 1
+fi
+case "${1:-}" in
+    --dry-run)
+        printf 'APT :'
+        printf ' %s' "${packages[@]}"
+        printf '\nLe post-install prépare /opt/vigil/.venv, les zones, les lanceurs, udev et AppArmor si présent.\n'
+        exit 0 ;;
+    '') ;;
+    *) echo "Usage: $0 [--dry-run]" >&2; exit 2 ;;
+esac
+if [ "$EUID" -eq 0 ]; then
+    echo "Démarrez le post-install depuis la session de l'opérateur, avec sudo interactif."
+    exit 1
+fi
+if [ "$script_directory" != /opt/vigil/scripts/post-install ]; then
+    echo "Installez le dépôt dans /opt/vigil avant le post-install." >&2
+    exit 1
+fi
+case "$(python3 -c 'import sys; print(int(sys.version_info >= (3, 11)))')" in
+    1) ;;
+    *) echo "Python 3.11 minimum est requis." >&2; exit 1 ;;
+esac
 vigil_launchers_preflight /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop
-
 vigil_banner 'Vigil · Installation de Vigil / Vigil installation'
-printf '%s\n' 'FR — sudo prépare les dossiers système, installe les dépendances et configure Vigil sur ce poste.' \
-    'EN — sudo prepares system folders, installs dependencies and configures Vigil on this workstation.' ''
-
-# Les installations existantes doivent retirer la règle héritée manuellement.
 sudo -v
 if sudo test -e /etc/sudoers.d/vigil; then
     echo "Règle sudoers Vigil existante : faites-la examiner et retirer par l'administrateur."
@@ -30,15 +52,33 @@ check_vigil_zones_unmounted() {
 }
 check_vigil_zones_unmounted
 
-if [ "$EUID" -eq 0 ]; then
-    echo "Démarrez le post-install depuis la session de l'opérateur, avec sudo interactif."
-    exit 1
-fi
 if [ ! -w /opt/vigil ] || [ ! -w /opt/vigil/data ] || [ ! -w /opt/vigil/logs ] || [ ! -w /opt/vigil/rapports ]; then
     echo "Faites préparer les répertoires de données par l'administrateur."
     echo "Voir docs/development/phase-01-transition.md."
     exit 1
 fi
+
+# Keep a record of packages newly installed during the APT transaction.
+manifest=/opt/vigil/data/apt-installed-by-vigil.txt
+apt_snapshot() {
+    dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' |
+        awk '$1 == "ii" { print $2 }' | LC_ALL=C sort -u
+}
+apt_work=$(mktemp -d)
+trap 'rm -rf -- "$apt_work"' EXIT
+sudo apt-get update
+sudo apt-get -s install -- "${packages[@]}" >/dev/null
+apt_snapshot > "$apt_work/before"
+apt_status=0
+sudo apt-get install -y -- "${packages[@]}" || apt_status=$?
+apt_snapshot > "$apt_work/after"
+LC_ALL=C comm -13 "$apt_work/before" "$apt_work/after" > "$apt_work/new"
+if [ -f "$manifest" ]; then
+    cat "$manifest" >> "$apt_work/new"
+fi
+LC_ALL=C sort -u "$apt_work/new" > "$apt_work/manifest"
+install -m 0600 "$apt_work/manifest" "$manifest"
+[ "$apt_status" -eq 0 ] || exit "$apt_status"
 
 # --- 1. Verifier et creer les repertoires necessaires ---
 echo "Création des répertoires..."
@@ -58,64 +98,6 @@ sudo install -d -o root -g root -m 0755 /investigation
 sh /opt/vigil/scripts/post-install/prepare-storage.sh
 sudo mkdir -p /opt/vigil/{data,scripts,logs,rapports}
 echo "✅ Répertoires de base présents."
-
-# Install the hotplug rule without replaying events for devices already connected.
-sh /opt/vigil/scripts/post-install/install-hotplug.sh
-
-# --- 2. Installer les dependances depuis requirements.txt ---
-# Les paquets y sont documentes (un commentaire par paquet).
-# La liste ci-dessous reste synchronisee avec ce fichier : elle sert de
-# secours si requirements.txt est introuvable.
-REQUIREMENTS_FILE="/opt/vigil/scripts/post-install/requirements.txt"
-FALLBACK_PKGS="util-linux coreutils chafa jq eject cryptsetup clamav clamav-daemon clamav-freshclam xrdp xorgxrdp udisks2 ufw konsole kdialog zenity jmtpfs ntfs-3g exfat-fuse dc3dd ewf-tools afflib-tools sleuthkit autopsy yara guymager gnupg ldmtool exiftool ffmpeg p7zip-full zstd binwalk pv file gdisk cloud-guest-utils parted imagemagick feh python3 python3-venv python3-tk python3-pil python3-pip python3-reportlab python3-cairosvg libcairo2 facedetect python3-opencv"
-if [ -f "$REQUIREMENTS_FILE" ]; then
-    echo "Installation des dépendances depuis $REQUIREMENTS_FILE..."
-    sudo apt update
-    # Filtrer les commentaires (#) et lignes vides avant de passer a apt
-    PKGS=$(grep -v '^[[:space:]]*#' "$REQUIREMENTS_FILE" | grep -v '^[[:space:]]*$' | tr '\n' ' ')
-    if [ -n "$PKGS" ]; then
-        sudo apt install -y $PKGS
-    fi
-    echo "✅ Dépendances installées."
-else
-    echo "❌ Fichier $REQUIREMENTS_FILE introuvable. Installation des dépendances de base..."
-    sudo apt update
-    sudo apt install -y $FALLBACK_PKGS
-fi
-
-# --- 3. Configurer le service RDP (optionnel) ---
-# L'accès RDP n'est pertinent que pour un usage à distance (serveur forensique
-# accédé depuis un autre poste). Sur une station de travail dédiée ou un live USB,
-# on n'en a pas besoin et on évite d'ouvrir un port inutile.
-echo ""
-echo "Souhaitez-vous activer l'accès RDP (xrdp) sur cette machine ?"
-echo "  [o] Oui — accès distant via RDP (ouverture du port 3389/tcp)"
-echo "  [n] Non  — station de travail locale, pas d'accès distant"
-echo -ne "Votre choix (o/n) [n] : "
-read -r ENABLE_RDP || ENABLE_RDP=""
-ENABLE_RDP="${ENABLE_RDP:-n}"
-case "$ENABLE_RDP" in
-    o|O|y|Y)
-        echo "Configuration du service RDP..."
-        sudo systemctl enable --now xrdp
-        sudo ufw allow 3389/tcp
-        echo "✅ Service RDP configuré."
-        ;;
-    *)
-        echo "RDP non activé."
-        ;;
-esac
-
-# --- 4. Désactiver udisks2 pour éviter le montage automatique ---
-echo "Configuration de udisks2..."
-sudo systemctl mask udisks2.service
-sudo systemctl stop udisks2.service
-sudo tee /etc/udisks2/udisks2.conf << 'EOF'
-[udisks2]
-auto_mount=false
-EOF
-sudo systemctl daemon-reload
-echo "✅ udisks2 configuré pour ne pas monter automatiquement les périphériques."
 
 # --- 6. Initialiser les logs et données ---
 mkdir -p /opt/vigil/data/{config/logo,projects,users,scans,usb}
@@ -167,62 +149,8 @@ elif command -v kbuildsycoca5 >/dev/null 2>&1; then
 fi
 echo "✅ Raccourci créé : /usr/share/applications/vigil.desktop (icône : $VIGIL_ICON)"
 
-# --- 9. Ajouter les emplacements Dolphin (item 4 du checklist) ---
-# Dolphin (KDE) stocke les emplacements dans ~/.local/share/user-places.xbel
-# (format XBEL). On ajoute /investigation, /stockage, /rapports de façon
-# idempotente : on ne réécrit pas un emplacement déjà présent.
-echo "Ajout des emplacements Dolphin..."
-PLACES_FILE="$HOME/.local/share/user-places.xbel"
-mkdir -p "$(dirname "$PLACES_FILE")"
-# Créer le fichier s'il n'existe pas avec l'en-tête XBEL minimal
-if [ ! -f "$PLACES_FILE" ]; then
-    cat > "$PLACES_FILE" <<'XBEL_EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE xbel>
-<xbel xmlns:kde="http:// kde.org/xbel-ns/1.0/" xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info" xmlns:bookmark="http://www.freedesktop.org/standards/xesam/1.0#">
-</xbel>
-XBEL_EOF
-fi
+# Install the hotplug rule without replaying events for devices already connected.
+sh /opt/vigil/scripts/post-install/install-hotplug.sh
 
-_add_dolphin_place() {
-    local target="$1"
-    local label="$2"
-    # Idempotence : on saute si l'emplacement est déjà référencé (par son href)
-    if grep -q "href=\"file://${target}\"" "$PLACES_FILE" 2>/dev/null; then
-        return
-    fi
-    local tmpfile
-    tmpfile=$(mktemp)
-    awk -v target="$target" -v label="$label" '
-        /<\/xbel>/ {
-            print "  <bookmark href=\"file://" target "\">"
-            print "    <title>" label "</title>"
-            print "    <info>"
-            print "      <metadata owner=\"http://kde.org\">"
-            print "        <kde:icon name=\"folder\"/>"
-            print "      </metadata>"
-            print "    </info>"
-            print "  </bookmark>"
-        }
-        { print }
-    ' "$PLACES_FILE" > "$tmpfile" && mv "$tmpfile" "$PLACES_FILE"
-}
-_add_dolphin_place "/investigation" "Investigation"
-_add_dolphin_place "/stockage" "Stockage"
-_add_dolphin_place "/rapports" "Rapports"
-echo "✅ Emplacements ajoutés à Dolphin : /investigation /stockage /rapports"
-
-# Les signatures du profil Vigil sont téléchargées sur demande depuis Qt.
-echo "Pour initialiser les signatures locales, ouvrez Vigil puis Actions rapides > Mettre à jour l’antivirus."
-
-echo "Script de post-installation terminé."
-
-echo ""
-echo "=== Étapes manuelles restantes ==="
-echo "Consultez post-install-checked.txt pour le détail :"
-echo "  - Bords d'écran : désactiver les actions (Paramètres > Souris & pavé tactile)"
-echo "  - Pop-up USB KDE : désactiver \"Disques et Périphériques\" (icônes cachées > Entrées)"
-echo "  - Barre des tâches : déplacer en bas (clic droit > Configurer le panneau)"
-echo ""
-echo "Ces éléments cosmétiques KDE sont figés dans l'image disque préconfigurée,"
-echo "ils ne sont pas automatisés (dépendent du layout Plasma de la cible)."
+echo "Installation terminée. Pour initialiser les signatures, ouvrez Vigil puis Actions rapides > Mettre à jour l’antivirus."
+echo "Inventaire des paquets nouvellement installés : $manifest"

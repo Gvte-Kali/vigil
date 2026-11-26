@@ -26,6 +26,10 @@ PHASE 02 — CONSOLIDATION DU CORE
 PHASE 03 — SÉCURITÉ, PORTABILITÉ ET INSTALLATION NATIVES
 [x] Installer en venv utilisateur, préparer la recette isolée GUI/TUI et
     proposer les profils minimal, forensic et complet avec simulation.
+[x] Valider le plan APT Debian 13 amd64 sur une base dpkg vierge,
+    l’installation du profil complet dans un venv neuf et les trois lanceurs.
+[ ] Rejouer le post-install privilégié, la purge et la réinstallation
+    sur VM Parrot/Debian avec la documentation de remise à zéro.
 [ ] Valider les paquets réellement installés sur les distributions cibles.
 [ ] Utiliser XDG, détecter les dépendances et adapter l’installation native
     à Debian, Ubuntu, Kali, Parrot, Fedora, Arch et openSUSE.

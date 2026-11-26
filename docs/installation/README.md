@@ -21,14 +21,33 @@ suivre la [recette native GUI et TUI](../development/native-recette.md).
 
 ## Installer et lancer
 
-Consulter la [procédure de transition des privilèges](../development/phase-01-transition.md), puis placer le dépôt dans `/opt/vigil` et lancer depuis la session opérateur :
+Sur Parrot/Debian, partir d’un compte opérateur avec sudo, Git et
+Python 3.11 ou plus récent. La procédure suivante suppose que `/opt/vigil`
+est absent ou vient d’être sauvegardé. Sur un site existant, consulter
+[la transition des privilèges](../development/phase-01-transition.md).
 
 ```bash
+sudo apt-get update
+sudo apt-get install -- git python3
+sudo mkdir -- /opt/vigil
+sudo chown -- "$(id -u):$(id -g)" /opt/vigil
+git clone --branch vigil-2.0 --single-branch https://github.com/Gvte-Kali/vigil.git /opt/vigil
 cd /opt/vigil
+install -d -m 0700 logs rapports
+bash scripts/post-install/post_install_vigil.sh --dry-run
 bash scripts/post-install/post_install_vigil.sh
+hash -r
+command -v vigil vigil-gui vigil-tui
+vigil --version
 vigil --help
-/usr/local/bin/vigil-gui
+vigil doctor
+vigil gui
 ```
+
+Le post-install met à jour les index APT, simule la résolution des paquets,
+puis les installe. Il enregistre les paquets nouvellement installés dans
+`/opt/vigil/data/apt-installed-by-vigil.txt`. Pour refaire l’installation depuis
+zéro, suivre la [procédure de remise à zéro](desinstallation.md).
 
 Le post-install place le venv dans `/opt/vigil/.venv`. En terminal interactif,
 `vigil`, `vigil tui` et `vigil-tui` ouvrent le workspace Textual supervisé.
@@ -52,9 +71,10 @@ ne contient aucune donnée de travail, copier l’arbre d’état utilisateur
 vers /opt/vigil/data/state. Qt reprend la langue de l’ancienne configuration
 au premier démarrage si le nouveau fichier de préférences est absent.
 
-L’accès RDP est proposé pendant l’installation et désactivé par défaut.
-Après installation, terminer les réglages KDE décrits dans `post-install-checked.txt`
-à la racine du dépôt, puis [configurer l’entité et les utilisateurs](../configuration/systeme.md).
+Après installation, [configurer l’entité et les utilisateurs](../configuration/systeme.md).
+Dans Actions rapides, lancer la mise à jour des signatures avant le premier
+scan. Pendant la recette, ouvrir aussi `vigil tui` et vérifier la protection
+et sa restitution à la fermeture avec un support synthétique.
 
 ## Mettre à jour les lanceurs d’une installation existante
 
@@ -94,36 +114,22 @@ raccordés et les recettes encore ouvertes.
 
 ## Modifications du poste
 
-- Installation des paquets de `scripts/post-install/requirements.txt`.
-- Création de `/investigation`, `/stockage` et des dossiers de données, journaux et rapports.
-- Désactivation du montage automatique et masquage d’`udisks2`.
-- Initialisation des données. L’administrateur vérifie la politique sudo du poste.
-- Création de la commande `vigil`, du raccourci et des emplacements Dolphin.
-- Configuration de l’accès FreshClam aux signatures sous /opt/vigil. La mise à jour est lancée depuis Qt.
-- Si accepté : activation de `xrdp` et configuration du port 3389/tcp via UFW.
+- Installation APT des paquets de `scripts/post-install/requirements.txt`, avec les hooks habituels de la distribution.
+- Préparation des zones démontées `/investigation` et `/stockage`, et des dossiers de travail.
+- Publication des trois lanceurs, du raccourci et de l’icône.
+- Installation de l’assistant et de la règle udev. L’autorisation sudo à l’ouverture active la protection des nouveaux périphériques pendant la session.
+- Ajout des règles AppArmor ciblées si le profil FreshClam est présent.
+- La politique UDisks2, le bureau et l’accès RDP relèvent de l’administration du poste. Sur une machine dédiée, configurer ces options séparément si nécessaire.
 
-## Dépendances principales
-
-| Besoin | Outils |
-|---|---|
-| Interface | Python 3, Tkinter, Konsole, Pillow, CairoSVG |
-| PDF | ReportLab |
-| Métadonnées | `file`, `exiftool`, `ffprobe` |
-| Archives et entropie | `7za`, `zstd`, `binwalk` |
-| Antivirus | ClamAV et FreshClam |
-| Imagerie | `dc3dd`, outils EWF et AFFlib |
-| Visages | `facedetect` ou OpenCV |
-| Téléphones | Outils MTP dont `jmtpfs` |
-
-La liste complète et commentée reste dans `requirements.txt`.
+Les dépendances système comprennent notamment Chafa et Konsole, les
+bibliothèques Qt hôtes, ClamAV, les outils d’imagerie et ReportLab pour les
+rapports historiques. PySide6, Textual et les dépendances Core sont installés
+par pip dans le venv.
 
 ## Développement local
 
-Depuis la racine du dépôt :
-
-```bash
-VIGIL_BASE="$PWD" VIGIL_DATA_DIR="$PWD/data" python3 gui/vigil_main_gui.py
-```
-
-Ce lancement permet d’examiner l’interface sans installer le poste complet.
-Les opérations réelles sur les supports nécessitent les outils et droits système.
+Utiliser la [recette native GUI et TUI](../development/native-recette.md)
+pour un venv, des données de test et des fixtures isolés. Le post-install de
+site vise la famille Debian. Sur les autres distributions, utiliser
+`install_native.py --profile complet --dry-run` pour contrôler le plan
+utilisateur et les paquets proposés.

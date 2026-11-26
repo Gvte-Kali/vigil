@@ -2,13 +2,13 @@
 
 Application Linux d’analyse de supports numériques : montage en lecture seule,
 analyses de fichiers, recherche de menaces et rapports PDF.
-Pensée pour un poste dédié sous ParrotOS / Debian, avec une interface Python / Tkinter.
+Pensée pour un poste dédié sous Parrot ou Debian, avec une GUI Qt et une TUI Textual.
 
 [Lire la documentation](https://gvte-kali.github.io/vigil/) · [Documentation dans le dépôt](docs/index.md)
 
 ## Vigil 2.0 sur Linux
 
-La [CLI en développement](docs/development/linux-portability.md) s'installe
+La [CLI](docs/development/linux-portability.md) s’installe
 dans un environnement Python utilisateur et fonctionne sans session graphique.
 Pour lancer l'espace de travail Qt sur un clone de la branche `vigil-2.0` :
 
@@ -25,29 +25,20 @@ les preuves et les parcours historiques encore disponibles dans Tkinter.
 
 ## Installer Vigil sur un poste Parrot ou Debian
 
-Placer le dépôt dans `/opt/vigil`, puis lancer :
+Sur Parrot ou Debian, suivre la [procédure d’installation depuis zéro](docs/installation/README.md#installer-et-lancer).
+Elle prépare le site dans `/opt/vigil`, les dépendances, les lanceurs et le
+profil de signatures ClamAV. Pour un poste déjà installé, la
+[remise à zéro](docs/installation/desinstallation.md) couvre aussi les paquets APT.
 
-```bash
-cd /opt/vigil
-bash scripts/post-install/post_install_vigil.sh
-vigil --help
-/usr/local/bin/vigil-gui
-```
-
-L'administrateur doit préparer les répertoires de travail et, sur un poste
-existant, traiter la règle sudoers héritée avant le post-install. Voir la
-[procédure de transition](docs/development/phase-01-transition.md).
-Le script installe les dépendances et configure les raccourcis et ClamAV.
-Le RDP est facultatif.
 Voir [Installation](docs/installation/README.md) et `post-install-checked.txt`.
 
 ## Première analyse
 
-1. Configurer l’entité et créer un utilisateur et un projet.
-2. Dans **Analyser un périphérique**, sélectionner l’utilisateur et le projet.
-3. Monter le support en lecture seule, puis lancer les analyses utiles.
-4. Consulter les PDF dans `/opt/vigil/rapports/`.
-5. Démonter le support et exporter le projet.
+1. Configurer l’entité et choisir un opérateur.
+2. Créer et sélectionner une affaire dans **Affaire en cours**.
+3. Monter le support en lecture seule depuis Vigil, puis lancer les analyses utiles.
+4. Consulter les rapports et démonter le support avant de quitter.
+5. Exporter l’affaire et vérifier son empreinte SHA-256.
 
 ## Fonctions principales
 
@@ -65,7 +56,8 @@ Un hash permet de vérifier un contenu ; une absence de détection antivirus ne 
 ## Développer
 
 ```bash
-VIGIL_BASE="$PWD" VIGIL_DATA_DIR="$PWD/data" python3 gui/vigil_main_gui.py
+python3 scripts/dev/workspace.py setup
+python3 scripts/dev/workspace.py gui
 ```
 
 | Dossier | Contenu |

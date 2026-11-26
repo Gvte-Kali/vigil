@@ -547,3 +547,15 @@ Recette interface et terminaux
     et métadonnées. Double-cliquer un dossier puis un document autorisé.
     Vérifier la copie de consultation, le refus d’un exécutable et les
     actions de dossier et de chemin avec et sans FileManager1.
+
+
+Déploiement natif depuis zéro
+[x] Debian 13 amd64, venv utilisateur neuf avec le profil complet.
+    Versions et aides des trois lanceurs, Qt offscreen initialisé.
+[x] Simulation APT avec l’index Debian trixie main amd64 et une base dpkg
+    vierge. Toutes les dépendances du post-install ont été résolues.
+[x] Syntaxe Bash et --dry-run du post-install sans sudo.
+[ ] Post-install privilégié puis désinstallation et réinstallation sur
+    Parrot Echo ou Debian avec systemd, sudo et udev réels.
+[ ] Vérifier AppArmor/FreshClam, les lanceurs desktop et la protection d’un
+    support synthétique pendant la session et après fermeture.
