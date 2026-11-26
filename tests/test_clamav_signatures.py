@@ -1,4 +1,5 @@
 import io
+import re
 from contextlib import redirect_stdout
 from datetime import UTC, datetime, timedelta
 import json
@@ -152,6 +153,21 @@ echo 'daily.cvd updated (version: 44, sigs: 100, f-level: 90, builder: fixture)'
             self.assertEqual((self.profile / "daily.cvd").read_bytes(), original)
             self.assertEqual(list(self.profile.glob(".rollback-*")), [])
 
+    def test_offline_update_lists_installed_and_retained_signatures(self):
+        database_file(self.profile / "bytecode.cvd", 5, self.now)
+
+        def copy_from_usb(candidate):
+            self.install(candidate, 43, self.now)
+            return {"main.cvd": 1, "daily.cvd": 43}
+
+        with patch.object(clamav, "usb_candidates", side_effect=copy_from_usb), \
+                patch("builtins.input", return_value="o"), \
+                patch.dict(os.environ, {"VIGIL_LANG": "en"}), \
+                redirect_stdout(io.StringIO()) as log:
+            self.assertEqual(clamav.offline_update(self.profile), 0)
+        self.assertIn(f"{self.profile / 'daily.cvd'} · 43 · imported from USB", log.getvalue())
+        self.assertIn(f"{self.profile / 'bytecode.cvd'} · 5 · retained", log.getvalue())
+
     def test_usb_rejects_corrupted_cvd_and_untrusted_cld(self):
         usb = self.root / "usb"
         usb.mkdir()
@@ -177,8 +193,10 @@ esac
              patch("vigil.inspection.open_evidence_path", side_effect=open_fixture), \
              patch("vigil.inspection.list_evidence_directory",
                    return_value=[(path.name, False) for path in usb.iterdir()]), \
-             redirect_stdout(io.StringIO()):
+             redirect_stdout(io.StringIO()) as log:
             self.assertEqual(clamav.usb_candidates(candidate), {"main.cvd": 7})
+        self.assertIn(str(usb / "main.cvd"), log.getvalue())
+        self.assertRegex(log.getvalue(), rf"{re.escape(str(candidate))}/[^/\n]+/main\.cvd")
         self.assertEqual({item.name for item in candidate.iterdir()}, {"main.cvd"})
 
     def test_update_lock_respects_an_active_scan(self):

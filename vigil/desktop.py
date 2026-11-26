@@ -538,10 +538,8 @@ class Workspace(QMainWindow):
         module_split.addWidget(self.module_inspector)
         module_split.setSizes([560, 360])
 
-        self.footer_protection = QLabel()
-        self.footer_zones = QLabel()
-        self.statusBar().addPermanentWidget(self.footer_protection)
-        self.statusBar().addPermanentWidget(self.footer_zones)
+        self.footer_protection = self.footer_status()
+        self.footer_zones = {zone: self.footer_status() for zone in ("/investigation", "/stockage")}
         self.refresh_operators()
         self.translate()
         self.refresh_cases()
@@ -553,6 +551,24 @@ class Workspace(QMainWindow):
         self.mount_timer.timeout.connect(self.refresh_hotplug_status)
         self.mount_timer.timeout.connect(self.refresh_external_runs)
         self.mount_timer.start(2000)
+
+    def footer_status(self):
+        widget = QWidget()
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(5)
+        icon, label = QLabel(), QLabel()
+        label.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(icon)
+        layout.addWidget(label)
+        self.statusBar().addPermanentWidget(widget)
+        return icon, label
+
+    def show_footer_status(self, indicator, glyph, text, color):
+        icon, label = indicator
+        icon.setPixmap(self.action_icon(glyph, color).pixmap(16, 16))
+        label.setText(text)
+        label.setStyleSheet(f"color: {color}; font-weight: 600;")
 
     def tr_pair(self, french, english):
         return english if self.language == "en" else french
@@ -1493,8 +1509,14 @@ class Workspace(QMainWindow):
         )
         if not destination:
             return
+        name, accepted = QInputDialog.getText(
+            self, self.tr_pair("Exporter l’affaire", "Export case"),
+            self.tr_pair("Nom de l’archive", "Archive filename"), text="affaire.tar.gz",
+        )
+        if not accepted:
+            return
         self.run_task(
-            lambda: export_case(self.database_path, case_id, operator, Path(destination)),
+            lambda: export_case(self.database_path, case_id, operator, Path(destination), name),
             self.show_case_export,
         )
 
@@ -1503,10 +1525,10 @@ class Workspace(QMainWindow):
             count = len(result.missing)
             self.notify(f"Archive créée avec {count} preuve(s) sans copie.",
                         f"Archive created with {count} missing evidence copy/copies.",
-                        "\n".join((str(result.path), *result.missing)))
+                        "\n".join((str(result.archive), *result.missing)))
         else:
             self.notify("Archive et empreinte SHA-256 enregistrées.",
-                        "Archive and SHA-256 checksum saved.", str(result.path))
+                        "Archive and SHA-256 checksum saved.", str(result.archive))
 
     def export_case_report(self):
         case_id = self.active_case_id
@@ -1514,10 +1536,19 @@ class Workspace(QMainWindow):
             self.notify("Choisissez une affaire depuis Affaire en cours.",
                         "Choose a case from Current case.")
             return
+        folder = QFileDialog.getExistingDirectory(
+            self, self.tr_pair("Choisir la destination de l’audit", "Choose an audit export folder"),
+            str(Path.home()), options=QFileDialog.Option.DontUseNativeDialog,
+        )
+        if not folder:
+            return
         self.run_task(
-            lambda: case_report(self.database_path, case_id),
+            lambda: case_report(self.database_path, case_id, Path(folder)),
             lambda path: self.notify("Rapport JSON et manifeste enregistrés.",
                                      "JSON report and manifest saved.", str(path)),
+            on_error=lambda error: self.notify(
+                "Impossible d’exporter l’audit.", "Could not export the audit.", f"{folder}\n{error}",
+            ),
         )
 
     def show_event(self, item):
@@ -2042,7 +2073,7 @@ class Workspace(QMainWindow):
             text = self.tr_pair("Protection des nouveaux disques non installée",
                                 "New disk protection is not installed")
         self.hotplug_status.setText(text)
-        self.footer_protection.setText(text)
+        self.show_footer_status(self.footer_protection, "shield", text, SUCCESS if active else WARNING)
         self.hotplug_status.setStyleSheet(
             f"color: {'#80D7A4' if active else '#EBC47A'}; font-weight: 600;"
         )
@@ -2089,8 +2120,8 @@ class Workspace(QMainWindow):
         except OSError:
             zones = None
         entries = zones.get("/investigation") if zones is not None else None
-        summary = []
         for zone in ("/investigation", "/stockage"):
+            color = WARNING
             if zones is None or zone not in zones:
                 state = self.tr_pair("inconnu", "unknown")
             elif not zones[zone]:
@@ -2108,8 +2139,14 @@ class Workspace(QMainWindow):
                     except OSError:
                         blocks.append("?")
                 state += " · " + self.tr_pair("bloc ", "block ") + "/".join(sorted(set(blocks)))
-            summary.append(f"{zone}  {state}")
-        self.footer_zones.setText("  |  ".join(summary))
+                expected = "ro" if zone == "/investigation" else "rw"
+                color = (SUCCESS if expected == "ro" else ACCENT) if (
+                    all(mode == expected for _, _, _, mode in zones[zone])
+                    and all(block == expected.upper() for block in blocks)
+                ) else WARNING
+            self.show_footer_status(self.footer_zones[zone],
+                                    "folder-tree" if zone == "/investigation" else "hard-drive",
+                                    f"{zone} · {state}", color)
         if entries is None:
             state = self.tr_pair("État indisponible", "Status unavailable")
         elif not entries:

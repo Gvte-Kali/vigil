@@ -414,6 +414,7 @@ def usb_candidates(candidate):
     signature_tool = executable("sigtool")
     selected = {}
     for root, mount_id in roots.items():
+        print(f"{tr('Recherche de signatures sur', 'Searching for signatures on')} {root}", flush=True)
         pending = [root]
         while pending:
             folder = pending.pop()
@@ -432,11 +433,16 @@ def usb_candidates(candidate):
                 with tempfile.TemporaryDirectory(dir=candidate) as staging:
                     path = Path(staging) / name
                     with open_evidence_path(source, root, mount_id) as fd:
-                        if not 512 < os.fstat(fd).st_size <= MAX_CVD_BYTES:
+                        size = os.fstat(fd).st_size
+                        if not 512 < size <= MAX_CVD_BYTES:
                             print(f"{display} · {tr('Taille CVD refusée', 'CVD size rejected')}")
                             continue
+                        print(f"{tr('Fichier trouvé', 'File found')} · {display} ({size} octets/bytes)", flush=True)
+                        print(f"{tr('Copie temporaire vers', 'Staging copy to')} {path}", flush=True)
                         with open(f"/proc/self/fd/{fd}", "rb") as origin, path.open("xb") as output:
                             shutil.copyfileobj(origin, output)
+                    print(tr("Copie terminée. Vérification de la signature officielle…",
+                             "Copy complete. Verifying the official signature…"), flush=True)
                     result = subprocess.run([signature_tool, "--info", str(path)], capture_output=True,
                                             text=True, check=False, timeout=120)
                     header = result.stdout
@@ -478,11 +484,20 @@ def offline_update(directory):
             advisory = directory / ENGINE_RECORD
             if advisory.is_file() and not advisory.is_symlink():
                 shutil.copyfile(advisory, candidate / ENGINE_RECORD)
+            if "bytecode.cvd" not in selected:
+                print(tr("Aucun bytecode USB importé. La base locale est conservée si présente.",
+                         "No USB bytecode imported. The local database is retained if present."))
+            print(tr("Vérification du chargement de la base préparée…", "Checking that ClamScan can load the staged set…"),
+                  flush=True)
             proposed = signature_status(candidate)
             print_transition(previous, proposed)
             if input(tr("Importer ces signatures ? [o/N] : ", "Import these signatures? [y/N]: ")).casefold() not in {"o", "y"}:
                 raise ValueError(tr("Import annulé.", "Import cancelled."))
+            print(f"{tr('Installation et vérification dans', 'Installing and verifying in')} {directory}", flush=True)
             current = publish_signatures(directory, candidate)
+        for stem, name, version, *_ in database_snapshot(directory):
+            result = tr("importé depuis USB", "imported from USB") if name in selected else tr("conservé", "retained")
+            print(f"{directory / name} · {version} · {result}")
         print_transition(previous, current)
         partial = current["freshness"] == "stale"
         print(tr("Résultat : partiel (signatures anciennes)." if partial else "Résultat : réussite complète.",

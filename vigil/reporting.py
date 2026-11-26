@@ -7,12 +7,13 @@ import tempfile
 from pathlib import Path
 from uuid import uuid4
 
+from .destination import writable_destination
 from .history import case_events
 from .report_copies import sync_report_copies
 from .storage import case_storage_directory, database, require_active_case, utc_now
 
 
-def case_report(state, case_id):
+def case_report(state, case_id, destination=None):
     with database(state) as connection:
         require_active_case(connection, case_id)
         case = connection.execute(
@@ -33,10 +34,14 @@ def case_report(state, case_id):
             "coverage": "registered_metadata_and_audit",
         }
 
-    root = state.parent.resolve() / "reports"
-    root.mkdir(mode=0o700, exist_ok=True)
-    if root.is_symlink() or root.resolve().is_relative_to("/investigation"):
-        raise ValueError("invalid report directory")
+    if destination is None:
+        root = state.parent.resolve() / "reports"
+        root.mkdir(mode=0o700, exist_ok=True)
+        if root.is_symlink():
+            raise ValueError("invalid report directory")
+    else:
+        root = destination
+    root = writable_destination(root).path
     stage = Path(tempfile.mkdtemp(prefix=".report-", dir=root))
     try:
         payload = stage / "case.json"

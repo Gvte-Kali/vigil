@@ -24,6 +24,7 @@ from .storage import audit, case_storage_directory, database, evidence_copy_path
 class CaseExport:
     path: Path
     missing: tuple[str, ...]
+    archive: Path
 
 
 class HashingReader:
@@ -113,7 +114,16 @@ def collect_results(state, case_id, custody, legacy):
 
 
 
-def export_case(state, case_id, operator, destination):
+def export_case(state, case_id, operator, destination, name="affaire.tar.gz"):
+    name = name.strip()
+    if not name or name in (".", "..") or name.startswith(".") or any(
+            char in "/\\" or ord(char) < 32 or ord(char) == 127 for char in name):
+        raise ValueError("Indiquez un nom de fichier valide / Enter a valid archive filename")
+    if not name.lower().endswith(".tar.gz"):
+        name += ".tar.gz"
+    if len(os.fsencode(name + ".sha256")) > 255:
+        raise ValueError("Nom de fichier trop long / Archive filename too long")
+    filename = name
     destination = writable_destination(destination).path
     custody = case_storage_directory(state, case_id)
     with database(state) as connection:
@@ -151,7 +161,7 @@ def export_case(state, case_id, operator, destination):
                       for row in evidence}
         copy_identities = {path: file_identity(path.lstat()) if os.path.lexists(path) else None
                            for path in copies.values()}
-        archive_path = stage / "affaire.tar.gz"
+        archive_path = stage / filename
         hashes, members = {}, {}
         missing = []
         with tarfile.open(archive_path, "w:gz") as archive:
@@ -202,7 +212,7 @@ def export_case(state, case_id, operator, destination):
             archive.addfile(archive_info("SHA256SUMS", len(manifest)), io.BytesIO(manifest))
         with archive_path.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        (stage / "affaire.tar.gz.sha256").write_text(f"{digest}  {archive_path.name}\n", encoding="ascii")
+        (stage / f"{filename}.sha256").write_bytes(f"{digest}  ".encode("ascii") + os.fsencode(filename) + b"\n")
         verify_archive(archive_path)
         with database(state) as connection:
             require_active_case(connection, case_id)
@@ -218,7 +228,7 @@ def export_case(state, case_id, operator, destination):
                            for path, identity in copy_identities.items())):
                 raise ValueError("case files changed during export")
             audit(connection, operator, case_id, "case.export.success", {
-                "sha256": digest, "archive": str(final), "missing_evidence_count": len(missing),
+                "sha256": digest, "archive": str(final / filename), "missing_evidence_count": len(missing),
             })
             stage.rename(final)
             published = True
@@ -230,4 +240,4 @@ def export_case(state, case_id, operator, destination):
             ).fetchone():
                 audit(connection, operator, case_id, "case.export.error", {})
         raise
-    return CaseExport(final, tuple(missing))
+    return CaseExport(final, tuple(missing), final / filename)

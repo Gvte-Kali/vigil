@@ -75,6 +75,9 @@ class HistoryAndReportingTest(unittest.TestCase):
             first = case_report(state, case)
             second = case_report(state, case)
             self.assertNotEqual(first, second)
+            chosen = Path(tmp) / "selected"
+            chosen.mkdir()
+            self.assertEqual(case_report(state, case, chosen).parent, chosen)
             report = first / "case.json"
             self.assertEqual(json.loads(report.read_text())["case"]["name"], "First")
             checksum, filename = (first / "SHA256SUMS").read_text().split()

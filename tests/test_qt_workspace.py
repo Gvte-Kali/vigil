@@ -167,6 +167,42 @@ class WorkspaceTest(unittest.TestCase):
                 dialog.deleteLater()
             self.close_workspace(window)
 
+    def test_case_export_actions_publish_to_chosen_folder(self):
+        import hashlib
+        import json
+
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            destination = root / "exports"
+            destination.mkdir()
+            window = Workspace(QSettings(str(root / "prefs"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.add_operator("Alice")
+            window.create_case("Fixture")
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
+            with patch("vigil.desktop.QFileDialog.getExistingDirectory", return_value=str(destination)), \
+                    patch("vigil.desktop.QInputDialog.getText", return_value=("Affaire été", True)), \
+                    patch.object(window, "notify") as notify:
+                window.export_case_report()
+                self.wait_for_task(window)
+                folder = Path(notify.call_args.args[2])
+                self.assertEqual(folder.parent, destination)
+                payload = (folder / "case.json").read_bytes()
+                self.assertEqual(json.loads(payload)["case"]["name"], "Fixture")
+                self.assertEqual((folder / "SHA256SUMS").read_text(),
+                                 f"{hashlib.sha256(payload).hexdigest()}  case.json\n")
+
+                window.export_full_case()
+                self.wait_for_task(window)
+                archive = Path(notify.call_args.args[2])
+                self.assertEqual(archive.name, "Affaire été.tar.gz")
+                self.assertEqual(archive.parent.parent, destination)
+                self.assertTrue(archive.is_file())
+            self.close_workspace(window)
+
     def test_archive_preview_confirmation_restores_without_activating(self):
         from vigil import storage
         from vigil.case_export import export_case

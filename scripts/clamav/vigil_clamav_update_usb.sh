@@ -35,4 +35,4 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 sudo -v || exit 1
 bash "$script_root/analyse/vigil_usb_mount.sh" || exit 1
-"$python_bin" "$core" offline 2>&1 | tee -a "$run/update.log"
+"$python_bin" -u "$core" offline 2>&1 | tee -a "$run/update.log"

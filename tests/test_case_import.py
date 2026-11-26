@@ -58,6 +58,16 @@ class CaseImportTest(unittest.TestCase):
         archive = export_case(self.state, self.case, "Alice", self.output).path / "affaire.tar.gz"
         return archive, originals, records
 
+    def test_custom_archive_name_and_checksum(self):
+        result = export_case(self.state, self.case, "Alice", self.root, "Affaire été")
+        self.assertEqual(result.archive.name, "Affaire été.tar.gz")
+        checksum = result.archive.with_name(result.archive.name + ".sha256")
+        self.assertEqual(checksum.read_text().strip(),
+                         f"{hashlib.sha256(result.archive.read_bytes()).hexdigest()}  {result.archive.name}")
+        self.assertEqual(verify_archive(result.path).source_id, self.case)
+        with self.assertRaises(ValueError):
+            export_case(self.state, self.case, "Alice", self.root, "../ailleurs")
+
     def test_complete_roundtrip_and_reexport(self):
         archive, originals, records = self.sample_archive()
         for source in originals:

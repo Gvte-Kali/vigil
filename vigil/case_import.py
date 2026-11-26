@@ -205,7 +205,14 @@ class LimitedTarInfo(tarfile.TarInfo):
 def archive_path(path):
     path = Path(path).expanduser()
     if path.is_dir():
-        path /= "affaire.tar.gz"
+        default = path / "affaire.tar.gz"
+        if os.path.lexists(default):
+            path = default
+        else:
+            matches = [item for item in path.iterdir()
+                       if item.name.lower().endswith(".tar.gz") and item.is_file() and not item.is_symlink()]
+            require(len(matches) == 1, "choose a single Vigil archive", "incompatible")
+            path = matches[0]
     if path.is_symlink() or not path.is_file():
         raise ArchiveError("incompatible", "choose a regular Vigil archive or its containing folder")
     return path.absolute()

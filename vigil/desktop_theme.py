@@ -74,6 +74,7 @@ QPushButton#quickActionCard:disabled { background: #131A20; border-color: #34434
 QPushButton#quickActionCard QLabel { background: transparent; color: #DCE3EA; }
 QPushButton#quickActionCard QLabel#actionCardDescription { color: #B8C3CF; }
 QPushButton#quickActionCard:disabled QLabel { color: #778490; }
+QLabel#quickCategoryTitle { background: transparent; font-size: 18px; font-weight: 700; }
 QLabel#quickActionTitle { color: #57C7D4; background: transparent; font-weight: 700; }
 QLabel#pageTitle { font-size: 20px; font-weight: 700; }
 QWidget[workspacePage="true"] { background: #101318; }

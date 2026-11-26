@@ -1042,8 +1042,9 @@ class Workspace(App):
                     result = await asyncio.to_thread(create_module_draft, self.state, response["name"])
                     self.info(t("Brouillon du module", "Module draft"), result)
                 case "export-case":
-                    result = await asyncio.to_thread(export_case, self.state, case, operator, self.form_path(response["path"]))
-                    self.info(t("Archive créée", "Archive created"), result.path)
+                    archive = self.form_path(response["path"])
+                    result = await asyncio.to_thread(export_case, self.state, case, operator, archive.parent, archive.name)
+                    self.info(t("Archive créée", "Archive created"), result.archive)
                 case "export-audit":
                     self.info(t("Audit exporté", "Audit exported"), await asyncio.to_thread(case_report, self.state, case))
                 case "inspect-image":
@@ -1191,8 +1192,9 @@ class Workspace(App):
                 self.pick_for(action, t("Inspecter une image RAW", "Inspect a RAW image"),
                               PickerOptions("open", (".raw", ".dd", ".img", ".iso")))
             case "export-case":
-                self.pick_for(action, t("Dossier de destination de l’archive", "Archive destination folder"),
-                              PickerOptions("directory", writable=True))
+                self.pick_for(action, t("Nom et destination de l’archive", "Archive filename and destination"),
+                              PickerOptions("save", writable=True),
+                              initial=Path.home() / "affaire.tar.gz")
             case "query-index":
                 self.pick_for(action, t("Index de recensement", "Census index"),
                               PickerOptions("open", (".sqlite", ".sqlite3", ".db")))

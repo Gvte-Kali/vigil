@@ -283,10 +283,10 @@ def import_case_archive(path: Path, operator: str = typer.Option(...), db: Datab
 
 @cases.command("export")
 def export(case_id: str, destination: Path, operator: str = typer.Option(...),
-           db: DatabaseOption = None):
+           db: DatabaseOption = None, name: str = typer.Option("affaire.tar.gz", help="Archive filename.")):
     with command():
-        result = export_case(db or storage.default_database(), case_id, operator, destination)
-        emit({"directory": str(result.path), "archive": str(result.path / "affaire.tar.gz"),
+        result = export_case(db or storage.default_database(), case_id, operator, destination, name)
+        emit({"directory": str(result.path), "archive": str(result.archive),
               "coverage": "partial" if result.missing else "complete",
               "missing_evidence": result.missing})
 
