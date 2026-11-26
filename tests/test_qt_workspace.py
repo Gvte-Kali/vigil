@@ -650,12 +650,34 @@ class WorkspaceTest(unittest.TestCase):
             self.app.processEvents()
             self.assertEqual(area.sections.direction(), QBoxLayout.Direction.LeftToRight)
             action_buttons = page.findChildren(QPushButton)
-            self.assertEqual(len(action_buttons), 7)
+            self.assertEqual(len(action_buttons), 8)
             self.assertTrue(all(not button.icon().isNull() for button in action_buttons))
             window.language_buttons["en"].click()
             self.assertEqual(quick.text(), "Quick actions")
             self.assertEqual(page.findChildren(QLabel, "quickCategoryTitle")[1].text(), "Storage")
             self.close_workspace(window)
+
+    def test_action_card_clicks_description_and_supports_keyboard(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QIcon
+        from PySide6.QtTest import QTest
+        from vigil.action_card import ActionCard
+
+        calls = []
+        card = ActionCard(QIcon(), "#55C5D2", lambda: calls.append(card.text()))
+        card.set_title("Test")
+        card.description.setText("Clickable description")
+        card.resize(260, 85)
+        card.show()
+        self.app.processEvents()
+        point = card.description.geometry().center()
+        self.assertTrue(card.rect().contains(point))
+        QTest.mouseClick(card, Qt.MouseButton.LeftButton, pos=point)
+        QTest.keyClick(card, Qt.Key.Key_Space)
+        card.setDisabled(True)
+        QTest.mouseClick(card, Qt.MouseButton.LeftButton, pos=point)
+        self.assertEqual(calls, ["Test", "Test"])
+        card.close()
 
     def test_external_terminal_preference_is_accessible_without_task_dock(self):
         from PySide6.QtWidgets import QDockWidget, QInputDialog

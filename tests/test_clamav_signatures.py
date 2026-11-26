@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import sys
+from contextlib import contextmanager
 import unittest
 from unittest.mock import patch
 
@@ -114,3 +116,85 @@ echo 'daily.cvd updated (version: 44, sigs: 100, f-level: 90, builder: fixture)'
 """)
         with redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, "revisions disagree"):
             clamav.update_signatures(self.profile, update_command(self.state))
+
+
+    def test_package_plans_are_scoped_and_never_partially_upgrade_arch(self):
+        packages = ["clamav", "libclamav12"]
+        apt = clamav.engine_upgrade_plan("debian", packages)
+        self.assertEqual(apt[1], ("apt-get", "install", "--only-upgrade", "--", *packages))
+        self.assertEqual(clamav.engine_upgrade_plan("fedora", packages)[0][-2:], tuple(packages))
+        self.assertEqual(clamav.engine_upgrade_plan("opensuse", packages)[1][-2:], tuple(packages))
+        self.assertEqual(clamav.engine_upgrade_plan("arch", packages), [])
+
+    def test_network_and_admin_errors_are_classified(self):
+        for message, diagnostic in (("Could not resolve host", "DNS"),
+                                    ("SSL certificate failure", "TLS"),
+                                    ("Could not acquire lock", "verrouillé"),
+                                    ("user is not in the sudoers file", "refusée"),
+                                    ("Download interrupted", "interrompu")):
+            with self.subTest(message=message):
+                with redirect_stdout(io.StringIO()), patch.dict(os.environ, {"VIGIL_LANG": "fr"}):
+                    with self.assertRaisesRegex(ValueError, diagnostic):
+                        clamav.checked_update_step([sys.executable, "-c", f"print({message!r}); raise SystemExit(1)"])
+
+    def test_activation_rollback_on_incompatible_database_and_interrupt(self):
+        candidate = self.root / "candidate"
+        original = (self.profile / "daily.cvd").read_bytes()
+        for error in (ValueError("incompatible engine"), KeyboardInterrupt()):
+            self.install(candidate, 43, self.now)
+            validated = clamav.signature_status(candidate)
+            with clamav.signature_lock(self.profile), \
+                 patch("vigil.clamav.signature_status", side_effect=[validated, error]):
+                with self.assertRaises(type(error)):
+                    clamav.publish_signatures(self.profile, candidate)
+            self.assertEqual((self.profile / "daily.cvd").read_bytes(), original)
+            self.assertEqual(list(self.profile.glob(".rollback-*")), [])
+
+    def test_usb_rejects_corrupted_cvd_and_untrusted_cld(self):
+        usb = self.root / "usb"
+        usb.mkdir()
+        candidate = self.root / "candidate"
+        candidate.mkdir()
+        for name in ("main.cvd", "daily.cvd", "bytecode.cld"):
+            database_file(usb / name, 7, self.now)
+        self.fake("sigtool", """#!/bin/sh
+case "$2" in
+    */main.cvd) echo "Version: 7"; echo "Build time: fixture"; echo "Verification OK." ;;
+    *) echo "Corrupt"; exit 1 ;;
+esac
+""")
+
+        @contextmanager
+        def open_fixture(path, *_):
+            with path.open("rb") as stream:
+                yield stream.fileno()
+
+        resources = [{"zone": "/investigation", "mountpoint": str(usb), "verified": True}]
+        with patch("vigil.device_manager.status", return_value=resources), \
+             patch("vigil.inspection.investigation_mounts", return_value={str(usb): 42}), \
+             patch("vigil.inspection.open_evidence_path", side_effect=open_fixture), \
+             patch("vigil.inspection.list_evidence_directory",
+                   return_value=[(path.name, False) for path in usb.iterdir()]), \
+             redirect_stdout(io.StringIO()):
+            self.assertEqual(clamav.usb_candidates(candidate), {"main.cvd": 7})
+        self.assertEqual({item.name for item in candidate.iterdir()}, {"main.cvd"})
+
+    def test_update_lock_respects_an_active_scan(self):
+        with clamav.signature_lock(self.profile, shared=True):
+            with self.assertRaisesRegex(ValueError, "already active"):
+                with patch.dict(os.environ, {"VIGIL_LANG": "en"}), clamav.signature_lock(self.profile):
+                    self.fail("update lock acquired while scanner was active")
+
+
+    def test_network_failure_reports_partial_if_signatures_were_updated(self):
+        current = clamav.signature_status(self.profile)
+        with patch("vigil.linux_distribution.identify", return_value="debian"), \
+             patch("vigil.clamav.installed_clamav", return_value=["clamav"]), \
+             patch("vigil.clamav.executable", return_value="/usr/bin/apt-get"), \
+             patch("vigil.clamav.previous_status", return_value=current), \
+             patch("vigil.clamav.checked_update_step", side_effect=ValueError("DNS")), \
+             patch("vigil.clamav.refresh_signatures", return_value=current), \
+             patch.dict(os.environ, {"VIGIL_LANG": "en"}), \
+             redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(clamav.online_update(self.profile), 2)
+            self.assertIn("Result: partial", output.getvalue())

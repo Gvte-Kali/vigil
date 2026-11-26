@@ -304,6 +304,10 @@ if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
     signature_log="$RAPPORTS_DIR/clamav-signatures.json"
 fi
 python3 "$clamav_core" prepare "${SIGNATURE_ARGS[@]}" --log "$signature_log" || exit 1
+signature_lock=$(python3 "$clamav_core" lock-path) || exit 1
+exec {signature_fd}<>"$signature_lock" || exit 1
+flock -sn "$signature_fd" || { echo "ClamAV update in progress / Mise à jour ClamAV en cours." >&2; exit 1; }
+python3 "$clamav_core" verify-log "$signature_log" || exit 1
 CLAMSCAN=$(command -v clamscan) || exit 1
 echo ""
 

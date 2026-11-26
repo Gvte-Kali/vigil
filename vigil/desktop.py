@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 )
 
 from . import storage
+from .action_card import ActionCard
+from .clamav import ONLINE_CONFIRMATION
 from .case_export import export_case
 from .case_import import import_archive, verify_archive
 from .case_manager import CaseLoad, CaseManager, NewCaseDialog
@@ -41,7 +43,7 @@ from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
-from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_workflow_command
+from .quick_actions import acquisition_command, legacy_mount_command, storage_command, offline_update_command, update_workflow_command
 from .external_terminal import TERMINALS, detected_terminal, launch_terminal, launch_tracked
 
 ANALYSIS_LABELS = {
@@ -413,53 +415,59 @@ class Workspace(QMainWindow):
         action_area = QuickActionArea()
         quick_actions.addWidget(action_area, 1)
         sections = action_area.sections
-        antivirus = self.quick_action_section(sections, "Antivirus", "Antivirus", "shield", "#57C7D4")
+        antivirus = self.quick_action_section(sections, "Antivirus", "Antivirus", "shield", ACCENT)
         self.quick_action_card(
             antivirus, "Scan antivirus", "Antivirus scan",
             "Monte le support, lance ClamAV et enregistre le rapport PDF.",
             "Mount the device, run ClamAV and save the PDF report.",
-            "shield", self.quick_scan, primary=True,
+            "shield", self.quick_scan, color=ACCENT,
         )
         self.quick_action_card(
             antivirus, "Mettre à jour l’antivirus", "Update antivirus",
-            "Télécharge les signatures ClamAV dans le profil Vigil.",
-            "Download ClamAV signatures into the Vigil profile.",
-            "upload", self.quick_update,
+            "Met à jour le moteur et les signatures ClamAV.",
+            "Update the ClamAV engine and signatures.",
+            "upload", self.quick_update, color="#82AAFF",
+        )
+        self.quick_action_card(
+            antivirus, "Mettre à jour la base virale depuis un périphérique USB", "Update signatures from USB",
+            "Vérifie et importe les signatures officielles sans connexion.",
+            "Verify and import official signatures offline.",
+            "plug", self.quick_update_usb, color=SUCCESS,
         )
         self.quick_action_card(
             antivirus, "Rapports antivirus", "Antivirus reports",
             "Retrouve les PDF consolidés des scans rapides.",
             "Find consolidated PDFs from quick scans.",
-            "folder", self.show_antivirus_reports,
+            "folder", self.show_antivirus_reports, color=VIOLET,
         )
         antivirus.addStretch()
-        storage_actions = self.quick_action_section(sections, "Stockage", "Storage", "folder", "#80D7A4")
+        storage_actions = self.quick_action_section(sections, "Stockage", "Storage", "folder", SUCCESS)
         self.quick_action_card(
             storage_actions, "Monter un stockage", "Mount storage",
             "Sélectionne un support de travail et le monte en lecture-écriture sous /stockage.",
             "Select a work drive and mount it read-write under /stockage.",
-            "hard-drive", lambda: self.quick_storage("mount"), primary=True,
+            "hard-drive", lambda: self.quick_storage("mount"), color=SUCCESS,
         )
         self.quick_action_card(
             storage_actions, "Démonter le stockage", "Unmount storage",
             "Démonte les supports de travail sous /stockage.",
             "Unmount work drives under /stockage.",
-            "hard-drive", lambda: self.quick_storage("unmount"),
+            "hard-drive", lambda: self.quick_storage("unmount"), color=WARNING,
         )
         storage_actions.addStretch()
-        acquisition = self.quick_action_section(sections, "Acquisition", "Acquisition", "hard-drive", "#BB9AF7")
+        acquisition = self.quick_action_section(sections, "Acquisition", "Acquisition", "hard-drive", VIOLET)
         self.quick_action_card(
             acquisition, "Cloner un disque", "Clone a disk",
             "Copie bit à bit sur un disque USB cible et vérifie son SHA-256.",
             "Copy bit for bit to a USB disk and verify its SHA-256.",
             "hard-drive", lambda: self.start_quick_action(lambda: acquisition_command("clone", language=self.language), "clone"),
-            destructive=True,
+            color=WARNING,
         )
         self.quick_action_card(
             acquisition, "Créer une image RAW", "Create a RAW image",
             "Enregistre une image vérifiée en local ou sur un stockage USB temporaire.",
             "Save a verified image locally or on temporarily mounted USB storage.",
-            "hard-drive", self.quick_raw_image,
+            "hard-drive", self.quick_raw_image, color=VIOLET,
         )
         acquisition.addStretch()
         sections.addStretch()
@@ -688,23 +696,11 @@ class Workspace(QMainWindow):
         sections.addWidget(section, 1, Qt.AlignmentFlag.AlignTop)
         return actions
 
-    def quick_action_card(self, column, french, english, description_fr, description_en,
-                          icon_name, action, *, primary=False, destructive=False):
-        card = QFrame()
-        card.setObjectName("quickActionCard")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(10, 9, 10, 10)
-        layout.setSpacing(6)
-        self.button(layout, french, english, action, primary=primary)
-        button = self.buttons[-1]
-        button.setProperty("destructive", destructive)
-        color = "#101318" if primary else "#EBC47A" if destructive else "#57C7D4"
-        button.setIcon(self.action_icon(icon_name, color))
-        description = QLabel()
-        description.setWordWrap(True)
-        description.setContentsMargins(2, 0, 2, 0)
-        self.bind(description.setText, description_fr, description_en)
-        layout.addWidget(description)
+    def quick_action_card(self, column, french, english, description_fr, description_en, icon_name, action, *, color):
+        card = ActionCard(self.action_icon(icon_name, color), color, action)
+        self.bind(card.set_title, french, english)
+        self.bind(card.description.setText, description_fr, description_en)
+        self.buttons.append(card)
         column.addWidget(card)
 
     @staticmethod
@@ -2278,13 +2274,24 @@ class Workspace(QMainWindow):
     def quick_update(self):
         response = QMessageBox.question(
             self, "Vigil",
-            self.tr_pair("Télécharger les signatures ClamAV dans le profil Vigil ?",
-                         "Download ClamAV signatures into the Vigil profile?"),
+            self.tr_pair(*ONLINE_CONFIRMATION),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if response == QMessageBox.StandardButton.Yes:
             self.start_quick_action(lambda: update_workflow_command(self.database_path), "freshclam")
+
+    def quick_update_usb(self):
+        operator = self.require_operator()
+        if not operator:
+            return
+        try:
+            if dev_mode.active():
+                raise ValueError(dev_mode.BLOCKED)
+            self.launch_external(offline_update_command(self.database_path, operator),
+                                 "clamav-usb", device_mode="operation")
+        except (OSError, ValueError) as error:
+            self.fail(error)
 
     def quick_raw_image(self):
         tr = self.tr_pair

@@ -65,13 +65,15 @@ QStatusBar { background: #151B22; color: #BAC9D7; }
 QListWidget#navigation::item:disabled { background: transparent; color: #91A1B3; }
 QScrollArea#quickActionArea { background: transparent; border: 0; }
 QFrame#quickActionSection { background: #171E27; border: 1px solid #35404E; border-radius: 12px; }
-QFrame#quickActionCard { background: #202A36; border: 1px solid #354658; border-radius: 8px; }
-QFrame#quickActionCard QLabel { background: transparent; color: #BDCADA; }
-QFrame#quickActionCard QPushButton { text-align: left; padding: 9px 11px; }
-QFrame#quickActionCard QPushButton:focus { border: 1px solid #A5EAF2; }
-QFrame#quickActionCard QPushButton[destructive="true"] { color: #FFE0AA; border-color: #806640; }
-QFrame#quickActionCard QPushButton[destructive="true"]:hover { background: #493A2D; }
-QLabel#quickCategoryTitle { background: transparent; font-size: 17px; font-weight: 700; }
+QScrollArea#quickActionArea QFrame#quickActionSection { background: #131A20; border: 1px solid #34434E; border-radius: 8px; }
+QPushButton#quickActionCard { background: #192129; border: 1px solid #34434E; border-radius: 8px; padding: 0; }
+QPushButton#quickActionCard:hover { background: #202C35; border-color: #55C5D2; }
+QPushButton#quickActionCard:pressed { background: #263C46; border-color: #55C5D2; }
+QPushButton#quickActionCard:focus { border-color: #82AAFF; }
+QPushButton#quickActionCard:disabled { background: #131A20; border-color: #34434E; }
+QPushButton#quickActionCard QLabel { background: transparent; color: #DCE3EA; }
+QPushButton#quickActionCard QLabel#actionCardDescription { color: #B8C3CF; }
+QPushButton#quickActionCard:disabled QLabel { color: #778490; }
 QLabel#quickActionTitle { color: #57C7D4; background: transparent; font-weight: 700; }
 QLabel#pageTitle { font-size: 20px; font-weight: 700; }
 QWidget[workspacePage="true"] { background: #101318; }

@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 from .clamav import signature_environment, signatures_path
 from .entity import data_directory, legacy_base
@@ -33,8 +34,11 @@ def scan_command(path, state):
 
 
 def update_command(state):
+    return freshclam_command(signatures_path(state))
+
+
+def freshclam_command(signatures):
     executable = tool("freshclam")
-    signatures = signatures_path(state).absolute()
     signatures.mkdir(mode=0o700, parents=True, exist_ok=True)
     if signatures.is_symlink():
         raise ValueError("Vigil signature directory must not be a symbolic link")
@@ -69,9 +73,29 @@ def update_command(state):
     return arguments
 
 
+def update_run_directory(state):
+    root = state.absolute().parent / "antivirus-updates"
+    if root.resolve() != root or root.is_relative_to("/investigation"):
+        raise ValueError("Invalid antivirus update journal directory")
+    run = root / uuid4().hex
+    run.mkdir(mode=0o700, parents=True)
+    return run
+
+
 def update_workflow_command(state):
-    return ["/usr/bin/env", signature_environment(state), sys.executable, "-m", "vigil.clamav",
-            "update", *update_command(state)]
+    run = update_run_directory(state)
+    return ["/usr/bin/env", signature_environment(state), f"VIGIL_UPDATE_RUN={run}",
+            "/usr/bin/bash", "-o", "pipefail", "-c",
+            '"$@" 2>&1 | tee -a "$VIGIL_UPDATE_RUN/update.log"', "vigil", sys.executable, "-m", "vigil.clamav", "online"]
+
+
+def offline_update_command(state, operator):
+    base = legacy_base()
+    run = update_run_directory(state)
+    return ["/usr/bin/env", signature_environment(state), f"VIGIL_BASE={base}",
+            f"VIGIL_DATA_DIR={data_directory(base)}", f"VIGIL_ACTIVE_USER={operator}",
+            f"VIGIL_UPDATE_RUN={run}", f"VIGIL_REPORT_PYTHON={sys.executable}",
+            "/usr/bin/bash", str(base / "scripts/clamav/vigil_clamav_update_usb.sh")]
 
 
 def mount_command(operation):

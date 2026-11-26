@@ -143,7 +143,7 @@ print('Copied', flush=True)
             async with workspace.run_test(size=(120, 32)) as pilot:
                 self.assertTrue(await pilot.click("#nav-quick"))
                 cards = list(workspace.query("#antivirus-group ActionCard"))
-                self.assertEqual(len(cards), 3)
+                self.assertEqual(len(cards), 4)
                 self.assertTrue(all(isinstance(card, ActionCard) for card in cards))
                 group = workspace.query_one("#antivirus-group")
                 self.assertLess(group.query_one(".heading").region.y, group.query_one(".section-description").region.y)

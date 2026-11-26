@@ -80,3 +80,22 @@ version du moteur, l’état du moteur reste « non vérifié ».
 
 `--db` sélectionne un profil particulier. En mode non interactif, un scan
 avec des signatures obsolètes exige `--offline`.
+
+### Mise à jour du moteur et import USB
+
+La carte **Mettre à jour l’antivirus** demande l’accord avant tout accès
+réseau. Vigil interroge les paquets ClamAV déjà installés et utilise APT,
+DNF ou Zypper pour les mettre à jour avec leurs dépendances. Sur Arch et
+Omarchy, la mise à niveau générale reste à lancer par l’opérateur. Vigil
+actualise les signatures et affiche un bilan partiel pour l’étape moteur.
+Les téléchargements FreshClam se font dans un dossier temporaire du profil.
+La base active est remplacée après vérification, avec sauvegarde et rollback.
+
+La carte **Mettre à jour la base virale depuis un périphérique USB** utilise
+le montage RO d’investigation sans affaire active. Seuls les noms officiels
+CVD sont admissibles. `sigtool` doit confirmer la signature officielle, puis
+ClamScan doit charger la base préparée avant activation. Les CLD externes
+sans chaîne de confiance vérifiée sont refusées. L’opérateur voit les versions
+et les dates avant de confirmer. Un verrou partagé avec les scans protège
+l’activation. Pour chaque mise à jour, le journal est conservé dans
+`antivirus-updates/<exécution>/update.log` à côté de la base de données.

@@ -141,3 +141,9 @@ PickerTable > .picker-table--file { color: $foreground; }
 #antivirus-report-error { height: auto; color: $error; }
 
 #tool-table { height: 10; }
+
+#quick ActionCard.blue-card { color: #82AAFF; }
+#quick ActionCard.green-card { color: #79CDA0; }
+#quick ActionCard.reports-card, #quick ActionCard.violet-card { color: #B59AF0; }
+#quick ActionCard.amber-card { color: #E4BC72; }
+#quick ActionCard:disabled { color: #94A3B3; }

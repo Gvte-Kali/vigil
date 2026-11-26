@@ -8,6 +8,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from vigil.linux_distribution import identify
 PROFILES = ("minimal", "forensic", "complet")
 COMMON = ("coreutils", "util-linux", "file")
 DISTRIBUTIONS = {
@@ -38,24 +40,6 @@ DISTRIBUTIONS = {
          "libxcb-keysyms1", "qt6-wayland"),
     ),
 }
-
-
-def identify(path):
-    data = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        key, sep, value = line.partition("=")
-        if sep and key in {"ID", "ID_LIKE"}:
-            data[key] = shlex.split(value)
-    for name in data.get("ID", []) + data.get("ID_LIKE", []):
-        if name in {"debian", "ubuntu", "kali", "parrot", "linuxmint"}:
-            return "debian"
-        if name in {"arch", "archlinux", "omarchy", "manjaro", "endeavouros"}:
-            return "arch"
-        if name in {"fedora", "rhel", "centos"}:
-            return "fedora"
-        if name == "suse" or name.startswith("opensuse"):
-            return "opensuse"
-    return None
 
 
 def system_plan(family, profile):

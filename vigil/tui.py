@@ -28,7 +28,9 @@ from .history import PAGE_SIZE, case_events
 from .images import inspect_raw
 from .inspection import inspect_file, investigation_mounts, list_evidence_directory
 from .module_scaffold import create_module_draft
-from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_workflow_command
+from .clamav import ONLINE_CONFIRMATION
+from .quick_actions import (acquisition_command, legacy_mount_command, offline_update_command,
+                            storage_command, update_workflow_command)
 from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .shutdown_state import check_shutdown_state
 from .tui_screens import Form, Operation
@@ -233,8 +235,11 @@ class Workspace(App):
                                    t("Analyser un support et produire un rapport.", "Scan media and produce a report."),
                                    "scan", id="quick-scan"),
                         ActionCard(t("Mettre à jour l’antivirus", "Update antivirus"),
-                                   t("Télécharger les signatures ClamAV.", "Download ClamAV signatures."),
-                                   "update", id="quick-update"),
+                                   t("Mettre à jour le moteur et les signatures ClamAV.", "Update the ClamAV engine and signatures."),
+                                   "update", id="quick-update", classes="blue-card"),
+                        ActionCard(t("Mettre à jour la base virale depuis un périphérique USB", "Update signatures from USB"),
+                                   t("Importer des signatures officielles hors ligne.", "Import official signatures offline."),
+                                   "mount", id="quick-update-usb", classes="green-card"),
                         ActionCard(t("Rapports antivirus", "Antivirus reports"),
                                    t("Retrouver les rapports de scan.", "Find previous scan reports."),
                                    "report", id="quick-reports", classes="reports-card"),
@@ -246,16 +251,16 @@ class Workspace(App):
                                    "mount", id="storage-mount"),
                         ActionCard(t("Démonter le stockage", "Unmount storage"),
                                    t("Libérer le support de travail.", "Release the work drive."),
-                                   "unmount", id="storage-unmount"),
+                                   "unmount", id="storage-unmount", classes="amber-card"),
                     ), id="storage-group", classes="quick-group", glyph="cases",
                        description=t("Supports de travail en lecture-écriture.", "Read-write work drives."))
                     yield SectionPanel("Acquisition", CardGrid(
                         ActionCard(t("Cloner un disque", "Clone a disk"),
                                    t("Copier bit à bit vers un disque cible.", "Copy bit for bit to a target disk."),
-                                   "clone", id="clone", classes="destructive"),
+                                   "clone", id="clone", classes="amber-card"),
                         ActionCard(t("Créer une image RAW", "Create a RAW image"),
                                    t("Enregistrer une image vérifiée.", "Save a verified disk image."),
-                                   "raw", id="raw", classes="sensitive"),
+                                   "raw", id="raw", classes="violet-card"),
                     ), id="acquisition-group", classes="quick-group", glyph="raw",
                        description=t("Clonage et images forensiques vérifiées.", "Verified disk clones and forensic images."))
                 with Vertical(id="configuration"):
@@ -1121,7 +1126,7 @@ class Workspace(App):
             self.notify(t("Une opération est en cours.", "An operation is active."))
             return
         needs_operator = {"import-case", "delete-case", "quick-scan", "storage-mount", "storage-unmount",
-                          "clone", "raw", "quick-update"}
+                          "clone", "raw", "quick-update-usb"}
         if action in needs_operator and not self.operator:
             self.notify(t("Choisissez un opérateur dans Entité.", "Choose an operator under Entity."), severity="warning")
             self.show_page("configuration")
@@ -1201,7 +1206,11 @@ class Workspace(App):
                                    "Data on the destination disk will be overwritten."))
             case "protect":
                 await self.request_protection()
-            case "quick-scan" | "quick-update" | "storage-mount" | "storage-unmount" | "mount-case" | "unmount-case" | "run-analysis" | "export-audit":
+            case "quick-update":
+                self.ask(action, t("Mettre à jour l’antivirus", "Update antivirus"), message=t(*ONLINE_CONFIRMATION))
+            case "quick-update-usb":
+                self.ask(action, t("Mettre à jour depuis USB", "Update from USB"))
+            case "quick-scan" | "storage-mount" | "storage-unmount" | "mount-case" | "unmount-case" | "run-analysis" | "export-audit":
                 self.ask(action, str(self.query_one(f"#{action}", Button).label))
             case "save-terminal":
                 preference = self.query_one("#terminal-preference", Select).value
@@ -1271,6 +1280,9 @@ class Workspace(App):
                 argv = await asyncio.to_thread(analysis_command, self.state, case, operator, key.value)
             case "quick-update":
                 argv = await asyncio.to_thread(update_workflow_command, self.state)
+            case "quick-update-usb":
+                mode = "operation"
+                argv = await asyncio.to_thread(offline_update_command, self.state, operator)
             case "quick-scan":
                 run = uuid4().hex
                 with storage.database(self.state) as connection:

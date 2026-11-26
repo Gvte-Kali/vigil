@@ -13,7 +13,7 @@ from typing import Annotated, Optional
 import typer
 
 from . import clamav, device_manager, storage
-from .quick_actions import scan_command, update_command
+from .quick_actions import scan_command
 from .case_export import export_case
 from .case_import import import_archive, verify_archive
 from .core import BUILTIN_MODULES, discover, doctor
@@ -197,7 +197,7 @@ def antivirus_update(db: DatabaseOption = None):
         if dev_mode.active():
             raise ValueError(dev_mode.BLOCKED)
         state = db or storage.default_database()
-        clamav.update_signatures(clamav.signatures_path(state), update_command(state))
+        clamav.describe(clamav.refresh_signatures(clamav.signatures_path(state)))
 
 
 @antivirus.command("scan")
@@ -212,15 +212,16 @@ def antivirus_scan(path: Path, db: DatabaseOption = None,
         state = db or storage.default_database()
         argv = scan_command(path, state)
         clamav.prepare_scan(clamav.signatures_path(state), offline=offline)
-        physical = Path(argv[-1])
-        if physical.is_relative_to("/investigation"):
-            from .inspection import investigation_mounts
+        with clamav.signature_lock(clamav.signatures_path(state), shared=True):
+            physical = Path(argv[-1])
+            if physical.is_relative_to("/investigation"):
+                from .inspection import investigation_mounts
 
-            if not any(physical.is_relative_to(root) for root in investigation_mounts()):
-                raise ValueError("Montage d’investigation RO requis / A read-only investigation mount is required")
-            status = device_manager.run_job(argv, analysis=True)
-        else:
-            status = subprocess.run(argv, check=False).returncode
+                if not any(physical.is_relative_to(root) for root in investigation_mounts()):
+                    raise ValueError("Montage d’investigation RO requis / A read-only investigation mount is required")
+                status = device_manager.run_job(argv, analysis=True)
+            else:
+                status = subprocess.run(argv, check=False).returncode
         raise typer.Exit(status)
 
 
