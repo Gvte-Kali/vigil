@@ -4,13 +4,13 @@ Application Linux d’analyse de supports numériques : montage en lecture seule
 analyses de fichiers, recherche de menaces et rapports PDF.
 Pensée pour un poste dédié sous Parrot ou Debian, avec une GUI Qt et une TUI Textual.
 
-[Lire la documentation](https://gvte-kali.github.io/vigil/) · [Documentation dans le dépôt](docs/index.md)
+[Lire la documentation](https://gvte-kali.github.io/vigil/)
 
-## Vigil 2.0 sur Linux
+## Utiliser Vigil sur Linux
 
-La [CLI](docs/development/linux-portability.md) s’installe
+La [CLI](https://gvte-kali.github.io/vigil/development/linux-portability.md) s’installe
 dans un environnement Python utilisateur et fonctionne sans session graphique.
-Pour lancer l'espace de travail Qt sur un clone de la branche `vigil-2.0` :
+Pour lancer l'espace de travail Qt depuis un clone du dépôt :
 
 ```bash
 python3 -m venv .venv
@@ -18,19 +18,17 @@ python3 -m venv .venv
 .venv/bin/vigil-gui
 ```
 
-Pour une installation existante dans `/opt/vigil`, suivre [la mise à jour des lanceurs](docs/installation/README.md#mettre-à-jour-les-lanceurs-dune-installation-existante).
+Pour une installation existante dans `/opt/vigil`, suivre [la mise à jour des lanceurs](https://gvte-kali.github.io/vigil/installation/README.html#mettre-à-jour-les-lanceurs-dune-installation-existante).
 
-La [recette Parrot](tests.txt) couvre le sélecteur FR/EN, les affaires,
+La [recette Parrot](https://gvte-kali.github.io/vigil/development/native-recette.md) couvre le sélecteur FR/EN, les affaires,
 les preuves et les parcours historiques encore disponibles dans Tkinter.
 
 ## Installer Vigil sur un poste Parrot ou Debian
 
-Sur Parrot ou Debian, suivre la [procédure d’installation depuis zéro](docs/installation/README.md#installer-et-lancer).
+Sur Parrot ou Debian, suivre la [procédure d’installation depuis zéro](https://gvte-kali.github.io/vigil/installation/README.html#installer-et-lancer).
 Elle prépare le site dans `/opt/vigil`, les dépendances, les lanceurs et le
 profil de signatures ClamAV. Pour un poste déjà installé, la
-[remise à zéro](docs/installation/desinstallation.md) couvre aussi les paquets APT.
-
-Voir [Installation](docs/installation/README.md) et `post-install-checked.txt`.
+[remise à zéro](https://gvte-kali.github.io/vigil/installation/desinstallation.html) couvre aussi les paquets APT.
 
 ## Première analyse
 
@@ -70,8 +68,7 @@ python3 scripts/dev/workspace.py gui
 
 Les wrappers de `scripts/Vigil-CLI/` sont en cours de développement.
 Le fonctionnement de l’application et les modules partagés sont décrits dans
-[Interface graphique](docs/interface-graphique/README.md).
-Pour construire le site localement, voir [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+[Interface graphique](https://gvte-kali.github.io/vigil/interface-graphique/README.html).
 
 ## Licence
 
