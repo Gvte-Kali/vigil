@@ -323,17 +323,34 @@ class WorkspaceTest(unittest.TestCase):
             opener = root / "xdg-open"
             opener.write_text("#!/bin/sh\nexit 7\n")
             opener.chmod(0o700)
+            confirmations = []
+
+            def accept_confirmation(dialog):
+                confirmations.append(dialog.informativeText())
+                self.assertIn("lecture seule stricte", dialog.informativeText())
+                dialog.checkBox().setChecked(True)
+                return QMessageBox.StandardButton.Open
+
             with patch("vigil.desktop.graphical_user", return_value=True), \
-                 patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Open), \
+                 patch.object(QMessageBox, "exec", accept_confirmation), \
                  patch("vigil.desktop_integration.shutil.which", return_value=str(opener)), \
                  patch.object(window, "fail") as failure:
                 window.explorer.open_item(item, 0)
                 failure.assert_not_called()
                 self.wait_for_task(window)
                 self.assertIn("xdg-open: 7", str(failure.call_args.args[0]))
+                window.explorer.open_item(item, 0)
+                self.wait_for_task(window)
+                self.assertEqual(failure.call_count, 2)
+                self.assertEqual(len(confirmations), 1)
             self.assertTrue(window.isVisible())
             self.assertEqual(window.active_case_id, case_id)
             self.assertEqual(source.read_text(), "synthetic evidence")
+            window.create_case("Other case")
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
+            self.assertNotEqual(window.active_case_id, case_id)
+            self.assertFalse(window.skip_viewing_copy_confirmation)
             self.close_workspace(window)
 
     def test_explorer_click_previews_latest_and_double_click_routes_by_type(self):

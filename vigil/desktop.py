@@ -14,7 +14,7 @@ from PySide6.QtCore import QByteArray, QLibraryInfo, QRectF, QSize, QObject, QSe
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QBoxLayout, QButtonGroup, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPlainTextEdit, QSplitter,
+    QAbstractItemView, QApplication, QBoxLayout, QButtonGroup, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QInputDialog, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPlainTextEdit, QSplitter,
     QListWidgetItem, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QScrollArea, QStackedWidget, QTabBar,
     QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QVBoxLayout, QWidget,
 )
@@ -130,6 +130,7 @@ class Workspace(QMainWindow):
         except (OSError, ValueError) as error:
             self.startup_state_error = error
         self.active_case_id = ""
+        self.skip_viewing_copy_confirmation = False
         self.settings.remove("active_case_id")
         self.language = "en" if settings.value("language") == "en" else "fr"
         self.translator = QTranslator(self)
@@ -826,6 +827,7 @@ class Workspace(QMainWindow):
             return
         if not any(case_id == self.active_case_id for case_id, _ in rows):
             self.active_case_id = ""
+            self.skip_viewing_copy_confirmation = False
         selected = selected or self.active_case_id
         self.cases.blockSignals(True)
         self.cases.clear()
@@ -979,6 +981,8 @@ class Workspace(QMainWindow):
             else:
                 self.cases.setCurrentItem(current)
             return
+        if target_id != self.active_case_id:
+            self.skip_viewing_copy_confirmation = False
         self.active_case_id = target_id
         self.save_session_context()
         self.refresh_evidence()
@@ -1223,8 +1227,9 @@ class Workspace(QMainWindow):
                         "No non-privileged graphical session is available.")
             return
 
-        if action != "copy":
+        if action == "folder" or (action == "file" and not self.skip_viewing_copy_confirmation):
             dialog = QMessageBox(self)
+            remember = None
             dialog.setTextFormat(Qt.TextFormat.PlainText)
             if action == "folder":
                 dialog.setText(self.tr_pair("Ouvrir dans l’explorateur système ?",
@@ -1237,13 +1242,24 @@ class Workspace(QMainWindow):
                 dialog.setText(self.tr_pair("Ouvrir une copie de consultation ?",
                                             "Open a viewing copy?"))
                 dialog.setInformativeText(self.tr_pair(
-                    "L’application par défaut peut traiter des contenus actifs. La copie n’est pas isolée de l’OS.",
-                    "The default application may process active content. The copy is not sandboxed from the OS.",
+                    "Le fichier s’ouvre dans l’application par défaut, sans isolation de l’OS. "
+                    "Vigil fournit une copie de consultation en lecture seule stricte. "
+                    "Les modifications de cette copie ne peuvent pas altérer la preuve enregistrée.",
+                    "The file opens in the default application without OS isolation. "
+                    "Vigil provides a strictly read-only viewing copy. "
+                    "Changes to this copy cannot alter the registered evidence.",
                 ))
+                remember = QCheckBox(self.tr_pair(
+                    "Ne plus afficher ce message tant que cette affaire est ouverte",
+                    "Do not show this message again while this case is open",
+                ), dialog)
+                dialog.setCheckBox(remember)
             dialog.setStandardButtons(QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Cancel)
             dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
-            if dialog.exec() != QMessageBox.StandardButton.Open:
+            if dialog.exec() != QMessageBox.StandardButton.Open or self.active_case_id != case_id:
                 return
+            if remember is not None and remember.isChecked():
+                self.skip_viewing_copy_confirmation = True
 
         def prepare():
             scope = storage.case_storage_directory(self.database_path, case_id) if mount is None else None
