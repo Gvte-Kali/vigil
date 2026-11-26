@@ -1,5 +1,6 @@
 """Resolve and validate the one ClamAV signature store used by Vigil."""
 import argparse
+import codecs
 from contextlib import contextmanager
 import fcntl
 from datetime import UTC, datetime, timedelta
@@ -320,11 +321,16 @@ def update_error(output):
 def checked_update_step(arguments):
     environment = {**os.environ, "LC_ALL": "C"}
     with subprocess.Popen(arguments, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          env=environment, text=True, errors="replace") as process:
+                          env=environment) as process:
         output = []
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            output.append(line)
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+        # Package managers can print a prompt without a newline, then wait on stdin.
+        while chunk := process.stdout.read1(8192):
+            text = decoder.decode(chunk)
+            print(text, end="", flush=True)
+            output.append(text)
+        output.append(decoder.decode(b"", final=True))
+        print(output[-1], end="", flush=True)
         code = process.wait()
     if code:
         raise ValueError(update_error("".join(output)))

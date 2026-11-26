@@ -3,6 +3,8 @@ from contextlib import redirect_stdout
 from datetime import UTC, datetime, timedelta
 import json
 import os
+import select
+import subprocess
 from pathlib import Path
 import tempfile
 import sys
@@ -198,3 +200,19 @@ esac
              redirect_stdout(io.StringIO()) as output:
             self.assertEqual(clamav.online_update(self.profile), 2)
             self.assertIn("Result: partial", output.getvalue())
+
+
+    def test_package_manager_prompt_is_visible_before_it_receives_a_reply(self):
+        manager = "print('Continue? [Y/n] ', end='', flush=True); assert input() == 'n'"
+        runner = "from vigil.clamav import checked_update_step; import sys; checked_update_step(sys.argv[1:])"
+        with subprocess.Popen([sys.executable, "-c", runner, sys.executable, "-c", manager],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE) as process:
+            try:
+                visible, _, _ = select.select([process.stdout], [], [], 5)
+                self.assertTrue(visible, "Prompt was buffered while the child waited for input")
+                self.assertIn(b"Continue? [Y/n] ", os.read(process.stdout.fileno(), 256))
+                process.communicate(b"n\n", timeout=5)
+                self.assertEqual(process.returncode, 0)
+            finally:
+                if process.poll() is None:
+                    process.kill()
