@@ -197,6 +197,50 @@ def antivirus_reports(state):
     return sorted(rows, key=lambda row: (-row.timestamp, row.path.name.casefold()))
 
 
+def delete_antivirus_report(state, selected):
+    """Remove a catalogue PDF and its case copy without removing scan records."""
+    from .report_copies import report_copy_lock, report_sources
+    from .storage import case_storage_directory, database, find_antivirus_case
+
+    if not any(row.path == selected for row in antivirus_reports(state)):
+        raise ValueError("Rapport introuvable / Report unavailable")
+    with database(state) as connection:
+        case = find_antivirus_case(connection)
+    if not case:
+        raise ValueError("Rapport introuvable / Report unavailable")
+    custody = case_storage_directory(state, case)
+    copies = custody / "rapports"
+    paths = {selected}
+    with report_copy_lock(custody):
+        for group, directory in report_sources(custody, custody / "projet-v1"):
+            origin = directory / selected.name
+            mirror = copies / group / selected.name
+            if selected in {origin, mirror}:
+                paths.update((origin, mirror))
+        for path in paths:
+            if not path.is_relative_to(custody) or path.resolve() != path or (
+                    path.exists() and not path.is_file()):
+                raise ValueError("Chemin de rapport non sûr / Unsafe report path")
+        if not selected.is_file():
+            raise ValueError("Rapport introuvable / Report unavailable")
+        staging = Path(tempfile.mkdtemp(prefix=".delete-report-", dir=custody))
+        staged = []
+        try:
+            for index, path in enumerate(sorted(paths)):
+                if path.is_file():
+                    target = staging / str(index)
+                    path.rename(target)
+                    staged.append((target, path))
+        except OSError:
+            for target, path in reversed(staged):
+                target.rename(path)
+            staging.rmdir()
+            raise
+        for target, _ in staged:
+            target.unlink()
+        staging.rmdir()
+
+
 def main():
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)

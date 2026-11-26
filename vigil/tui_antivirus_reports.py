@@ -8,7 +8,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Static
 
-from .antivirus_reports import antivirus_reports
+from .antivirus_reports import antivirus_reports, delete_antivirus_report
 from .desktop_integration import dispatch_viewing_copy
 from .tui_screens import Form
 
@@ -44,6 +44,7 @@ class AntivirusReportScreen(ModalScreen):
             with Horizontal(classes="actions"):
                 yield Button(t("Ouvrir le PDF", "Open PDF"), id="antivirus-open")
                 yield Button(t("Ouvrir le dossier", "Open folder"), id="antivirus-folder")
+                yield Button(t("Supprimer le rapport…", "Delete report…"), id="antivirus-delete")
                 yield Button(t("Actualiser", "Refresh"), id="antivirus-reload")
                 yield Button(t("Fermer", "Close"), id="antivirus-close")
 
@@ -72,7 +73,7 @@ class AntivirusReportScreen(ModalScreen):
             values = (row.date_label(), row.path.name, row.result_label(self.tr))
             if any(query in value.casefold() for value in values):
                 table.add_row(*(Text(value) for value in values), key=str(row.path))
-        for key in ("open", "folder"):
+        for key in ("open", "folder", "delete"):
             self.query_one(f"#antivirus-{key}", Button).disabled = table.row_count == 0
 
     def on_input_changed(self):
@@ -109,10 +110,29 @@ class AntivirusReportScreen(ModalScreen):
                 await self.open_selected()
             case "antivirus-folder":
                 await self.open_selected(folder=True)
+            case "antivirus-delete":
+                self.confirm_delete()
             case "antivirus-reload":
                 await self.reload()
             case "antivirus-close":
                 self.dismiss()
+
+    def confirm_delete(self):
+        if not (row := self.selected()):
+            return
+        t = self.tr
+
+        async def confirm(answer):
+            if answer is not None:
+                try:
+                    await asyncio.to_thread(delete_antivirus_report, self.state, row.path)
+                    await self.reload()
+                except (OSError, ValueError, sqlite3.Error) as error:
+                    self.show_error(error)
+
+        self.app.push_screen(Form(t("Supprimer le rapport", "Delete report"), t,
+                                  message=t(f"Supprimer définitivement « {row.path.name} » ? Les journaux sont conservés.",
+                                            f"Permanently delete “{row.path.name}”? Logs are kept.")), confirm)
 
     def action_close(self):
         self.dismiss()
@@ -124,12 +144,15 @@ class AntivirusReportScreen(ModalScreen):
         t = self.tr
         options = [(t("Actualiser", "Refresh"), "reload")]
         if self.selected():
-            options[0:0] = [(t("Ouvrir le PDF", "Open PDF"), "open"), (t("Ouvrir le dossier", "Open folder"), "folder")]
+            options[0:0] = [(t("Ouvrir le PDF", "Open PDF"), "open"), (t("Ouvrir le dossier", "Open folder"), "folder"),
+                            (t("Supprimer le rapport…", "Delete report…"), "delete")]
 
         async def choose(result):
             if result:
                 if result["choice"] == "reload":
                     await self.reload()
+                elif result["choice"] == "delete":
+                    self.confirm_delete()
                 else:
                     await self.open_selected(result["choice"] == "folder")
 

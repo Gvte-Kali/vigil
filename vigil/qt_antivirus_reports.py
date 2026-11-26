@@ -4,11 +4,11 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QDialog, QHBoxLayout, QLineEdit, QMenu, QPushButton,
+    QAbstractItemView, QDialog, QHBoxLayout, QLineEdit, QMenu, QMessageBox, QPushButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
 )
 
-from .antivirus_reports import antivirus_reports
+from .antivirus_reports import antivirus_reports, delete_antivirus_report
 from .desktop_integration import dispatch_viewing_copy
 
 
@@ -51,11 +51,13 @@ class AntivirusReportDialog(QDialog):
         self.folder = QPushButton(t("Ouvrir le dossier", "Open folder"))
         self.open.clicked.connect(self.open_selected)
         self.folder.clicked.connect(lambda: self.open_selected(folder=True))
+        self.delete = QPushButton(t("Supprimer le rapport…", "Delete report…"))
+        self.delete.clicked.connect(self.delete_selected)
         refresh = QPushButton(t("Actualiser", "Refresh"))
         close = QPushButton(t("Fermer", "Close"))
         refresh.clicked.connect(self.reload)
         close.clicked.connect(self.close)
-        for button in (self.open, self.folder, refresh, close):
+        for button in (self.open, self.folder, self.delete, refresh, close):
             actions.addWidget(button)
         self.reload()
 
@@ -92,7 +94,7 @@ class AntivirusReportDialog(QDialog):
         self.update_actions()
 
     def update_actions(self):
-        for button in (self.open, self.folder):
+        for button in (self.open, self.folder, self.delete):
             button.setEnabled(bool(self.table.selectedItems()))
 
     def open_selected(self, *, folder=False):
@@ -104,6 +106,25 @@ class AntivirusReportDialog(QDialog):
             except (OSError, ValueError) as error:
                 self.workspace.fail(error)
 
+    def delete_selected(self):
+        if not self.table.selectedItems():
+            return
+        item = self.table.item(self.table.currentRow(), 1)
+        path = Path(item.data(Qt.ItemDataRole.UserRole + 1))
+        t = self.workspace.tr_pair
+        answer = QMessageBox.question(
+            self, t("Supprimer le rapport", "Delete report"),
+            t(f"Supprimer définitivement « {path.name} » ? Les journaux du scan seront conservés.",
+              f"Permanently delete “{path.name}”? Scan logs will be kept."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            try:
+                delete_antivirus_report(self.workspace.database_path, path)
+            except (OSError, ValueError, sqlite3.Error) as error:
+                self.workspace.fail(error)
+            self.reload()
+
     def context_menu(self, position):
         index = self.table.indexAt(position)
         menu = QMenu(self)
@@ -111,6 +132,7 @@ class AntivirusReportDialog(QDialog):
             self.table.setCurrentCell(index.row(), index.column())
             menu.addAction(self.open.text(), self.open_selected)
             menu.addAction(self.folder.text(), lambda: self.open_selected(folder=True))
+            menu.addAction(self.delete.text(), self.delete_selected)
         menu.addAction(self.workspace.tr_pair("Actualiser", "Refresh"), self.reload)
         menu.exec(self.table.viewport().mapToGlobal(position))
         menu.deleteLater()

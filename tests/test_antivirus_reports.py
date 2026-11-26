@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from vigil.antivirus_reports import antivirus_reports, publish_report, report_name, scan_summary
+from vigil.antivirus_reports import antivirus_reports, delete_antivirus_report, publish_report, report_name, scan_summary
 from vigil.storage import antivirus_case, case_storage_directory, database
 
 
@@ -163,3 +163,32 @@ printf '%s\n' '----------- SCAN SUMMARY -----------' 'Scanned files: 1' 'Infecte
                              ("complete", 1, 2))
             fixture(run, expected=4, infected=1, errors=1, text=log)
             self.assertEqual(scan_summary(run, 0, 0)["status"], "partial")
+
+    def test_delete_removes_only_catalogue_pdf_and_prevents_resync(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory) / "cases.sqlite"
+            with database(state) as connection:
+                case = antivirus_case(connection, "Alice")
+            custody = case_storage_directory(state, case)
+            current, legacy = custody / "scan-current", custody / "scan-legacy"
+            fixture(current)
+            fixture(legacy)
+            modern, _ = publish_report(current, "Recent", START, "Alice", "", fake_generator, 0, 0)
+            old = legacy / "rapport_clamav_old.pdf"
+            old.write_bytes(b"%PDF")
+            unrelated = legacy / "triage_usb.pdf"
+            unrelated.write_bytes(b"%PDF")
+            rows = antivirus_reports(state)
+            mirror = custody / "rapports" / current.name / modern.name
+            self.assertTrue(mirror.is_file())
+            delete_antivirus_report(state, next(row.path for row in rows if row.path.name == old.name))
+            delete_antivirus_report(state, modern)
+            self.assertEqual(antivirus_reports(state), [])
+            self.assertFalse(old.exists())
+            self.assertFalse(modern.exists())
+            self.assertFalse(mirror.exists())
+            self.assertTrue(unrelated.exists())
+            self.assertTrue((current / "antivirus-report.json").is_file())
+            self.assertTrue(any(current.glob("clamav_*.log")))
+            with self.assertRaises(ValueError):
+                delete_antivirus_report(state, unrelated)

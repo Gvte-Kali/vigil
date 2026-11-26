@@ -1,4 +1,6 @@
 """Keep case PDF copies grouped by their source execution."""
+from contextlib import contextmanager
+import fcntl
 import os
 import shutil
 import sys
@@ -20,9 +22,25 @@ def report_sources(custody, imported=None):
         yield ("projet-v1", imported)
 
 
-def sync_report_copies(custody, imported=None):
+@contextmanager
+def report_copy_lock(custody):
     if custody.resolve() != custody.absolute() or custody.resolve().is_relative_to("/investigation"):
         raise ValueError("invalid case directory for PDF reports")
+    custody.mkdir(parents=True, mode=0o700, exist_ok=True)
+    fd = os.open(custody, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def sync_report_copies(custody, imported=None):
+    with report_copy_lock(custody):
+        return _sync_report_copies(custody, imported)
+
+
+def _sync_report_copies(custody, imported):
     root = custody / "rapports"
     if root.resolve() != root.absolute():
         raise ValueError("invalid PDF report directory")
