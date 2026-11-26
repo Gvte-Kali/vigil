@@ -1511,7 +1511,8 @@ class Workspace(QMainWindow):
             return
         name, accepted = QInputDialog.getText(
             self, self.tr_pair("Exporter l’affaire", "Export case"),
-            self.tr_pair("Nom de l’archive", "Archive filename"), text="affaire.tar.gz",
+            self.tr_pair("Nom de l’archive (extension fixe .tar.gz)", "Archive name (fixed .tar.gz extension)"),
+            text="affaire",
         )
         if not accepted:
             return

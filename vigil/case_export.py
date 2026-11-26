@@ -1,4 +1,5 @@
 """Export one case as a tarball with internal and external SHA-256 manifests."""
+import ctypes
 import hashlib
 import io
 import json
@@ -10,7 +11,6 @@ import tempfile
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from uuid import uuid4
 
 from . import evidence_layout
 from .case_import import verify_archive
@@ -18,6 +18,9 @@ from .destination import writable_destination
 from .history import case_events
 from .report_copies import sync_report_copies
 from .storage import audit, case_storage_directory, database, evidence_copy_path, file_identity, require_active_case, utc_now
+
+
+ARCHIVE_EXTENSION = ".tar.gz"
 
 
 @dataclass(frozen=True)
@@ -114,16 +117,28 @@ def collect_results(state, case_id, custody, legacy):
 
 
 
-def export_case(state, case_id, operator, destination, name="affaire.tar.gz"):
-    name = name.strip()
-    if not name or name in (".", "..") or name.startswith(".") or any(
-            char in "/\\" or ord(char) < 32 or ord(char) == 127 for char in name):
-        raise ValueError("Indiquez un nom de fichier valide / Enter a valid archive filename")
-    if not name.lower().endswith(".tar.gz"):
-        name += ".tar.gz"
-    if len(os.fsencode(name + ".sha256")) > 255:
-        raise ValueError("Nom de fichier trop long / Archive filename too long")
-    filename = name
+def publish_export(stage, destination):
+    # Linux renameat2 publishes the whole directory and refuses to replace an existing entry.
+    rename = ctypes.CDLL(None, use_errno=True).renameat2
+    rename.argtypes = (ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint)
+    rename.restype = ctypes.c_int
+    at_fdcwd = -100
+    rename_noreplace = 1
+    if rename(at_fdcwd, os.fsencode(stage), at_fdcwd, os.fsencode(destination), rename_noreplace):
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), str(destination))
+
+
+def export_case(state, case_id, operator, destination, name="affaire"):
+    stem = name.strip()
+    if stem.lower().endswith(ARCHIVE_EXTENSION):
+        stem = stem[:-len(ARCHIVE_EXTENSION)].rstrip()
+    if not stem or stem.startswith(".") or any(
+            char in "/\\" or ord(char) < 32 or ord(char) == 127 for char in stem):
+        raise ValueError("Indiquez un nom de fichier valide / Enter a valid archive name")
+    filename = stem + ARCHIVE_EXTENSION
+    if len(os.fsencode(filename + ".sha256")) > 255:
+        raise ValueError("Nom de fichier trop long / Archive name too long")
     destination = writable_destination(destination).path
     custody = case_storage_directory(state, case_id)
     with database(state) as connection:
@@ -150,7 +165,7 @@ def export_case(state, case_id, operator, destination, name="affaire.tar.gz"):
 
     writable_destination(destination)
     stage = Path(tempfile.mkdtemp(prefix=".vigil-export-", dir=destination))
-    final = destination / f"affaire-{case_id[:8]}-{uuid4().hex}"
+    final = None
     published = False
     try:
         sync_report_copies(custody, legacy)
@@ -227,11 +242,20 @@ def export_case(state, case_id, operator, destination, name="affaire.tar.gz"):
                     or any((file_identity(path.lstat()) if os.path.lexists(path) else None) != identity
                            for path, identity in copy_identities.items())):
                 raise ValueError("case files changed during export")
+            # Keep repeat exports separate, with a readable suffix only on collision.
+            for number in range(1, 10001):
+                final = destination / (stem if number == 1 else f"{stem} ({number})")
+                try:
+                    publish_export(stage, final)
+                except FileExistsError:
+                    continue
+                published = True
+                break
+            else:
+                raise FileExistsError(f"No available export folder for {stem}")
             audit(connection, operator, case_id, "case.export.success", {
                 "sha256": digest, "archive": str(final / filename), "missing_evidence_count": len(missing),
             })
-            stage.rename(final)
-            published = True
     except BaseException:
         shutil.rmtree(final if published else stage)
         with database(state) as connection:

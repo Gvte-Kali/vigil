@@ -358,6 +358,10 @@ class Workspace(App):
         if not Path("/usr/local/sbin/vigil-hotplug").is_file():
             raise ValueError(t("L’assistant USB est absent. Installez-le avec scripts/post-install/install-hotplug.sh.",
                                "The USB helper is missing. Install it with scripts/post-install/install-hotplug.sh."))
+        if await self.pending_protection_reports():
+            self.notify(t("Restitution précédente à vérifier dans le bilan des sessions.",
+                          "Review the previous recovery in session reports."), severity="warning")
+            return
         await self.launch_workflow("protect", {}, self.active_case, self.operator)
 
     async def finish_protection_start(self, status, guard, candidates):
@@ -1042,8 +1046,8 @@ class Workspace(App):
                     result = await asyncio.to_thread(create_module_draft, self.state, response["name"])
                     self.info(t("Brouillon du module", "Module draft"), result)
                 case "export-case":
-                    archive = self.form_path(response["path"])
-                    result = await asyncio.to_thread(export_case, self.state, case, operator, archive.parent, archive.name)
+                    destination = self.form_path(response["path"])
+                    result = await asyncio.to_thread(export_case, self.state, case, operator, destination, response["name"])
                     self.info(t("Archive créée", "Archive created"), result.archive)
                 case "export-audit":
                     self.info(t("Audit exporté", "Audit exported"), await asyncio.to_thread(case_report, self.state, case))
@@ -1075,6 +1079,11 @@ class Workspace(App):
         self.pick_path(title, options,
                        lambda path: self.submit_form(action, {**(fields or {}), "path": str(path)}),
                        initial=initial)
+
+    def choose_export_folder(self, answer):
+        if answer is not None:
+            self.pick_for("export-case", self.tr("Destination de l’archive", "Archive destination"),
+                          PickerOptions("directory", writable=True), fields=answer)
 
     def choose_import(self, answer):
         if answer is not None:
@@ -1192,9 +1201,9 @@ class Workspace(App):
                 self.pick_for(action, t("Inspecter une image RAW", "Inspect a RAW image"),
                               PickerOptions("open", (".raw", ".dd", ".img", ".iso")))
             case "export-case":
-                self.pick_for(action, t("Nom et destination de l’archive", "Archive filename and destination"),
-                              PickerOptions("save", writable=True),
-                              initial=Path.home() / "affaire.tar.gz")
+                self.push_screen(Form(t("Créer l’archive complète", "Create full archive"), t, (
+                    ("name", t("Nom (extension fixe .tar.gz)", "Name (fixed .tar.gz extension)"), "affaire"),
+                )), self.choose_export_folder)
             case "query-index":
                 self.pick_for(action, t("Index de recensement", "Census index"),
                               PickerOptions("open", (".sqlite", ".sqlite3", ".db")))

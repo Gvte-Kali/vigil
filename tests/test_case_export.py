@@ -51,7 +51,7 @@ class CaseExportTest(unittest.TestCase):
                 self.assertEqual(row["copy_status"], "missing")
                 self.assertIsNone(row["archive_path"])
                 self.assertEqual(row["sha256"], record["sha256"])
-            self.assertEqual(set(root.glob("affaire-*")), {output, partial.path})
+            self.assertEqual(set(root.glob("affaire*")), {output, partial.path})
             self.assertFalse(list(root.glob(".vigil-export-*")))
 
 

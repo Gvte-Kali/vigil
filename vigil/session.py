@@ -15,7 +15,7 @@ from importlib.metadata import PackageNotFoundError, version
 from uuid import uuid4
 
 from .entity import legacy_base
-from .external_terminal import TERMINALS, ExternalRun, launch_terminal
+from .external_terminal import TERMINALS, ExternalRun, launch_terminal, prepare_tracked
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
 from .storage import default_database
 from .terminal import show_logo
@@ -95,8 +95,12 @@ def read_receipt(path, *, wait=12, include_pending=False):
 
 def record_startup_recovery(state, guard_pid, candidates):
     receipt = read_receipt(receipt_path(int(guard_pid)), wait=0, include_pending=True)
-    if receipt.get("startup_recovery") != "complete":
+    if receipt.get("startup_recovery") != "complete" or mount_check()["status"] != "clear":
         return
+    close_recovered_sessions(state, candidates)
+
+
+def close_recovered_sessions(state, candidates):
     for name in set(candidates) & set(pending_sessions(state.parent / "sessions")):
         if not re.fullmatch(r"[0-9a-f]{32}\.json", name):
             continue
@@ -235,6 +239,60 @@ def guard(root, session_id):
         time.sleep(0.5)
 
 
+def recovery_confirmed(result):
+    return result["status"] == "complete" and all(
+        row.get("state") in {"restored", "absent"} for row in result["devices"]
+    )
+
+
+def restore_system():
+    check_shutdown_state()
+    result = subprocess.run(["/usr/bin/sudo", "--", str(HELPER), "recover"],
+                            stdout=subprocess.PIPE, text=True, check=True)
+    return json.loads(result.stdout)
+
+
+def startup_recovery_command():
+    language = os.environ.get("VIGIL_LANG", "fr")
+
+    def tr(french, english):
+        return english if language == "en" else french
+
+    report_line("RUN", tr("Restitution de la session précédente…", "Restoring the previous session…"))
+    try:
+        recovery = restore_system()
+        show_hotplug(recovery, tr)
+        check_shutdown_state()
+        return 0 if recovery_confirmed(recovery) else 1
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        report_line("WARN", str(error))
+        return 1
+
+
+def recover_before_startup(state, pending, *, terminal_workspace):
+    check_shutdown_state()
+    runs = state.parent / "terminal-runs"
+    if any(active_runs(runs, Path(name).stem) for name in pending):
+        raise ShutdownBlocked("Une opération Vigil est encore active / A Vigil operation is still active")
+    if not HELPER.is_file():
+        return pending
+    language, preferred = session_preferences(state)
+    argv = ["/usr/bin/env", f"VIGIL_LANG={language}", sys.executable,
+            "-m", "vigil.session", "--startup-recovery"]
+    if terminal_workspace and sys.stdin.isatty():
+        status = subprocess.run(argv, check=False).returncode
+    else:
+        run, command = prepare_tracked(argv, runs, {"operation": "startup-recovery", "language": language},
+                                       interface="tui")
+        launch_terminal(command, preferred, detached=True)
+        while (status := run.status()) is None:
+            time.sleep(0.15)
+    if status == 0:
+        check_shutdown_state()
+        close_recovered_sessions(state, pending)
+    return pending_sessions(state.parent / "sessions")
+
+
 def supervise(arguments, *, interface="gui", state=None):
     state = state or default_database()
     terminal_workspace = interface == "tui"
@@ -265,6 +323,11 @@ def supervise(arguments, *, interface="gui", state=None):
     try:
         supervisor_record = session_record(state, identifier)
         pending = pending_sessions(supervisor_record.parent)
+        if pending:
+            try:
+                pending = recover_before_startup(state, pending, terminal_workspace=terminal_workspace)
+            except (OSError, ValueError) as failure:
+                print(f"Vigil · {failure}", file=sys.stderr)
         if pending:
             print("Vigil · Sessions précédentes à vérifier / Previous sessions need review: "
                   + ", ".join(pending), file=sys.stderr)
@@ -340,7 +403,8 @@ def supervise(arguments, *, interface="gui", state=None):
         output = persist_report(state, report)
         if supervisor_record:
             unresolved = (
-                hotplug["status"] in {"pending", "error"}
+                report["mounts"]["status"] != "clear"
+                or hotplug["status"] in {"pending", "error"}
                 or (path is not None and status != 0 and hotplug["status"] == "unavailable")
                 or any(row.get("state") in {"error", "unverified"} for row in hotplug.get("devices", []))
             )
@@ -507,14 +571,10 @@ def recover(report, path, tr):
         return
     report_line("RUN", tr("Vérification et restitution ciblées…", "Checking and restoring recorded changes…"))
     try:
-        result = subprocess.run(["/usr/bin/sudo", "--", str(HELPER), "recover"], stdout=subprocess.PIPE,
-                                text=True, check=True)
-        recovery = json.loads(result.stdout)
+        recovery = restore_system()
         show_hotplug(recovery, tr)
         report["recovery_retry"] = recovery
-        if report.get("journal") and recovery["status"] == "complete" and all(
-            row.get("state") in {"restored", "absent"} for row in recovery.get("devices", [])
-        ):
+        if report.get("journal") and recovery_confirmed(recovery):
             journal = Path(report["journal"])
             state = default_database()
             if journal == session_record(state, report["session"]):
@@ -525,7 +585,7 @@ def recover(report, path, tr):
         if path is not None:
             with path.open("w", encoding="utf-8") as stream:
                 json.dump(report, stream, ensure_ascii=False, indent=2)
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
         print(terminal_style(tr("Nouvelle tentative non confirmée.", "Recovery retry not confirmed."), "91"))
 
 
@@ -603,6 +663,8 @@ def show_report_file(path, *, review=False):
 
 
 def main():
+    if sys.argv[1:] == ["--startup-recovery"]:
+        return startup_recovery_command()
     if len(sys.argv) == 4 and sys.argv[1] == "--guard":
         guard(Path(sys.argv[2]), sys.argv[3])
         return 0

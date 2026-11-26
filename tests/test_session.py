@@ -65,6 +65,31 @@ class SessionTest(unittest.TestCase):
             with patch("vigil.session.receipt_path", side_effect=lambda pid: root / f"{pid}-10.json"):
                 self.assertEqual(set(session.pending_sessions(root)), {"stale.json", "bad.json"})
 
+    def test_previous_session_is_closed_only_after_verified_recovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp) / "cases.sqlite"
+            identifier = "a" * 32
+            journal = session.session_record(state, identifier)
+            session.write_state(journal, {"status": "open", "pid": 12, "session": identifier})
+            candidates = [journal.name]
+            with patch("vigil.session.HELPER", Path(__file__)), \
+                    patch("vigil.session.sys.stdin.isatty", return_value=True), \
+                    patch("vigil.session.check_shutdown_state") as check, \
+                    patch("vigil.session.subprocess.run") as command:
+                command.return_value.returncode = 1
+                self.assertEqual(session.recover_before_startup(state, candidates, terminal_workspace=True),
+                                 candidates)
+                command.return_value.returncode = 0
+                self.assertEqual(session.recover_before_startup(state, candidates, terminal_workspace=True), [])
+                self.assertEqual(check.call_count, 3)
+            self.assertTrue(json.loads(journal.read_text())["recovered_at_startup"])
+
+    def test_recovery_rejects_unverified_devices(self):
+        outcome = {"status": "complete", "devices": [{"state": "unverified"}]}
+        with patch("vigil.session.restore_system", return_value=outcome), \
+                patch("vigil.session.check_shutdown_state"), redirect_stdout(io.StringIO()):
+            self.assertEqual(session.startup_recovery_command(), 1)
+
     def test_independently_running_writer_holds_session_guard(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

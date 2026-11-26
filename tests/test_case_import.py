@@ -60,7 +60,11 @@ class CaseImportTest(unittest.TestCase):
 
     def test_custom_archive_name_and_checksum(self):
         result = export_case(self.state, self.case, "Alice", self.root, "Affaire été")
+        self.assertEqual(result.path.name, "Affaire été")
         self.assertEqual(result.archive.name, "Affaire été.tar.gz")
+        repeated = export_case(self.state, self.case, "Alice", self.root, "Affaire été.TAR.GZ")
+        self.assertEqual(repeated.path.name, "Affaire été (2)")
+        self.assertEqual(repeated.archive.name, result.archive.name)
         checksum = result.archive.with_name(result.archive.name + ".sha256")
         self.assertEqual(checksum.read_text().strip(),
                          f"{hashlib.sha256(result.archive.read_bytes()).hexdigest()}  {result.archive.name}")
