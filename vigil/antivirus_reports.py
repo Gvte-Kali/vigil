@@ -45,6 +45,8 @@ def scan_summary(run, scan_status, operation_status, *, requires_triage=True):
         with log.open(encoding="utf-8", errors="replace") as stream:
             for raw in stream:
                 line = raw.rstrip()
+                if line.startswith("Vigil ClamAV metadata: "):
+                    continue
                 if line.strip() == "----------- SCAN SUMMARY -----------":
                     summary = True
                 if summary and (match := re.fullmatch(r"Scanned files:\s*(\d+)", line)):

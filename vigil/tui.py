@@ -27,7 +27,7 @@ from .history import PAGE_SIZE, case_events
 from .images import inspect_raw
 from .inspection import inspect_file, investigation_mounts, list_evidence_directory
 from .module_scaffold import create_module_draft
-from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_command
+from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_workflow_command
 from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .shutdown_state import check_shutdown_state
 from .tui_screens import Form, Operation
@@ -1200,7 +1200,7 @@ class Workspace(App):
                 mode = "analysis"
                 argv = await asyncio.to_thread(analysis_command, self.state, case, operator, key.value)
             case "quick-update":
-                argv = await asyncio.to_thread(update_command, self.state)
+                argv = await asyncio.to_thread(update_workflow_command, self.state)
             case "quick-scan":
                 run = uuid4().hex
                 with storage.database(self.state) as connection:

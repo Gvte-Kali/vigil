@@ -46,6 +46,9 @@ PHASE 04 — PÉRIPHÉRIQUES ET SOURCES
 [ ] Conserver les mécanismes de copie, de synchronisation et de SHA-256.
 
 PHASE 05 — AFFAIRES, PREUVES ET ARCHIVES
+[x] Base de signatures Vigil commune à FreshClam et ClamScan, sans
+    repli système. Contrôle de chargement et de révision après mise à jour,
+    confirmation hors ligne et état des signatures dans les rapports.
 [x] Rapport antivirus complet avec nom choisi, PDF unique, relevé USB
     et journaux ClamAV conservés. Catalogue commun GUI/TUI avec états
     incomplet, échec et résultat historique inconnu.

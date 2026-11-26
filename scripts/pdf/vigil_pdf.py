@@ -2244,6 +2244,18 @@ def build_report(kind, source_path, user, project, out_dir,
     elif kind == "usbhid":
         _section_usbhid(story, styles, data)
     elif kind == "clamav":
+        if logs:
+            signature = {}
+            try:
+                with open(logs[0], encoding="utf-8", errors="replace") as stream:
+                    prefix = "Vigil ClamAV metadata: "
+                    line = stream.readline()
+                    if line.startswith(prefix):
+                        signature = json.loads(line.removeprefix(prefix))
+            except (OSError, ValueError):
+                pass
+            en = os.environ.get("VIGIL_LANG") == "en"
+            append_signature_status(story, styles, signature, lambda fr, en_text: en_text if en else fr)
         _section_clamav(story, styles, logs, action, options)
 
     # --- Pied du rapport (description + signature pour ClamAV) ---
@@ -2278,6 +2290,26 @@ def build_report(kind, source_path, user, project, out_dir,
     return out_path
 
 
+def append_signature_status(story, styles, database, tr):
+    fields = {"engine", "engine_update", "directory", "daily_version", "daily_published", "age_hours", "freshness"}
+    if isinstance(database, dict) and fields <= database.keys():
+        engine_state = {"outdated": tr("obsolète", "outdated"),
+                        "unknown": tr("non vérifié", "not verified")}
+        freshness = tr("obsolètes", "stale") if database["freshness"] == "stale" else tr("à jour", "current")
+        story.append(info_table([
+            (tr("Moteur", "Engine"), esc(database["engine"])),
+            (tr("État du moteur", "Engine status"), engine_state.get(database["engine_update"], "—")),
+            (tr("Répertoire de signatures", "Signature directory"), esc(database["directory"])),
+            ("Daily", f"{database['daily_version']} · {esc(database['daily_published'])}"),
+            (tr("Âge des signatures", "Signature age"), f"{database['age_hours']} h · {freshness}"),
+            (tr("Poursuite hors ligne", "Offline continuation"),
+             tr("Oui", "Yes") if database.get("offline") else tr("Non", "No")),
+        ]))
+    else:
+        story.append(Paragraph(tr("État des signatures non enregistré.", "Signature status not recorded."),
+                               styles["StatusDesc"]))
+
+
 def build_antivirus_report(path, run, summary, started, user, project):
     """Reuse the Vigil cover, USB and ClamAV sections for a single workflow PDF."""
     english = os.environ.get("VIGIL_LANG") == "en"
@@ -2305,6 +2337,12 @@ def build_antivirus_report(path, run, summary, started, user, project):
         story.append(Paragraph(tr("Aucun relevé de triage USB disponible.", "USB triage log unavailable."), styles["StatusDesc"]))
     story.append(PageBreak())
     story.append(Paragraph(tr("Analyse antivirus ClamAV", "ClamAV antivirus analysis"), styles["SectionTitle"]))
+    signatures = run / "clamav-signatures.json"
+    try:
+        database = json.loads(signatures.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        database = {}
+    append_signature_status(story, styles, database, tr)
     options = run / "scan-options.txt"
     if summary["logs"]:
         _section_clamav(story, styles, [str(log) for log in summary["logs"]], "Antivirus",

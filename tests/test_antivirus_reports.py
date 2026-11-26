@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -127,6 +128,11 @@ printf '%s\n' '----------- SCAN SUMMARY -----------' 'Scanned files: 1' 'Infecte
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
             fixture(run, expected=2)
+            (run / "clamav-signatures.json").write_text(json.dumps({
+                "engine": "ClamAV 1.4.3", "engine_update": "outdated", "directory": "/profile/clamav",
+                "daily_version": 42, "daily_published": START, "age_hours": 192, "freshness": "stale",
+                "offline": True,
+            }))
             target, status = publish_report(run, "Rapport", START, "Alice", "Fixture",
                                             module.build_antivirus_report, 0, 0)
             self.assertEqual(status, "partial")
@@ -139,4 +145,6 @@ printf '%s\n' '----------- SCAN SUMMARY -----------' 'Scanned files: 1' 'Infecte
                 positions = [contents.index(title) for title in titles]
                 self.assertEqual(positions, sorted(positions))
                 self.assertIn("Scan incomplet", contents)
+                self.assertIn("/profile/clamav", contents)
+                self.assertIn("192 h", contents)
                 self.assertNotIn("AUCUNE MENACE DÉTECTÉE", contents)

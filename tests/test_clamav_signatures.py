@@ -1,0 +1,116 @@
+import io
+from contextlib import redirect_stdout
+from datetime import UTC, datetime, timedelta
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+from typer.testing import CliRunner
+
+from vigil import clamav, storage
+from vigil.adapters import analysis_command
+from vigil.cli import app
+from vigil.quick_actions import legacy_mount_command, scan_command, update_command
+
+
+def database_file(path, version, release):
+    header = f"ClamAV-VDB:fixture:{version}:1:99:digest:signature:fixture:{int(release.timestamp())}"
+    path.write_bytes(header.encode().ljust(512, b" ") + b"fixture")
+
+
+class ClamAVSignaturesTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.now = datetime.now(UTC)
+        self.state = self.root / "profile/cases.sqlite"
+        self.profile = clamav.signatures_path(self.state)
+        self.system = self.root / "system"
+        self.commands = self.root / "commands.log"
+        self.bin = self.root / "bin"
+        self.bin.mkdir()
+        self.install(self.profile, 42, self.now)
+        self.install(self.system, 900, self.now - timedelta(days=20))
+        self.fake("clamscan", """#!/bin/sh
+printf '%s\\n' "$*" >> "$CLAM_TEST_COMMANDS"
+[ "$1" = --database ] && [ -f "$2/main.cvd" ] && [ -f "$2/daily.cvd" ] || exit 2
+if [ "$3" = --version ]; then printf '%s\\n' 'ClamAV 1.4.3/900/system fixture'; fi
+""")
+        p = patch.dict(os.environ, {"PATH": f"{self.bin}:{os.environ['PATH']}",
+                                    "CLAM_TEST_COMMANDS": str(self.commands),
+                                    "CLAM_TEST_SYSTEM_DB": str(self.system)})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def fake(self, name, content):
+        path = self.bin / name
+        path.write_text(content)
+        path.chmod(0o700)
+        return path
+
+    def install(self, directory, version, release):
+        directory.mkdir(parents=True, exist_ok=True)
+        database_file(directory / "main.cvd", 1, release)
+        database_file(directory / "daily.cvd", version, release)
+
+    def test_profile_beats_a_different_system_database_in_all_builders(self):
+        with storage.database(self.state) as connection:
+            case = storage.create_case(connection, "Case", "Alice")
+        env = f"VIGIL_CLAMAV_DB_DIR={self.profile}"
+        self.assertIn(env, legacy_mount_command("scan", self.state, case, "Case", "Alice", run_id="1" * 32))
+        self.assertIn(env, analysis_command(self.state, case, "Alice", "vigil.clamav"))
+        target = self.root / "study.txt"
+        target.touch()
+        self.assertIn(str(self.profile), scan_command(target, self.state))
+        result = CliRunner().invoke(app, ["antivirus", "scan", str(target), "--db", str(self.state)])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("Daily: 42", result.output)
+        commands = self.commands.read_text().splitlines()
+        self.assertGreaterEqual(len(commands), 3)
+        self.assertTrue(all("--database " + str(self.profile) in cmd for cmd in commands))
+        self.assertNotIn(str(self.system), self.commands.read_text())
+
+    def test_missing_and_incomplete_profile_do_not_run_the_system_scanner(self):
+        with self.assertRaisesRegex(ValueError, "missing or unreadable"):
+            clamav.signature_status(self.profile / "missing")
+        (self.profile / "main.cvd").unlink()
+        with self.assertRaisesRegex(ValueError, "Incomplete or ambiguous"):
+            clamav.signature_status(self.profile)
+        self.assertFalse(self.commands.exists())
+
+    def test_stale_requires_explicit_offline_and_records_that_choice(self):
+        self.install(self.profile, 42, self.now - timedelta(days=8))
+        log = self.root / "scan.json"
+        with redirect_stdout(io.StringIO()), patch("vigil.clamav.sys.stdin.isatty", return_value=False):
+            with self.assertRaisesRegex(ValueError, "--offline"):
+                clamav.prepare_scan(self.profile, log=log)
+            self.assertFalse(json.loads(log.read_text())["offline"])
+            status = clamav.prepare_scan(self.profile, offline=True, log=log)
+        self.assertEqual(status["freshness"], "stale")
+        self.assertTrue(json.loads(log.read_text())["offline"])
+
+    def test_freshclam_result_is_loaded_and_verified_by_the_same_scanner(self):
+        database_file(self.root / "new.cvd", 43, self.now)
+        self.fake("freshclam", f"""#!/bin/sh
+[ "$1" = '--config-file={self.profile}/vigil-freshclam.conf' ] || exit 3
+if [ "$2" = --version ]; then exit 0; fi
+[ "$2" = '--datadir={self.profile}' ] || exit 4
+cp '{self.root / "new.cvd"}' '{self.profile / "daily.cvd"}'
+echo 'WARNING: Your ClamAV installation is OUTDATED!'
+echo 'daily.cvd updated (version: 43, sigs: 100, f-level: 90, builder: fixture)'
+""")
+        with redirect_stdout(io.StringIO()):
+            status = clamav.update_signatures(self.profile, update_command(self.state))
+        self.assertEqual(status["daily_version"], 43)
+        self.assertEqual(clamav.signature_status(self.profile)["engine_update"], "outdated")
+        self.assertEqual(clamav.signature_status(self.system)["daily_version"], 900)
+        self.fake("freshclam", """#!/bin/sh
+if [ "$2" = --version ]; then exit 0; fi
+echo 'daily.cvd updated (version: 44, sigs: 100, f-level: 90, builder: fixture)'
+""")
+        with redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, "revisions disagree"):
+            clamav.update_signatures(self.profile, update_command(self.state))

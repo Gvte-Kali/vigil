@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from . import storage
-from .quick_actions import signatures_path
+from .clamav import signature_environment
 from .report_copies import SYNC_REPORTS, report_sync_context
 
 CENSUS_LIMIT = 100
@@ -89,6 +89,6 @@ def analysis_command(state, case_id, operator, module_id):
         "VIGIL_INVESTIGATION_DIR=/investigation", f"VIGIL_LEGACY_PROJECT={case['name']}",
         f"VIGIL_ACTIVE_USER={operator}", f"VIGIL_ANALYSIS_RESULTS={output}",
         f"VIGIL_LEGACY_SCAN_DIR={output if is_antivirus else ''}",
-        f"VIGIL_CLAMAV_DB_DIR={signatures_path(state)}", f"VIGIL_LEGACY_CASE_DIR={output}", "/usr/bin/bash", "-c", wrapper,
+        signature_environment(state), f"VIGIL_LEGACY_CASE_DIR={output}", "/usr/bin/bash", "-c", wrapper,
         "vigil", str(script), *args,
     ]

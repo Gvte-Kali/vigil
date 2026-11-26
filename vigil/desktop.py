@@ -41,7 +41,7 @@ from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .system_panel import SystemPanel
 from .system_info import read_zones
 from .shutdown_state import ShutdownBlocked, capture_startup_state, check_shutdown_state
-from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_command
+from .quick_actions import acquisition_command, legacy_mount_command, storage_command, update_workflow_command
 from .external_terminal import TERMINALS, launch_terminal, launch_tracked
 
 ANALYSIS_LABELS = {
@@ -2270,7 +2270,7 @@ class Workspace(QMainWindow):
             QMessageBox.StandardButton.No,
         )
         if response == QMessageBox.StandardButton.Yes:
-            self.start_quick_action(lambda: update_command(self.database_path), "freshclam")
+            self.start_quick_action(lambda: update_workflow_command(self.database_path), "freshclam")
 
     def quick_raw_image(self):
         tr = self.tr_pair

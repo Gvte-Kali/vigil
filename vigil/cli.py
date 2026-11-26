@@ -2,6 +2,7 @@
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 from contextlib import contextmanager
 from dataclasses import asdict
@@ -11,7 +12,8 @@ from typing import Annotated, Optional
 
 import typer
 
-from . import device_manager, storage
+from . import clamav, device_manager, storage
+from .quick_actions import scan_command, update_command
 from .case_export import export_case
 from .case_import import import_archive, verify_archive
 from .core import BUILTIN_MODULES, discover, doctor
@@ -37,6 +39,8 @@ modules = typer.Typer(no_args_is_help=True)
 cases = typer.Typer(no_args_is_help=True)
 evidence = typer.Typer(no_args_is_help=True)
 devices = typer.Typer(no_args_is_help=True, help="Manage devices / Gérer les périphériques.")
+antivirus = typer.Typer(no_args_is_help=True, help="ClamAV avec le profil Vigil / ClamAV using the Vigil profile.")
+app.add_typer(antivirus, name="antivirus")
 app.add_typer(modules, name="modules")
 app.add_typer(cases, name="cases")
 app.add_typer(evidence, name="evidence")
@@ -67,7 +71,7 @@ def options(
 def command():
     try:
         yield
-    except (OSError, ValueError, sqlite3.Error) as error:
+    except (OSError, ValueError, EOFError, sqlite3.Error, subprocess.SubprocessError) as error:
         typer.echo(str(error), err=True)
         raise typer.Exit(1) from error
 
@@ -175,6 +179,49 @@ def launch_gui():
     from .session import supervise
 
     raise typer.Exit(supervise([]))
+
+
+@antivirus.command("status")
+def antivirus_status(db: DatabaseOption = None):
+    """Verify and show the active Vigil signature set."""
+    with command():
+        emit(clamav.signature_status(clamav.signatures_path(db or storage.default_database())))
+
+
+@antivirus.command("update")
+def antivirus_update(db: DatabaseOption = None):
+    """Update the Vigil signature set and verify it with ClamScan."""
+    from . import dev_mode
+
+    with command():
+        if dev_mode.active():
+            raise ValueError(dev_mode.BLOCKED)
+        state = db or storage.default_database()
+        clamav.update_signatures(clamav.signatures_path(state), update_command(state))
+
+
+@antivirus.command("scan")
+def antivirus_scan(path: Path, db: DatabaseOption = None,
+                   offline: bool = typer.Option(False, "--offline", help="Explicitly accept stale signatures.")):
+    """Scan a readable path with the Vigil signature set."""
+    from . import dev_mode
+
+    with command():
+        if dev_mode.active():
+            raise ValueError(dev_mode.BLOCKED)
+        state = db or storage.default_database()
+        argv = scan_command(path, state)
+        clamav.prepare_scan(clamav.signatures_path(state), offline=offline)
+        physical = Path(argv[-1])
+        if physical.is_relative_to("/investigation"):
+            from .inspection import investigation_mounts
+
+            if not any(physical.is_relative_to(root) for root in investigation_mounts()):
+                raise ValueError("Montage d’investigation RO requis / A read-only investigation mount is required")
+            status = device_manager.run_job(argv, analysis=True)
+        else:
+            status = subprocess.run(argv, check=False).returncode
+        raise typer.Exit(status)
 
 
 @app.command("doctor")

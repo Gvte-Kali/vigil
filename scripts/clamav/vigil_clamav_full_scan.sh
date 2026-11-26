@@ -84,6 +84,7 @@ while [ $# -gt 0 ]; do
         --user=*)
             SELECTED_USER="${1#--user=}"
             ;;
+        --offline)     SCAN_ARGS+=(--offline) ;;
         --archives)    SCAN_ARGS+=(--archives) ;;
         --no-archives) SCAN_ARGS+=(--no-archives) ;;
         --size-unlimited) SCAN_ARGS+=(--size-unlimited); SIZE_SET=1; SIZE_MODE="unlimited" ;;
@@ -172,6 +173,10 @@ else
 fi
 
 echo ""
+
+# Managed callers pass the profile explicitly. Direct launches resolve it in Core.
+VIGIL_CLAMAV_DB_DIR=$(python3 "$SCRIPT_DIR/../vigil/clamav.py" directory) || exit 1
+export VIGIL_CLAMAV_DB_DIR
 
 if [ "$GEN_PDF" = 1 ]; then
     report_tool="$SCRIPT_DIR/../vigil/antivirus_reports.py"

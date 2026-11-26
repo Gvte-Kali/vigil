@@ -117,6 +117,7 @@ SIZE_MODE="unlimited"
 ALERT_ENC_SET=0
 ALERT_ENC=1
 JSON_OUT_DIR=""
+SIGNATURE_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --pdf)        GEN_PDF=1; PDF_SET=1 ;;
@@ -124,6 +125,7 @@ while [ $# -gt 0 ]; do
         --log)        GEN_LOG=1; LOG_SET=1 ;;
         --no-log)     GEN_LOG=0; LOG_SET=1 ;;
         --all)        SCAN_ALL=1 ;;
+        --offline)    SIGNATURE_ARGS+=(--offline) ;;
         --comment)    shift; SCAN_COMMENT="${1:-}"; COMMENT_SET=1 ;;
         --comment=*) SCAN_COMMENT="${1#--comment=}"; COMMENT_SET=1 ;;
         --yes)        AUTO_YES=1 ;;
@@ -292,51 +294,17 @@ echo -e "${BLUE}============================================${NC}"
 echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
 
-# --- Vérification des dépendances ---
-echo -e "${BLUE}=== Vérification des dépendances ===${NC}"
-if ! command -v clamscan >/dev/null 2>&1; then
-    echo -e "${RED}❌ clamscan n'est pas installé.${NC}"
-    echo -e "${YELLOW}    Installez-le : sudo apt install clamav${NC}"
-    echo -e "${YELLOW}    Puis mettez à jour les bases : sudo bash $(dirname "$0")/vigil_clamav_update.sh${NC}"
-    ERRORS=$((ERRORS + 1))
-    final_pause
-    exit 1
+# Resolve the same Vigil profile regardless of operator or scan mode.
+clamav_core="$(dirname -- "$0")/../../vigil/clamav.py"
+DB_DIR=$(python3 "$clamav_core" directory) || exit 1
+export VIGIL_CLAMAV_DB_DIR="$DB_DIR"
+mkdir -p -- "$RAPPORTS_DIR" || exit 1
+signature_log="$RAPPORTS_DIR/clamav-signatures-$(date +%Y%m%d_%H%M%S)-$$.json"
+if [ -n "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+    signature_log="$RAPPORTS_DIR/clamav-signatures.json"
 fi
-
-# Vérifier que les bases virales existent
-DB_DIR=$(clamconf 2>/dev/null | sed -nE 's/^\s*DatabaseDirectory\s*=\s*"?([^"]*)"?\s*$/\1/p' | tail -1)
-[ -z "$DB_DIR" ] && DB_DIR="/var/lib/clamav"
-CASE_DB=()
-if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ] && [ -n "${VIGIL_CLAMAV_DB_DIR:-}" ]; then
-    for local_db in "$VIGIL_CLAMAV_DB_DIR"/*.cvd "$VIGIL_CLAMAV_DB_DIR"/*.cld; do
-        if [ -f "$local_db" ]; then
-            DB_DIR="$VIGIL_CLAMAV_DB_DIR"
-            CASE_DB=(--database="$DB_DIR")
-            break
-        fi
-    done
-fi
-HAS_DB=0
-for db in main.cvd main.cld daily.cvd daily.cld; do
-    if [ -f "$DB_DIR/$db" ]; then HAS_DB=1; break; fi
-done
-if [ "$HAS_DB" = "0" ]; then
-    echo ""
-    echo -e "${YELLOW}⚠️  ${BOLD}Aucune base virale trouvée${NC} ${GREY}dans $DB_DIR${NC}"
-    echo -e "  ${GREY}Mettez à jour les bases :${NC} ${BOLD}sudo bash $(dirname "$0")/vigil_clamav_update.sh${NC}"
-    if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
-        echo "Mettez à jour les signatures ClamAV dans Actions rapides." >&2
-        exit 1
-    elif [ "$AUTO_YES" = "1" ]; then
-        echo -e "${GREY}--yes : continuation automatique sans base virale.${NC}"
-    else
-        echo -ne "\n${BOLD}${YELLOW}Voulez-vous continuer quand même ? (o/n) : ${NC}"
-        read -r CONT
-        [ "$CONT" = "o" ] || [ "$CONT" = "O" ] || { echo -e "${YELLOW}Annulé.${NC}"; exit 0; }
-    fi
-fi
-
-echo -e "${GREEN}✅ clamscan disponible : $(clamscan --version 2>/dev/null | head -1)${NC}"
+python3 "$clamav_core" prepare "${SIGNATURE_ARGS[@]}" --log "$signature_log" || exit 1
+CLAMSCAN=$(command -v clamscan) || exit 1
 echo ""
 
 # --- Lister les dossiers disponibles dans /investigation ---
@@ -577,10 +545,23 @@ for target in "${TARGETS[@]}"; do
     else
         USE_TTY=0
     fi
-    SCANNER=(sudo clamscan)
-    if [ "${VIGIL_CASE_ANALYSIS:-}" = "1" ]; then
-        SCANNER=(clamscan --follow-dir-symlinks=0 --follow-file-symlinks=0 --cross-fs=no "${CASE_DB[@]}")
+    SCANNER=("$CLAMSCAN")
+    # Case analysis stays unprivileged. Only request sudo for a legacy scan
+    # when the mounted tree cannot be read by the operator.
+    if [ "${VIGIL_CASE_ANALYSIS:-}" != 1 ]; then
+        if ! unreadable=$(find "$target" \( -type f ! -readable -o -type d \( ! -readable -o ! -executable \) \) \
+                                  -print -quit 2>/dev/null) || [ -n "$unreadable" ]; then
+            if [ "$(realpath -- "$CLAMSCAN")" != /usr/bin/clamscan ]; then
+                echo "ClamScan privilégié requiert /usr/bin/clamscan / Elevated ClamScan requires /usr/bin/clamscan." >&2
+                ERRORS=$((ERRORS + 1))
+                continue
+            fi
+            SCANNER=(sudo -- /usr/bin/clamscan)
+        fi
     fi
+    SCANNER+=(--database "$DB_DIR" --follow-dir-symlinks=0 --follow-file-symlinks=0 --cross-fs=no)
+    printf 'Vigil ClamAV metadata: ' >> "$LOG_FILE"
+    cat -- "$signature_log" >> "$LOG_FILE"
     "${SCANNER[@]}" --recursive --bell $CLAM_OPTS "$target" 2>&1 \
         | progress_monitor "$LOG_FILE" "$TOTAL_FILES" "$USE_TTY"
     CLAM_RC=${PIPESTATUS[0]:-0}

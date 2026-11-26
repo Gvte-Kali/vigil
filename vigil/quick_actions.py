@@ -5,8 +5,10 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import sys
 from pathlib import Path
 
+from .clamav import signature_environment, signatures_path
 from .entity import data_directory, legacy_base
 from .report_copies import SYNC_REPORTS, report_sync_context
 from .storage import case_storage_directory
@@ -19,20 +21,14 @@ def tool(name):
     return path
 
 
-def signatures_path(state):
-    return state.parent / "clamav"
-
-
 def scan_command(path, state):
     path = path.resolve(strict=True)
     if not (path.is_file() or path.is_dir()):
         raise ValueError("select a regular file or directory")
-    arguments = [tool("clamscan"), "--recursive=yes", "--scan-archive=yes",
+    arguments = [tool("clamscan"), "--database", str(signatures_path(state)),
+                 "--recursive=yes", "--scan-archive=yes",
                  "--alert-encrypted=yes", "--follow-dir-symlinks=0",
                  "--follow-file-symlinks=0", "--cross-fs=no"]
-    signatures = signatures_path(state)
-    if any(file.is_file() for pattern in ("*.cvd", "*.cld") for file in signatures.glob(pattern)):
-        arguments.extend(("--database", str(signatures)))
     return [*arguments, "--", str(path)]
 
 
@@ -71,6 +67,11 @@ def update_command(state):
         )
         raise ValueError(f"FreshClam · {config}\n{diagnostic}\n{help_text}")
     return arguments
+
+
+def update_workflow_command(state):
+    return ["/usr/bin/env", signature_environment(state), sys.executable, "-m", "vigil.clamav",
+            "update", *update_command(state)]
 
 
 def mount_command(operation):
@@ -118,7 +119,7 @@ def legacy_mount_command(operation, state, case_id, name, operator, *, run_id=No
             raise ValueError("invalid scan execution ID")
         run = directory / f"scan-{run_id}"
         run.mkdir(mode=0o700)
-        context.append(f"VIGIL_LEGACY_SCAN_DIR={run}")
+        context.extend((f"VIGIL_LEGACY_SCAN_DIR={run}", signature_environment(state)))
         arguments = ["--user", label(operator), "--log", "--pdf"]
 
     wrapper = '/usr/bin/sudo -v && exec /usr/bin/bash "$@"'

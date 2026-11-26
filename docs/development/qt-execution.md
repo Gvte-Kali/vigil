@@ -54,3 +54,29 @@ avec un scan complet reste un résultat valide. Le catalogue utilise les
 métadonnées enregistrées pour les nouveaux rapports. Les anciens PDF sans
 résultat documenté affichent « Résultat inconnu ». Leur date reste vide si
 elle ne peut pas être lue dans le nom historique.
+
+### Base de signatures ClamAV
+
+FreshClam et ClamScan utilisent le répertoire `clamav` à côté de la base
+SQLite de Vigil. Tous les scripts de scan passent ce chemin explicitement à
+ClamScan. Une base `main` ou `daily` absente, illisible, ambiguë ou que le
+moteur ne peut pas charger arrête le scan. La base système n’est jamais un
+repli automatique. Le scan rapide s’exécute avec les droits de l’opérateur
+lorsque l’arborescence est lisible. L’analyse d’une affaire reste sans sudo.
+
+Le terminal et le PDF indiquent la version du moteur ainsi que la révision,
+la date et l’âge de `daily`. Au-delà de sept jours, le terminal propose
+une mise à jour, une poursuite hors ligne explicite ou l’annulation.
+FreshClam et ClamScan sont vérifiés après mise à jour dans le même
+répertoire, et la révision annoncée par FreshClam doit correspondre au
+relevé de `daily`. Un avertissement FreshClam sur le moteur est enregistré
+séparément de la fraîcheur des signatures. Sans avis connu pour cette
+version du moteur, l’état du moteur reste « non vérifié ».
+
+    vigil antivirus status
+    vigil antivirus update
+    vigil antivirus scan /chemin/vers/un/fichier
+    vigil antivirus scan /chemin/vers/un/fichier --offline
+
+`--db` sélectionne un profil particulier. En mode non interactif, un scan
+avec des signatures obsolètes exige `--offline`.
