@@ -28,8 +28,8 @@ def sync_report_copies(custody, imported=None):
         raise ValueError("invalid PDF report directory")
     root.mkdir(parents=True, mode=0o700, exist_ok=True)
     for group, directory in report_sources(custody, imported):
-        for source in directory.glob("*.pdf"):
-            if source.is_symlink() or not source.is_file():
+        for source in directory.glob("*"):
+            if source.suffix.casefold() != ".pdf" or source.is_symlink() or not source.is_file():
                 continue
             destination = root / group / source.name
             if destination.resolve() != destination.absolute():
@@ -50,7 +50,7 @@ def sync_report_copies(custody, imported=None):
     for directory, _, files in os.walk(root):
         for name in files:
             path = Path(directory) / name
-            if path.suffix == ".pdf" and not path.is_symlink() and path.is_file():
+            if path.suffix.casefold() == ".pdf" and not path.is_symlink() and path.is_file():
                 copies.append(path)
     return sorted(copies, key=lambda path: (-path.stat().st_mtime_ns, path.name.casefold(), str(path)))
 

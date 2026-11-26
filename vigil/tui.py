@@ -31,6 +31,7 @@ from .quick_actions import acquisition_command, legacy_mount_command, storage_co
 from .reporting import case_pdf_reports, case_report, pdf_analysis_kind
 from .shutdown_state import check_shutdown_state
 from .tui_screens import Form, Operation
+from .tui_antivirus_reports import AntivirusReportScreen
 from .tui_picker import FileSystemPicker, PickerOptions
 from . import dev_mode
 from .tui_widgets import ActionCard, CardGrid, MetricCard, NavigationItem, SectionPanel, StatusIndicator, icon, supports_unicode
@@ -1162,15 +1163,7 @@ class Workspace(App):
                     self.pick_path(title, PickerOptions("open", (".pdf",)), lambda path: self.info(title, path),
                                    initial=self.report_paths[key.value])
             case "quick-reports":
-                with storage.database(self.state) as connection:
-                    case = storage.find_antivirus_case(connection)
-                paths = await asyncio.to_thread(case_pdf_reports, self.state, case) if case else []
-                title = t("Rapports antivirus", "Antivirus reports")
-                if paths:
-                    self.pick_path(title, PickerOptions("open", (".pdf",)), lambda path: self.info(title, path),
-                                   initial=paths[0])
-                else:
-                    self.info(title, t("Aucun rapport.", "No reports."))
+                self.push_screen(AntivirusReportScreen(self.state, t))
             case "analysis-results" if self.active_case:
                 directory = await asyncio.to_thread(storage.case_storage_directory, self.state, self.active_case)
                 results = directory / "analyses"

@@ -213,7 +213,10 @@ report_usb_triage() {
             grep -qxF "$busdev" "$prot_file" 2>/dev/null && protflag=true
             grep -qxF "${vid}:${pid}" "$USB_BLACKLIST_FILE" 2>/dev/null && blflag=true
             { [ -n "$ser" ] && grep -qxF "$ser" "$USB_BLACKLIST_FILE" 2>/dev/null; } && blflag=true
-            printf '{"bus_dev": "%s", "vid": "%s", "pid": "%s", "manufacturer": "%s", "product": "%s", "serial": "%s", "hid": %s, "protected": %s, "blacklisted": %s}' \
+            jq -cn --arg bus_dev "$busdev" --arg vid "$vid" --arg pid "$pid" \
+                --arg manufacturer "$mfr" --arg product "$prod" --arg serial "$ser" \
+                --argjson hid "$hidflag" --argjson protected "$protflag" --argjson blacklisted "$blflag" \
+                '{$bus_dev, $vid, $pid, $manufacturer, $product, $serial, $hid, $protected, $blacklisted}'
                 "$busdev" "$vid" "$pid" "$mfr" "$prod" "$ser" "$hidflag" "$protflag" "$blflag"
         done < "$new_file"
         printf ']}'

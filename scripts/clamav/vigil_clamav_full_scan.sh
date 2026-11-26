@@ -60,12 +60,21 @@ ERRORS=0
 # --log/--no-log : conserver/ne pas conserver le fichier journal clamscan
 # --user NOM     : utilisateur passe directement (pas de sélection interactive)
 SCAN_ARGS=()
+GEN_PDF=1
+CUSTOM_REPORT_NAME=
+REPORT_NAME_SET=0
 SIZE_SET=0
 SIZE_MODE="unlimited"
 while [ $# -gt 0 ]; do
     case "$1" in
-        --pdf)    SCAN_ARGS+=(--pdf) ;;
-        --no-pdf) SCAN_ARGS+=(--no-pdf) ;;
+        --pdf)    GEN_PDF=1 ;;
+        --no-pdf) GEN_PDF=0 ;;
+        --report-name)
+            if [ "$#" -lt 2 ]; then echo "Nom de rapport manquant / Missing report name" >&2; exit 1; fi
+            shift
+            CUSTOM_REPORT_NAME="$1"
+            REPORT_NAME_SET=1
+            ;;
         --log)    SCAN_ARGS+=(--log) ;;
         --no-log) SCAN_ARGS+=(--no-log) ;;
         --user)
@@ -164,6 +173,42 @@ fi
 
 echo ""
 
+if [ "$GEN_PDF" = 1 ]; then
+    report_tool="$SCRIPT_DIR/../vigil/antivirus_reports.py"
+    report_started=$(date -Iseconds)
+    report_default=$(python3 "$report_tool" name "$report_started" "") || exit 1
+    while true; do
+        if [ "$REPORT_NAME_SET" = 0 ]; then
+            printf '%s [%s] : ' "$(vigil_text "Nom du rapport final" "Final report name")" "$report_default"
+            IFS= read -r CUSTOM_REPORT_NAME || exit 1
+        fi
+        if report_name=$(python3 "$report_tool" name "$report_started" -- "$CUSTOM_REPORT_NAME"); then
+            break
+        fi
+        [ "$REPORT_NAME_SET" = 0 ] || exit 1
+    done
+    if [ -z "${VIGIL_LEGACY_SCAN_DIR:-}" ]; then
+        mkdir -p -- "$VIGIL_BASE/rapports" || exit 1
+        VIGIL_LEGACY_SCAN_DIR=$(mktemp -d -- "$VIGIL_BASE/rapports/scan-XXXXXXXX") || exit 1
+        export VIGIL_LEGACY_SCAN_DIR
+    fi
+    export VIGIL_ANTIVIRUS_REPORT_RUN="$VIGIL_LEGACY_SCAN_DIR"
+    export VIGIL_MOUNT_TRIAGE_JSON_OUT="$VIGIL_ANTIVIRUS_REPORT_RUN/usb-triage.json"
+    _scan_rc=125
+    finalize_report() {
+        local workflow_status="$?" report_status=0
+        trap - EXIT
+        python3 "$report_tool" publish "$VIGIL_ANTIVIRUS_REPORT_RUN" "$report_name" "$report_started" \
+            "$ACTIVE_USER" "${VIGIL_LEGACY_PROJECT:-}" "$_scan_rc" "$workflow_status" || report_status=$?
+        if [ "$workflow_status" -eq 0 ]; then exit "$report_status"; fi
+        exit "$workflow_status"
+    }
+    trap finalize_report EXIT
+    SCAN_ARGS+=(--no-pdf --log)
+else
+    SCAN_ARGS+=(--no-pdf)
+fi
+
 # --- Plus aucune question après le choix de l'utilisateur ---
 # Le scan du contenu des archives, le signalement des archives chiffrées et
 # le mode de taille (illimité, plafond 2047M) sont FORCÉS par défaut.
@@ -221,6 +266,16 @@ if ! read_investigation_mounts /investigation || [ "${#INVESTIGATION_MOUNTS[@]}"
     exit 1
 fi
 
+if [ "$GEN_PDF" = 1 ]; then
+    for target in "${INVESTIGATION_MOUNTS[@]}"; do
+        findmnt -n --mountpoint "$target" -o SOURCE,FSTYPE,OPTIONS,TARGET
+        source_device=$(findmnt -n --mountpoint "$target" -o SOURCE)
+        if [ -b "$source_device" ]; then
+            lsblk -dn -P -o MODEL,SERIAL,WWN,UUID,SIZE -- "$source_device" || true
+        fi
+    done > "$VIGIL_ANTIVIRUS_REPORT_RUN/support.txt"
+fi
+
 # --- Etape 2 : Scan antivirus ---
 clear
 print_banner
@@ -265,11 +320,13 @@ fi
 echo ""
 if [ "$ERRORS" -gt 0 ]; then
     echo -e "${RED}❌ Scan antivirus complet terminé avec $ERRORS erreur(s).${NC}"
-else
-    echo -e "${GREEN}✅ Scan antivirus complet terminé avec succès.${NC}"
+elif [ "$GEN_PDF" = 0 ]; then
+    echo -e "${GREEN}✅ Scan antivirus terminé.${NC}"
 fi
-echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
-read -r
+if [ "$GEN_PDF" = 0 ]; then
+    echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
+    read -r
+fi
 if [ "$ERRORS" -gt 0 ]; then
     exit 1
 fi

@@ -74,6 +74,12 @@ def pdf_analysis_kind(path):
     if run.startswith("vigil."):
         return run.removeprefix("vigil.").split("-", 1)[0]
     if run.startswith("scan-"):
+        from .antivirus_reports import METADATA, read_json
+
+        for directory in (path.parent, path.parent.parent.parent / run):
+            data = read_json(directory / METADATA)
+            if data and data.get("name") == path.name:
+                return "clamav"
         return "clamav" if path.name.startswith("rapport_clamav") else "usbhid"
     match = re.match(r"rapport_([a-z0-9-]+)", path.name.casefold())
     return match.group(1) if match else ""

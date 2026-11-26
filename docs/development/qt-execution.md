@@ -37,3 +37,20 @@ stockage inventorie les périphériques ; l’administrateur reste responsable
 du montage pendant la transition du broker. Le tableau de bord lit le RO
 bloc via lsblk au démarrage et conserve l’état des montages séparément.
 Un état déclaré RO ne garantit pas la protection physique d’une preuve.
+
+## Rapports antivirus
+
+Actions rapides demande le nom du PDF avant le triage. Entrée propose
+`rapport_antivirus_AAAA-MM-JJ_HH-MM-SS.pdf`. Le parcours complet enregistre le
+PDF dans le dossier dédié à l’exécution, avec le nom saisi. Un même nom peut
+donc servir à deux scans distincts. Le PDF et son index de résultat sont
+publiés sans écrasement.
+
+Le PDF réunit le contexte, le relevé USB, ClamAV, les limites et la conclusion.
+Les journaux individuels et le relevé JSON sont conservés. Un résumé absent,
+une sortie scanner en erreur, un écart de couverture ou un triage incomplet
+sont traités comme un résultat incomplet ou un échec. Une menace détectée
+avec un scan complet reste un résultat valide. Le catalogue utilise les
+métadonnées enregistrées pour les nouveaux rapports. Les anciens PDF sans
+résultat documenté affichent « Résultat inconnu ». Leur date reste vide si
+elle ne peut pas être lue dans le nom historique.

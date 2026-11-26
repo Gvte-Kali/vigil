@@ -1717,9 +1717,9 @@ def _section_usbhid(story, styles, data):
             "clavier (HID). Un périphérique de stockage légitime ne se "
             "présente pas en clavier : ce comportement est caractéristique "
             "d'un Rubber Ducky ou d'un périphérique malveillant. Le(s) "
-            "périphérique(s) concerné(s) n'ont PAS été proposés au montage "
-            "et leurs frappes ont été bloquées par déliaison du driver "
-            "usbhid.".format(hid_count),
+            "périphérique(s) signalé(s) hors liste d’autorisation ont été "
+            "exclus de la sélection. Consultez les compteurs ci-dessus "
+            "pour distinguer les blocages et les échecs.".format(hid_count),
             alert_style))
         story.append(Spacer(1, 10))
 
@@ -1730,8 +1730,7 @@ def _section_usbhid(story, styles, data):
             textColor=COLOR_SUCCESS, leading=15)
         story.append(Paragraph(
             "✔ {} périphérique(s) clavier ont été PROTÉGÉS par "
-            "l'analyste (choix « P ») : il s'agissait de périphériques de "
-            "travail rebranchés pendant le triage. Leurs frappes restent "
+            "la liste d’autorisation. Leurs frappes restent "
             "actives et ils restent utilisables.".format(protected_count),
             ok_style))
         story.append(Spacer(1, 10))
@@ -1819,7 +1818,7 @@ def _section_usbhid(story, styles, data):
         styles["StatusDesc"]))
 
 
-def _section_clamav(story, styles, log_paths, action, options):
+def _section_clamav(story, styles, log_paths, action, options, *, status=None):
     """Section résultats : scan antivirus ClamAV (un ou plusieurs dossiers).
 
     ``log_paths`` est une liste de chemins de journaux clamscan. Quand elle
@@ -1853,7 +1852,10 @@ def _section_clamav(story, styles, log_paths, action, options):
     is_clean = total_infected == 0
     multi = len(summaries) > 1
 
-    if is_clean:
+    if status in {"partial", "failed"}:
+        label = "SCAN INCOMPLET" if status == "partial" else "ÉCHEC DU SCAN"
+        story.append(Paragraph(label, styles["StatusBigDanger"]))
+    elif is_clean:
         status_box = Table([[
             Paragraph("AUCUNE MENACE DÉTECTÉE", styles["StatusBig"])
         ]], colWidths=[170 * mm])
@@ -1868,7 +1870,7 @@ def _section_clamav(story, styles, log_paths, action, options):
         story.append(Spacer(1, 8))
         story.append(Paragraph(
             f"Le scan de {total_scanned} fichier(s) n'a révélé aucune "
-            f"infection. Le périphérique analysé est considéré comme sain.",
+            f"infection dans les fichiers analysés.",
             styles["StatusDesc"]))
     else:
         status_box = Table([[
@@ -1892,8 +1894,8 @@ def _section_clamav(story, styles, log_paths, action, options):
     story.append(Spacer(1, 18))
     story.append(Paragraph("Résultat du scan", styles["SectionTitle"]))
     result_rows = [
-        ("Statut", f'<b><font color="{("#27ae60" if is_clean else "#c0392b")}">'
-         f'{("SAIN" if is_clean else "INFECTÉ")}</font></b>'),
+        ("Statut", {"partial": "SCAN INCOMPLET", "failed": "ÉCHEC DU SCAN"}.get(
+            status, "AUCUNE MENACE DÉTECTÉE" if is_clean else "MENACES DÉTECTÉES")),
         ("Dossiers analysés", str(len(summaries))),
         ("Fichiers scannés", str(total_scanned)),
         ("Fichiers infectés", str(total_infected)),
@@ -2274,6 +2276,68 @@ def build_report(kind, source_path, user, project, out_dir,
     doc.build(story, onFirstPage=header_footer, onLaterPages=header_footer,
               canvasmaker=NumberedCanvas)
     return out_path
+
+
+def build_antivirus_report(path, run, summary, started, user, project):
+    """Reuse the Vigil cover, USB and ClamAV sections for a single workflow PDF."""
+    english = os.environ.get("VIGIL_LANG") == "en"
+
+    def tr(fr, en):
+        return en if english else fr
+
+    config = load_system_config(os.environ.get("VIGIL_DATA_DIR"))
+    meta = REPORT_META["clamav"]
+    styles = build_styles()
+    story = [Paragraph(tr("Rapport antivirus consolidé", "Consolidated antivirus report"), styles["ReportTitle"])]
+    build_front_page(story, styles, config, user, project, started)
+    story.append(Paragraph(tr("Identification du support", "Media identification"), styles["SectionTitle"]))
+    support = run / "support.txt"
+    for line in (support.read_text(errors="replace").splitlines() if support.exists() else []):
+        story.append(Paragraph(esc(line), styles["StatusDesc"]))
+    if not support.exists() or not support.stat().st_size:
+        story.append(Paragraph(tr("Support non documenté.", "Media details unavailable."), styles["StatusDesc"]))
+    story.append(PageBreak())
+    story.append(Paragraph(tr("Triage USB", "USB triage"), styles["SectionTitle"]))
+    story.append(Paragraph(tr("Contrôles HID, liste d’autorisation et liste de blocage.", "HID checks, allowlist and blocklist."), styles["StatusDesc"]))
+    if summary["triage"] is not None:
+        _section_usbhid(story, styles, summary["triage"])
+    else:
+        story.append(Paragraph(tr("Aucun relevé de triage USB disponible.", "USB triage log unavailable."), styles["StatusDesc"]))
+    story.append(PageBreak())
+    story.append(Paragraph(tr("Analyse antivirus ClamAV", "ClamAV antivirus analysis"), styles["SectionTitle"]))
+    options = run / "scan-options.txt"
+    if summary["logs"]:
+        _section_clamav(story, styles, [str(log) for log in summary["logs"]], "Antivirus",
+                        options.read_text(errors="replace").strip() if options.exists() else "",
+                        status=summary["status"])
+    else:
+        story.append(Paragraph(tr("Aucun journal ClamAV exploitable.", "No usable ClamAV log."), styles["StatusDesc"]))
+    story.append(Paragraph(tr("Fichiers ignorés, erreurs et limites", "Skipped files, errors and limitations"), styles["SectionTitle"]))
+    expected = summary["expected"]
+    story.append(info_table([
+        (tr("Fichiers recensés", "Files inventoried"), str(expected) if expected is not None else tr("Non renseigné", "Not available")),
+        (tr("Fichiers analysés", "Files scanned"), str(summary["scanned"])),
+        (tr("Menaces recensées", "Threats recorded"), str(summary["threats"]) if summary["threats"] is not None else tr("Non renseigné", "Not available")),
+    ]))
+    story.append(Paragraph(
+        tr("Les fichiers chiffrés, illisibles ou au-delà des limites du moteur peuvent échapper à l’analyse. "
+           "Le détail original est conservé dans les journaux techniques.",
+           "Encrypted, unreadable or oversized files may escape analysis. "
+           "The original details are retained in the technical logs."), styles["StatusDesc"]))
+    for issue in summary["issues"]:
+        story.append(Paragraph(esc(issue), styles["StatusDesc"]))
+    story.append(Paragraph(tr("Conclusion et statut final", "Conclusion and final status"), styles["SectionTitle"]))
+    label = {"complete": tr("Scan terminé", "Scan completed"),
+             "partial": tr("Scan incomplet", "Incomplete scan"),
+             "failed": tr("Échec du scan", "Scan failed")}
+    story.append(Paragraph(label[summary["status"]], styles["StatusDesc"]))
+    build_signature_page(story, styles, user, meta["title"])
+    header_footer = make_header_footer(config, meta["header"])
+    SimpleDocTemplate(str(path), pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm,
+                      topMargin=22 * mm, bottomMargin=18 * mm, title=meta["doc_title"],
+                      author="Vigil", subject=meta["doc_subject"]).build(
+                          story, onFirstPage=header_footer, onLaterPages=header_footer,
+                          canvasmaker=NumberedCanvas)
 
 
 def main():

@@ -584,6 +584,10 @@ for target in "${TARGETS[@]}"; do
     "${SCANNER[@]}" --recursive --bell $CLAM_OPTS "$target" 2>&1 \
         | progress_monitor "$LOG_FILE" "$TOTAL_FILES" "$USE_TTY"
     CLAM_RC=${PIPESTATUS[0]:-0}
+    if [ -n "${VIGIL_ANTIVIRUS_REPORT_RUN:-}" ]; then
+        printf '%s %s\n' "$TOTAL_FILES" "$CLAM_RC" >> "$VIGIL_ANTIVIRUS_REPORT_RUN/scan-coverage.tsv"
+        printf '%s\n' "--recursive --bell $CLAM_OPTS" > "$VIGIL_ANTIVIRUS_REPORT_RUN/scan-options.txt"
+    fi
 
     if [ "$GEN_LOG" -eq 1 ]; then
         if mv -- "$RAPPORT.tmp" "$RAPPORT"; then
