@@ -146,8 +146,9 @@ class CaseManager(QDialog):
         self.load_error = False
         self.loading = True
         self.setWindowTitle(tr("Gestionnaire d’affaires", "Case Manager"))
-        self.resize(900, 600)
         self.setMinimumSize(540, 360)
+        available = parent.screen().availableGeometry()
+        self.resize(min(1000, available.width() - 32), min(660, available.height() - 48))
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
