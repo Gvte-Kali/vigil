@@ -196,9 +196,6 @@ class Workspace(QMainWindow):
         layout.addLayout(body, 1)
         self.navigation = QListWidget()
         self.navigation.setObjectName("navigation")
-        self.group_items = {}
-        self.group_open = {}
-        self.current_group = None
         self.sidebar_compact = False
         self.navigation.setFixedWidth(208)
         self.navigation.setIconSize(QSize(18, 18))
@@ -560,47 +557,27 @@ class Workspace(QMainWindow):
         self.navigation.setFixedWidth(56 if self.sidebar_compact else 208)
         for row in range(self.navigation.count()):
             item = self.navigation.item(row)
-            button = self.navigation.itemWidget(item)
-            if button is None:
+            heading = self.navigation.itemWidget(item)
+            if heading is None:
                 item.setText("" if self.sidebar_compact else item.toolTip())
             else:
-                arrow = button.text().split(" ", 1)[0]
-                button.setText(arrow if self.sidebar_compact else f"{arrow}  {item.text()}")
+                heading.setText("" if self.sidebar_compact else item.text())
 
     def navigation_group(self, french, english):
         item = QListWidgetItem(self.navigation)
-        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-        button = QPushButton()
-        button.setStyleSheet(
-            "QPushButton { text-align: left; background: #101318; "
-            "border: 1px solid transparent; color: #57C7D4; } "
-            "QPushButton:hover { background: #203741; color: #80DEE8; } "
-            "QPushButton:focus { border-color: #57C7D4; }"
-        )
-        self.navigation.setItemWidget(item, button)
-        key = french
-        self.current_group = key
-        self.group_items[key] = []
-        self.group_open[key] = True
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        heading = QLabel()
+        heading.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation)
+        heading.setStyleSheet("color: #57C7D2; padding-left: 8px; font-weight: 600;")
+        self.navigation.setItemWidget(item, heading)
 
         def label(value):
             item.setText(value)
-            arrow = "▾" if self.group_open[key] else "▸"
-            button.setText(arrow if self.sidebar_compact else f"{arrow}  {value}")
-            button.setAccessibleName(value)
-            button.ensurePolished()
-            height = max(button.sizeHint().height(), button.fontMetrics().height() + 16)
-            button.setMinimumHeight(height)
-            item.setSizeHint(QSize(0, height + 8))
-
-        def toggle():
-            self.group_open[key] = not self.group_open[key]
-            for child in self.group_items[key]:
-                child.setHidden(not self.group_open[key])
-            label(self.tr_pair(french, english))
+            heading.setAccessibleName(value)
+            heading.setText("" if self.sidebar_compact else value)
+            item.setSizeHint(QSize(0, heading.fontMetrics().height() + 24))
 
         self.bind(label, french, english)
-        button.clicked.connect(toggle)
 
     def open_page(self, item, _previous):
         if item is not None:
@@ -611,13 +588,11 @@ class Workspace(QMainWindow):
                         and self.case_pages.currentWidget() is self.history_page):
                     self.reset_history()
 
-    def page(self, french, english, *, heading=True, grouped=True, scroll=False):
+    def page(self, french, english, *, heading=True, scroll=False):
         widget = QWidget()
         widget.setProperty("workspacePage", True)
         item = QListWidgetItem(self.navigation)
         item.setData(Qt.ItemDataRole.UserRole, self.pages.addWidget(widget))
-        if grouped:
-            self.group_items[self.current_group].append(item)
         item.setIcon(self.action_icon(ICONS[english], ACCENT))
         def page_label(label):
             item.setText("" if self.sidebar_compact else label)

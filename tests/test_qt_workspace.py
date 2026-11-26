@@ -595,7 +595,10 @@ class WorkspaceTest(unittest.TestCase):
                 self.assertTrue(window.configuration_pages.currentWidget().isAncestorOf(child))
             self.close_workspace(window)
 
-    def test_group_can_collapse_and_reopen(self):
+    def test_navigation_group_headings_are_static(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QLabel
         from vigil.desktop import Workspace
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -606,17 +609,14 @@ class WorkspaceTest(unittest.TestCase):
             )
             window.show()
             self.app.processEvents()
-            for index in range(window.navigation.count()):
+            selected = window.navigation.currentItem()
+            for index in (0, 2, 5):
                 group = window.navigation.item(index)
                 header = window.navigation.itemWidget(group)
-                if header is not None:
-                    self.assertTrue(header.isVisible())
-                    self.assertGreaterEqual(header.height(), header.fontMetrics().height() + 12)
-            header = window.navigation.itemWidget(window.navigation.item(0))
-            header.click()
-            self.assertTrue(window.navigation.item(1).isHidden())
-            header.click()
-            self.assertFalse(window.navigation.item(1).isHidden())
+                self.assertIsInstance(header, QLabel)
+                QTest.mouseClick(header, Qt.MouseButton.LeftButton)
+                self.assertIs(window.navigation.currentItem(), selected)
+                self.assertFalse(window.navigation.item(index + 1).isHidden())
             self.close_workspace(window)
 
     def test_quick_actions_are_one_standalone_page(self):
@@ -632,12 +632,6 @@ class WorkspaceTest(unittest.TestCase):
             sidebar = window.navigation
             quick = sidebar.item(4)
             self.assertEqual(quick.text(), "Actions rapides")
-            system = next(sidebar.item(index) for index in range(sidebar.count())
-                          if sidebar.item(index).text() == "INVESTIGATION")
-            sidebar.itemWidget(system).click()
-            self.assertTrue(quick.isHidden())
-            sidebar.itemWidget(system).click()
-            self.assertFalse(quick.isHidden())
             sidebar.setCurrentItem(quick)
             page = window.pages.currentWidget()
             self.assertEqual(
