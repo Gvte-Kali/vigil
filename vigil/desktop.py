@@ -31,7 +31,8 @@ from .images import inspect_raw
 from .inspection import inspect_file, inspect_open_file, investigation_mounts
 from .module_scaffold import create_module_draft
 from .evidence_panel import EvidencePanel
-from .desktop_integration import checked_descriptor, graphical_user, prepare_view, reveal_in_file_manager
+from .desktop_integration import (checked_descriptor, dispatch_viewing_copy, graphical_user,
+                                  prepare_view, reveal_in_file_manager)
 from . import dev_mode
 from .entity import data_directory, legacy_base
 from .entity_panel import EntityPanel
@@ -1204,11 +1205,16 @@ class Workspace(QMainWindow):
             self.preview_evidence(*resource, generation=generation)
 
     def external_explorer_action(self, action, resource):
-        if not self.active_case_id or self.busy is not None:
+        case_id = self.active_case_id
+        if case_id and self.busy is None:
+            # A modal dialog must not interrupt QTreeWidget's item activation.
+            QTimer.singleShot(0, self, lambda: self.open_explorer_resource(case_id, action, resource))
+
+    def open_explorer_resource(self, case_id, action, resource):
+        if self.active_case_id != case_id or self.busy is not None:
             return
         name, digest, mount, directory = resource
         original = Path(name)
-        case_id = self.active_case_id
         operator = self.require_operator()
         if not operator:
             return
@@ -1289,6 +1295,14 @@ class Workspace(QMainWindow):
                 return
             if self.active_case_id != case_id:
                 failed(ValueError(self.tr_pair("L’affaire active a changé.", "The active case changed.")))
+                return
+            if action == "file":
+                try:
+                    dispatch_viewing_copy(target)
+                except (OSError, ValueError) as error:
+                    failed(error)
+                else:
+                    record("dispatched", location=target)
                 return
             accepted = (selected is not None and reveal_in_file_manager(selected)) or QDesktopServices.openUrl(
                 QUrl.fromLocalFile(str(target)))

@@ -106,7 +106,7 @@ def doctor():
         "x11" if os.environ.get("DISPLAY") else "headless",
         "tools": {tool: shutil.which(tool) for tool in (
             "bash", "sh", "python3", "unshare", "sudo", "file", "jq", "clamscan", "freshclam", "ewfinfo", "affinfo",
-            "chafa", "lsblk", "findmnt", "mmls", "pv", *TERMINALS,
+            "chafa", "lsblk", "findmnt", "mmls", "pv", "xdg-open", *TERMINALS,
         )},
     }
 

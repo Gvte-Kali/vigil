@@ -267,7 +267,14 @@ class WorkspaceTest(unittest.TestCase):
                 window.open_evidence_folder()
             self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()).parent.name, "preuves")
             window.case_navigation.setCurrentIndex(window.case_pages.indexOf(window.evidence.parentWidget()))
-            window.evidence.itemActivated.emit(evidence_item, 0)
+            from PySide6.QtCore import Qt
+            from PySide6.QtTest import QTest
+
+            window.evidence.scrollToItem(evidence_item)
+            self.app.processEvents()
+            position = window.evidence.visualItemRect(evidence_item).center()
+            QTest.mouseClick(window.evidence.viewport(), Qt.MouseButton.LeftButton, pos=position)
+            QTest.mouseDClick(window.evidence.viewport(), Qt.MouseButton.LeftButton, pos=position)
             self.wait_for_task(window)
             self.assertIs(window.case_pages.currentWidget(), window.explorer_page)
             self.assertIn("local case copy", window.explorer.views[0].toPlainText())
@@ -291,6 +298,42 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(window.explorer.tree.topLevelItemCount(), 0)
             self.assertTrue(window.active_case_id)
             self.assertTrue(window.isVisible())
+            self.close_workspace(window)
+
+    def test_external_viewer_failure_keeps_the_active_case_open(self):
+        from PySide6.QtWidgets import QMessageBox
+        from vigil.desktop import Workspace
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            window = Workspace(QSettings(str(root / "settings.ini"), QSettings.Format.IniFormat),
+                               root / "cases.sqlite")
+            window.add_operator("Alice")
+            window.create_case("Fixture")
+            with patch.object(window, "confirm_case_selection", return_value=True):
+                window.case_clicked(window.cases.currentItem())
+            source = root / "synthetic.txt"
+            source.write_text("synthetic evidence")
+            with patch.object(window, "choose_file", return_value=str(source)):
+                window.add_file()
+            self.wait_for_task(window)
+            window.show()
+            case_id = window.active_case_id
+            item = window.explorer.tree.topLevelItem(0).child(0)
+            opener = root / "xdg-open"
+            opener.write_text("#!/bin/sh\nexit 7\n")
+            opener.chmod(0o700)
+            with patch("vigil.desktop.graphical_user", return_value=True), \
+                 patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Open), \
+                 patch("vigil.desktop_integration.shutil.which", return_value=str(opener)), \
+                 patch.object(window, "fail") as failure:
+                window.explorer.open_item(item, 0)
+                failure.assert_not_called()
+                self.wait_for_task(window)
+                self.assertIn("xdg-open: 7", str(failure.call_args.args[0]))
+            self.assertTrue(window.isVisible())
+            self.assertEqual(window.active_case_id, case_id)
+            self.assertEqual(source.read_text(), "synthetic evidence")
             self.close_workspace(window)
 
     def test_explorer_click_previews_latest_and_double_click_routes_by_type(self):

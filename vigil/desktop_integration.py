@@ -103,6 +103,26 @@ def graphical_user():
 
 
 
+def dispatch_viewing_copy(path):
+    """Launch the default viewer outside the Qt process."""
+    opener = shutil.which("xdg-open")
+    if opener is None:
+        raise ValueError("xdg-open est introuvable / xdg-open is unavailable")
+    process = subprocess.Popen([opener, path.as_uri()], start_new_session=True,
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL)
+    try:
+        status = process.wait(timeout=0.25)
+    except subprocess.TimeoutExpired:
+        # Some desktop openers stay active for the lifetime of the viewer.
+        # Reap the launcher asynchronously without tying it to Vigil's lifetime.
+        from threading import Thread
+        Thread(target=process.wait, daemon=True).start()
+    else:
+        if status != 0:
+            raise ValueError(f"Ouverture externe impossible / External open failed (xdg-open: {status})")
+
+
 def reveal_in_file_manager(path):
     """Ask the optional freedesktop FileManager1 service to select the file."""
     program = shutil.which("gdbus")
