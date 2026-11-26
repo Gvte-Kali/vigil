@@ -171,7 +171,9 @@ def storage_command(operation, state, case_id, name, operator):
     ]
 
 
-def acquisition_command(operation, *, local_directory=None, external=False, language=None):
+def acquisition_command(operation, *, local_directory=None, external=False, language=None, interface="gui"):
+    if interface not in {"gui", "tui"}:
+        raise ValueError("invalid terminal interface")
     if operation not in {"clone", "image"}:
         raise ValueError("unsupported acquisition operation")
     if (local_directory is not None and external) or (operation == "clone" and (local_directory is not None or external)):
@@ -181,7 +183,7 @@ def acquisition_command(operation, *, local_directory=None, external=False, lang
         raise ValueError(f"acquisition script unavailable: {script}")
     if language not in {None, "fr", "en"}:
         raise ValueError("invalid script language")
-    arguments = ["--data-directory", str(data_directory())]
+    arguments = ["--data-directory", str(data_directory()), "--interface", interface]
     if language:
         arguments.extend(("--language", language))
     if local_directory is not None:

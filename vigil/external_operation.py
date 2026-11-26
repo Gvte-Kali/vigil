@@ -24,8 +24,15 @@ def main():
     directory = Path(sys.argv[1])
     args = sys.argv[2:]
     context = json.loads((directory / "context.json").read_text(encoding="utf-8"))
+    interface = args.pop(0).partition("=")[2] if args and args[0] in {"--interface=gui", "--interface=tui"} else None
+    if interface is None:
+        interface = "tui" if os.environ.get("VIGIL_EMBEDDED_TERMINAL") == "1" else "gui"
     language = "en" if context.get("language") == "en" else "fr"
     environment = {**os.environ, "VIGIL_LANG": language}
+    if interface == "tui":
+        environment["VIGIL_EMBEDDED_TERMINAL"] = "1"
+    else:
+        environment.pop("VIGIL_EMBEDDED_TERMINAL", None)
     started = {"pid": os.getpid(), "start": process_start(os.getpid())}
     write_status(directory, "started.json", started)
     operation = None
@@ -56,7 +63,7 @@ def main():
     write_status(directory, "result.json", {"exit_code": status})
     label = "Exit code" if language == "en" else "Code de sortie"
     print(f"\n{label} : {status}", flush=True)
-    if sys.stdin.isatty() and interrupted is None and os.environ.get("VIGIL_EMBEDDED_TERMINAL") != "1":
+    if sys.stdin.isatty() and interrupted is None and interface == "gui":
         try:
             input("Press Enter" if language == "en" else "Appuyez sur Entrée")
         except EOFError:

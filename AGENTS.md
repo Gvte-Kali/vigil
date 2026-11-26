@@ -4,7 +4,7 @@
 
 - Travailler exclusivement sur `vigil-2.0`. Utiliser `vigil` comme commande publique.
 - Suivre la roadmap active de `todo.txt`. Conserver les acquis et le backlog historique. Livrer par lots cohérents avec tests de non-régression et validation humaine entre phases.
-- Priorité à l’installation Linux native, aux services Core et à la parité Textual. Migrer les parcours au fil de la disponibilité de leurs services. Garder la GUI Qt fonctionnelle et limiter ses évolutions aux corrections et à la compatibilité pendant la transition.
+- Priorité à l’installation Linux native et aux services Core. Stabiliser les commandes et les tester depuis la GUI avant la recette Textual. Le lanceur distingue le terminal classique et le rendu TUI par un argument. Migrer les parcours au fil de la disponibilité de leurs services. Garder la GUI Qt fonctionnelle et limiter ses évolutions aux corrections et à la compatibilité pendant la transition.
 
 ## Core, interfaces et forensique
 

@@ -90,18 +90,27 @@ run_usb_triage() {
     echo -e "${BLUE}  $(vigil_text "Triage USB (détection Rubber Ducky)" "USB triage (Rubber Ducky detection)")${role:+ · $role}${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "${YELLOW}⚠️  $(vigil_text "Pour sécuriser l'analyse, DÉBRANCHEZ tous les périphériques USB" "For safe analysis, DISCONNECT all USB storage devices")${NC}"
-    echo -e "${YELLOW}    $(vigil_text "de stockage à analyser (clé, disque...) avant de continuer." "to be examined (flash drive, disk, etc.) before continuing.")${NC}"
+    echo -e "${YELLOW}$(vigil_text "Débranchez les supports USB à examiner avant de relever les périphériques déjà présents." "Disconnect USB media to be examined before recording the already connected devices.")${NC}"
     echo ""
-    echo -ne "${BOLD}${YELLOW}$(vigil_text "Débranchez les périphériques USB, puis appuyez sur Entrée..." "Disconnect the USB devices, then press Enter...")${NC}"
     if [ "$allow_internal" = internal ]; then
-        echo -e "\n${YELLOW}$(vigil_text "i : source interne · q : annuler" "i: internal source · q: cancel")${NC}"
+        vigil_style '1;96' "  [Entrée / Enter]  $(vigil_text "Support USB · poursuivre le triage par débranchement/rebranchement" "USB media · continue with disconnect/reconnect triage")"
+        vigil_style '1;93' "  [I]               $(vigil_text "Disque interne · afficher les sources admissibles en lecture seule" "Internal disk · list eligible read-only sources")"
+        vigil_style '1;90' "  [Q]               $(vigil_text "Annuler l’opération" "Cancel the operation")"
     fi
-    read -r HID_ANSWER || return 1
-    [[ "$HID_ANSWER" != [qQ] ]] || return 1
-    if [ "$allow_internal" = internal ] && [[ "$HID_ANSWER" == [iI] ]]; then
-        return 3
-    fi
+    while true; do
+        if [ "$allow_internal" = internal ]; then
+            printf '%s ' "$(vigil_text "Votre choix [Entrée/I/Q] :" "Your choice [Enter/I/Q]:")"
+        else
+            printf '%s ' "$(vigil_text "Appuyez sur Entrée après le débranchement, ou Q pour annuler :" "Press Enter after disconnecting, or Q to cancel:")"
+        fi
+        read -r HID_ANSWER || return 1
+        case "$HID_ANSWER" in
+            "") break ;;
+            [qQ]) return 1 ;;
+            [iI]) [ "$allow_internal" != internal ] || return 3 ;;
+        esac
+        vigil_style '1;91' "$(vigil_text "Choix invalide." "Invalid choice.")"
+    done
     usb_snapshot > "$base_file"
     baseline_count=$(grep -cve '^[[:space:]]*$' "$base_file" 2>/dev/null)
     baseline_count=${baseline_count:-0}

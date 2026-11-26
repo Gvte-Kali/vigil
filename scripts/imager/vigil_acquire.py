@@ -460,6 +460,7 @@ def main():
     destination.add_argument("--local-directory")
     destination.add_argument("--external", action="store_true")
     parser.add_argument("--filename", help=argparse.SUPPRESS)
+    parser.add_argument("--interface", choices=("gui", "tui"))
     parser.add_argument("--embedded-terminal", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.language:
@@ -473,8 +474,10 @@ def main():
     if os.readlink("/proc/self/ns/mnt") == os.readlink("/proc/1/ns/mnt"):
         parser.error(tr("Espace de montage privé requis.", "A private mount namespace is required."))
 
-    if args.embedded_terminal:
+    if args.interface == "tui" or (args.interface is None and args.embedded_terminal):
         os.environ["VIGIL_EMBEDDED_TERMINAL"] = "1"
+    elif args.interface == "gui":
+        os.environ.pop("VIGIL_EMBEDDED_TERMINAL", None)
 
     def interrupt(*_):
         raise InterruptedError(tr("Acquisition interrompue.", "Acquisition interrupted."))

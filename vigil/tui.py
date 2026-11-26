@@ -1189,12 +1189,11 @@ class Workspace(App):
                 selected = None if external else self.form_path(fields["path"])
                 argv = acquisition_command("image", external=external,
                                            local_directory=selected.parent if selected else None,
-                                           language=self.language)
+                                           language=self.language, interface="tui")
                 if selected:
                     argv.extend(("--filename", selected.name))
-                argv.append("--embedded-terminal")
             case "clone":
-                argv = [*acquisition_command("clone", language=self.language), "--embedded-terminal"]
+                argv = acquisition_command("clone", language=self.language, interface="tui")
             case "mount-case" | "unmount-case":
                 mode = "operation"
                 argv = await asyncio.to_thread(legacy_mount_command, action.split("-")[0], self.state, case, name, operator)
@@ -1235,7 +1234,8 @@ class Workspace(App):
         if mode:
             argv = [sys.executable, "-m", "vigil.device_manager", mode, *argv]
         run, argv = prepare_tracked(argv, self.state.parent / "terminal-runs",
-                                   {"operation": action, "language": self.language, "operator": operator, "case_id": case})
+                                   {"operation": action, "language": self.language, "operator": operator, "case_id": case},
+                                   interface="tui")
         callback = self.finish_session_review if action == "review-session" else self.action_refresh_workspace
 
         def finish(status):

@@ -33,6 +33,11 @@ PHASE 03 — SÉCURITÉ, PORTABILITÉ ET INSTALLATION NATIVES
     de daemon permanent et la restauration vérifiée après interruption.
 
 PHASE 04 — PÉRIPHÉRIQUES ET SOURCES
+[x] Clarifier le choix USB/interne en acquisition RAW et le diagnostic des
+    permissions du répertoire /stockage. Sélection explicite du rendu
+    classique GUI ou des événements de progression pour la TUI.
+[ ] Valider les commandes et les parcours privilégiés via la GUI avant la
+    recette TUI. Conserver un même contrat de lancement pour les deux.
 [ ] Mutualiser le triage selon la référence d’« Affaire en cours ». Transmettre
     des contextes vérifiés et empêcher le démontage pendant une opération.
 [ ] Maintenir /investigation RO et /stockage RW. Gérer plusieurs sources par

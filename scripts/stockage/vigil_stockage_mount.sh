@@ -15,6 +15,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-terminal.sh"
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-triage.sh"
 . "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-device-ops.sh"
+. "$(dirname -- "${BASH_SOURCE[0]}")/../lib/vigil-storage-root.sh"
 vigil_device_begin
 
 print_banner() {
@@ -214,14 +215,14 @@ echo -e "${YELLOW}⚠️  ATTENTION : montage en lecture/écriture.${NC}"
 echo ""
 
 # Refuse an occupied storage zone instead of implicitly unmounting it.
-if [ ! -e "$STOCKAGE_DIR" ] && [ ! -L "$STOCKAGE_DIR" ]; then
-    sudo mkdir -m 0755 -- "$STOCKAGE_DIR" || fail "Impossible de créer $STOCKAGE_DIR."
-fi
 existing_mounts=$(list_mounts_under_stockage) || fail "État de /stockage non vérifiable."
 [ -z "$existing_mounts" ] || fail "Un montage existe sous /stockage. Démontez le support d’abord."
-if [ ! -d "$STOCKAGE_DIR" ] || [ "$(realpath -e -- "$STOCKAGE_DIR")" != "$STOCKAGE_DIR" ] ||
-   [ "$(stat -c '%u:%a' -- "$STOCKAGE_DIR")" != "0:755" ]; then
-    fail "Préparez /stockage avec sh $VIGIL_BASE/scripts/post-install/prepare-storage.sh."
+if [ ! -e "$STOCKAGE_DIR" ] && [ ! -L "$STOCKAGE_DIR" ]; then
+    sudo install -d -o root -g root -m 0755 -- "$STOCKAGE_DIR" || fail "Impossible de créer $STOCKAGE_DIR."
+fi
+if ! storage_error=$(vigil_storage_root_check "$STOCKAGE_DIR"); then
+    printf '%s\n' "$storage_error"
+    fail "$(vigil_text "Depuis un terminal, exécutez : sh $VIGIL_BASE/scripts/post-install/prepare-storage.sh"                        "From a terminal, run: sh $VIGIL_BASE/scripts/post-install/prepare-storage.sh")"
 fi
 
 # --- 0.4. Triage USB anti-Rubber Ducky (baseline + blocage HID par défaut) ---
