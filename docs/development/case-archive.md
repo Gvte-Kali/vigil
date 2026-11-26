@@ -16,7 +16,7 @@ par `reporting.py` étaient rangés hors du dossier d’affaire et omis de l’a
 | Nom, référence, description, dates et ID | SQLite | `affaire.json` | SQLite | Schéma et SHA-256 |
 | Opérateurs et provenance | SQLite, audit | Identifiants et noms de l’audit | Identités archivées distinctes | Schéma, FK et mapping |
 | Preuves, tailles et SHA-256 | SQLite | Métadonnées de chaque preuve | SQLite | Schéma et correspondance avec la copie |
-| Copies enregistrées | `preuves/<id>/contenu` | `preuves/` si présentes | Copies locales en mode 0400 | Taille, SHA-256 et contrôle en staging |
+| Copies enregistrées | `preuves/<id>/contenu` dans le TAR | `preuves/` si présentes | Copies locales en mode 0400 | Taille, SHA-256 et contrôle en staging |
 | Sources originales | Chemins dans SQLite | Références historiques | Métadonnées uniquement | Cohérence du manifeste |
 | Résultats, journaux d’exécution, et custody fichiers | Dossier local | `resultats/` | Dossier d’affaire | SHA-256 et taille |
 | Audit SQLite | Tables d’audit | Événements jusqu’au point de coupure | Audit avec provenance | Séquences, FK et SHA-256 |
@@ -50,7 +50,7 @@ pour les noms Linux sont conservés. Un unique marqueur de répertoire
 | `members` | Dictionnaire chemin vers taille pour toutes les données archivées, hors manifestes |
 | `source_archive` | Reçu de provenance si l’affaire a été importée, ou null |
 
-`archive_path` vaut `preuves/<id>/contenu` pour une copie incluse et null pour
+`archive_path` vaut `preuves/<id>/contenu` **dans le TAR** pour une copie incluse et null pour
 une copie manquante. Le schéma v2 utilise les mêmes champs de preuve. Il
 ne fournit pas nécessairement la version de Vigil, les tailles des résultats,
 le point de coupure explicite ni l’identifiant de l’opérateur.
@@ -123,3 +123,39 @@ Schéma SQLite 5. Sauvegarder `data/state` avant la mise à jour. Pour
 revenir à une version antérieure, restaurer la sauvegarde et conserver
 séparément les archives créées depuis. Le lecteur antérieur ne connaît
 pas le schéma v3.
+
+
+## Copies locales dans l’affaire
+
+Les preuves ajoutées depuis un support suivent
+`preuves/<source>_<identifiant>/<partition si nécessaire>/<chemin>/<nom exact>`.
+L’identifiant court est dérivé du WWN ou du numéro de série lorsqu’il existe.
+Vigil peut aussi identifier une image montée par son fichier de backing ou
+un volume par son UUID et son port. Sans identifiant persistant, le repli est
+limité au montage et au démarrage courant. Une remontée de ce support peut
+donc créer un autre dossier. Les ajouts locaux sont rangés sous `local_…`
+avec leur chemin absolu reproduit sans le premier `/`. Les anciennes copies
+dont la source physique n’est pas vérifiable vont sous `origine-inconnue_…`.
+
+SQLite conserve le chemin original, l’UUID, la taille et le SHA-256.
+Le chemin relatif et la clé de source sont enregistrés séparément. Lorsqu’un
+nom est occupé, le dossier de source de la nouvelle copie reçoit un suffixe
+de variante avec son UUID. Son nom et sa hiérarchie relative restent intacts.
+Tous les fichiers sont publiés en mode `0400`, sans écrasement.
+
+Les anciennes copies restent accessibles pendant la transition. Pour migrer
+une affaire depuis le terminal, fermer les interfaces ouvertes pour cette
+affaire puis utiliser son identifiant retourné par `vigil cases list`.
+
+    vigil evidence migrate ID_AFFAIRE --operator "Nom opérateur"
+    vigil evidence list ID_AFFAIRE
+    vigil evidence verify ID_PREUVE --copy --operator "Nom opérateur"
+
+La migration vérifie la taille et le SHA-256 avant et après publication.
+Une erreur annule les changements de références SQLite et retire les nouveaux
+liens créés par la migration. Les anciennes copies sont retirées seulement
+après validation de la transaction. Les copies absentes sont indiquées dans
+le résultat. L’export écrit le chemin relatif et la clé de source dans les
+métadonnées du TAR. L’import restaure ces chemins ou reconstruit une
+arborescence d’origine inconnue pour les archives antérieures. Les membres
+de preuve du TAR gardent leur nom historique pour rester compatibles.

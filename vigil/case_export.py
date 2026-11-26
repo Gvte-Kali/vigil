@@ -12,6 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from uuid import uuid4
 
+from . import evidence_layout
 from .case_import import verify_archive
 from .destination import writable_destination
 from .history import case_events
@@ -123,7 +124,9 @@ def export_case(state, case_id, operator, destination):
         if details is not None:
             case.update(dict(details))
         evidence = [dict(row) for row in connection.execute(
-            "SELECT * FROM evidence WHERE case_id = ? ORDER BY id", (case_id,))]
+            """SELECT evidence.*, relative_path, source_key FROM evidence
+               LEFT JOIN evidence_copies ON evidence.id = evidence_id
+               WHERE evidence.case_id = ? ORDER BY evidence.id""", (case_id,))]
         origin = connection.execute("SELECT sha256, provenance FROM case_archives WHERE case_id = ?", (case_id,)).fetchone()
         source_archive = {"sha256": origin["sha256"], **json.loads(origin["provenance"])} if origin else None
         restored_legacy = custody / "projet-v1"
@@ -164,7 +167,8 @@ def export_case(state, case_id, operator, destination):
                     missing.append(record["path"])
                     record.update(archive_path=None, copy_status="missing")
                     continue
-                name = f"preuves/{record['id']}/contenu"
+                evidence_layout.require_readonly(source)
+                name = str(evidence_layout.legacy_path(record["id"]))
                 digest = archive_file(archive, source, name)
                 if digest != record["sha256"] or archive.members[-1].size != record["size"]:
                     raise ValueError(f"evidence copy failed integrity check: {record['path']}")

@@ -242,7 +242,7 @@ class WorkspaceTest(unittest.TestCase):
             metadata = window.explorer.views[0].toPlainText()
             self.assertIn("local case copy", metadata)
             self.assertIn(f"Original path: {source}", metadata)
-            self.assertEqual(Path(metadata.splitlines()[0]).name, "contenu")
+            self.assertEqual(Path(metadata.splitlines()[0]).name, source.name)
             self.assertEqual(Path(group.text(0)).name, "preuves")
             self.assertEqual(window.explorer.views[2].toPlainText(), "fixture")
             evidence_item = window.evidence.topLevelItem(0).child(0)
@@ -265,7 +265,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertEqual(Path(open_case_url.call_args.args[0].toLocalFile()).name, "Fixture")
             with patch.object(QDesktopServices, "openUrl", return_value=True) as open_url:
                 window.open_evidence_folder()
-            self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()).parent.name, "preuves")
+            self.assertEqual(Path(open_url.call_args.args[0].toLocalFile()), Path(metadata.splitlines()[0]).parent)
             window.case_navigation.setCurrentIndex(window.case_pages.indexOf(window.evidence.parentWidget()))
             from PySide6.QtCore import Qt
             from PySide6.QtTest import QTest
@@ -279,7 +279,7 @@ class WorkspaceTest(unittest.TestCase):
             self.assertIs(window.case_pages.currentWidget(), window.explorer_page)
             self.assertIn("local case copy", window.explorer.views[0].toPlainText())
 
-            Path(open_url.call_args.args[0].toLocalFile(), "contenu").unlink()
+            Path(metadata.splitlines()[0]).unlink()
             window.case_navigation.setCurrentIndex(window.case_pages.indexOf(window.evidence.parentWidget()))
             with patch.object(window, "fail") as failure:
                 window.evidence.itemActivated.emit(evidence_item, 0)

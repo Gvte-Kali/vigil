@@ -350,7 +350,7 @@ class Workspace(App):
         columns = {
             "case-table": [t("Affaire", "Case"), t("Référence", "Reference"), t("Preuves", "Evidence")],
             "operator-table": [t("Opérateur", "Operator")],
-            "evidence-table": [t("Chemin", "Path"), t("Octets", "Bytes"), "SHA-256"],
+            "evidence-table": [t("Chemin", "Path"), t("Octets", "Bytes"), "SHA-256", t("Copie locale", "Local copy")],
             "mount-table": [t("Montage", "Mountpoint"), t("Source", "Source"), t("Mode", "Mode"), t("État", "Status")],
             "module-table": [t("Module", "Module"), "Version", t("État", "Status")],
             "analysis-table": [t("Module", "Module"), t("Description", "Description")],
@@ -446,7 +446,7 @@ class Workspace(App):
 
     async def refresh_evidence(self):
         rows = await asyncio.to_thread(storage.case_evidence_rows, self.state, self.active_case) if self.active_case else []
-        self.replace_rows("evidence-table", ((row["id"], (row["path"], row["size"], row["sha256"])) for row in rows))
+        self.replace_rows("evidence-table", ((row["id"], (row["path"], row["size"], row["sha256"], row["relative_path"] or "—")) for row in rows))
         self.refresh_evidence_buttons()
 
     async def refresh_mounts(self, rows=None):

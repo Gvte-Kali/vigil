@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from . import storage
+from . import evidence_layout, storage
 
 CHUNK = 1024 * 1024
 HEX = re.compile(r"[0-9a-f]{64}")
@@ -134,6 +134,7 @@ def read_metadata(raw, files):
     require(isinstance(evidence, list) and isinstance(events, list), "missing evidence or audit list")
     used = set()
     included = set()
+    destinations = set()
     for row in evidence:
         require(isinstance(row, dict) and valid_id(row.get("id"))
                 and row.get("id") not in used and row.get("case_id") == case["id"]
@@ -141,7 +142,18 @@ def read_metadata(raw, files):
                 and 0 <= row["size"] < 2**63 and HEX.fullmatch(str(row.get("sha256", ""))),
                 "invalid or duplicated evidence metadata")
         used.add(row["id"])
-        member = f"preuves/{row['id']}/contenu"
+        relative = row.get("relative_path")
+        source_key = row.get("source_key")
+        if relative is not None or source_key is not None:
+            try:
+                evidence_layout.validate_path(relative)
+            except ValueError as error:
+                raise ArchiveError("dangerous", str(error)) from error
+            require(valid_text(source_key, 4096), "invalid evidence source identifier")
+            require(not valid_id(relative.split("/")[1]), "reserved evidence copy directory", "dangerous")
+            require(relative not in destinations, "duplicated evidence copy path", "dangerous")
+            destinations.add(relative)
+        member = str(evidence_layout.legacy_path(row["id"]))
         if row.get("copy_status") == "included":
             require(row.get("archive_path") == member and files.get(member) == (row["sha256"], row["size"]),
                     "evidence content does not match its reference")
@@ -459,16 +471,24 @@ def restore_evidence(connection, stage, case_id, rows):
             target = uuid4().hex
             while target in inbound or connection.execute("SELECT 1 FROM evidence WHERE id = ?", (target,)).fetchone():
                 target = uuid4().hex
-            if row["copy_status"] == "included":
-                (stage / "preuves" / source).rename(stage / "preuves" / target)
-        if row["copy_status"] == "included":
-            copy = stage / "preuves" / target / "contenu"
-            info = copy.stat()
-            require(stat.S_IMODE(info.st_mode) == 0o400 and info.st_size == row["size"],
-                    "restored evidence metadata mismatch")
         connection.execute("INSERT INTO evidence VALUES (?, ?, ?, ?, ?)", (
             target, case_id, row["path"], row["size"], row["sha256"],
         ))
+        relative, key = row.get("relative_path"), row.get("source_key")
+        if row["copy_status"] == "included":
+            copy = stage / evidence_layout.legacy_path(source)
+            evidence_layout.require_readonly(copy)
+            require(copy.stat().st_size == row["size"], "restored evidence metadata mismatch")
+            if relative is None:
+                layout = evidence_layout.source_layout(row["path"], historical=True)
+                relative = evidence_layout.allocate_copy(copy, stage, layout, target)
+                key = layout[3]
+            else:
+                evidence_layout.publish_copy(copy, stage, relative)
+            copy.unlink()
+            copy.parent.rmdir()
+        if relative is not None:
+            storage.record_copy(connection, case_id, target, relative, key)
         mapping[source] = target
     return mapping
 

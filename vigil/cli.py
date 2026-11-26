@@ -250,10 +250,24 @@ def add(case_id: str, path: Path, operator: str = typer.Option(...),
         emit(storage.register_file(db or storage.default_database(), case_id, path, operator))
 
 
-@evidence.command("verify")
-def verify(evidence_id: str, operator: str = typer.Option(...), db: DatabaseOption = None):
+@evidence.command("migrate")
+def migrate_evidence(case_id: str, operator: str = typer.Option(...), db: DatabaseOption = None):
+    """Migrate and verify legacy local evidence copies."""
     with command():
-        result = storage.verify_file(db or storage.default_database(), evidence_id, operator)
+        emit(storage.migrate_evidence_copies(db or storage.default_database(), case_id, operator))
+
+
+@evidence.command("list")
+def list_evidence(case_id: str, db: DatabaseOption = None):
+    with command():
+        emit(storage.case_evidence_rows(db or storage.default_database(), case_id))
+
+
+@evidence.command("verify")
+def verify(evidence_id: str, operator: str = typer.Option(...), db: DatabaseOption = None,
+           use_copy: bool = typer.Option(False, "--copy", help="Verify the local evidence copy")):
+    with command():
+        result = storage.verify_file(db or storage.default_database(), evidence_id, operator, use_copy=use_copy)
         emit(result)
         if not result["matches"]:
             raise typer.Exit(2)

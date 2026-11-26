@@ -1052,6 +1052,7 @@ class Workspace(QMainWindow):
             except (OSError, ValueError):
                 continue
         result_folders = {}
+        custody = None
         try:
             custody = storage.case_storage_directory(self.database_path, self.active_case_id)
             for folder, labels in (
@@ -1067,9 +1068,9 @@ class Workspace(QMainWindow):
         self.explorer.set_files(rows, copies=copies, keep_state=keep_explorer,
                                 archived=archived, result_folders=result_folders)
         self.refresh_explorer_mounts()
-        self.update_evidence_tree(rows, copies, archived=archived)
+        self.update_evidence_tree(rows, copies, custody=custody, archived=archived)
 
-    def update_evidence_tree(self, rows, copies=None, *, archived=False):
+    def update_evidence_tree(self, rows, copies=None, *, custody=None, archived=False):
         copies = copies or {}
         self.case_folder_button.setVisible(bool(copies) or archived)
         expanded = set()
@@ -1084,13 +1085,14 @@ class Workspace(QMainWindow):
         for evidence_id, name, digest in rows:
             path = Path(name)
             copy = copies.get(evidence_id)
-            group = str(copy.parents[1]) if copy else self.tr_pair(
+            relative = copy.relative_to(custody) if copy and custody else None
+            group = str(custody / "preuves") if relative else self.tr_pair(
                 "Preuve référencée — contenu indisponible", "Referenced evidence — content unavailable",
             )
             if group not in groups:
                 groups[group] = QTreeWidgetItem(self.evidence, [group])
                 groups[group].setExpanded(group in expanded)
-            relative_copy = str(copy.relative_to(copy.parents[2])) if copy else "—"
+            relative_copy = str(relative) if relative else "—"
             item = QTreeWidgetItem(groups[group], [path.name, digest, relative_copy])
             if copy:
                 item.setToolTip(2, str(copy))

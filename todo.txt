@@ -46,6 +46,9 @@ PHASE 04 — PÉRIPHÉRIQUES ET SOURCES
 [ ] Conserver les mécanismes de copie, de synchronisation et de SHA-256.
 
 PHASE 05 — AFFAIRES, PREUVES ET ARCHIVES
+[x] Arborescence des preuves locales avec provenance, nom exact, chemin
+    relatif en SQLite et variantes immuables. Migration vérifiée par affaire,
+    conservation du format TAR et affichage du chemin en GUI, TUI et CLI.
 [ ] Consolider migrations, preuves locales, imports et exports. Vérifier
     l’intégrité, la chaîne de custody et les restaurations entre postes.
 

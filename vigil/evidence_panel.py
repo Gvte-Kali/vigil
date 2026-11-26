@@ -142,7 +142,7 @@ class EvidencePanel(QWidget):
                 continue
             path = Path(name)
             copy = self.local_copies.get(name)
-            parent = str(copy.parents[1]) if copy else self.tr_pair("Sans copie locale", "No local copy")
+            parent = next((str(folder) for folder in reversed(copy.parents) if folder.name == "preuves"), str(copy.parent)) if copy else self.tr_pair("Sans copie locale", "No local copy")
             if parent not in groups:
                 groups[parent] = QTreeWidgetItem(self.tree, [parent])
                 groups[parent].setIcon(0, self.icon("folder", "#55C5D2"))

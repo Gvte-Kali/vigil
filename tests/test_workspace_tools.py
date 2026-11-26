@@ -83,11 +83,15 @@ class WorkspaceToolsTest(unittest.TestCase):
             original = rows[0][1]
             target.write_text("changed")
             rows, _ = process_explorer_selection(state, case, "Alice", [source], register=True)
-            self.assertEqual(rows[0][2], "existing")
+            self.assertEqual(rows[0][2], "added")
+            changed = rows[0][1]
+            repeated, _ = process_explorer_selection(state, case, "Alice", [source], register=True)
+            self.assertEqual(repeated[0][2], "existing")
             rows, _ = process_explorer_selection(state, case, "Alice", [source], register=False)
-            self.assertEqual(rows[0][2:], ("changed", [original]))
+            self.assertEqual(rows[0][2:], ("changed", [original, changed]))
             with database(state) as connection:
-                self.assertEqual(connection.execute("SELECT sha256 FROM evidence").fetchall()[0][0], original)
+                self.assertEqual({r[0] for r in connection.execute("SELECT sha256 FROM evidence")},
+                                 {original, changed})
 
     def test_mounted_explorer_requires_a_read_only_matching_mount_and_skips_symlinks(self):
         with tempfile.TemporaryDirectory() as tmp:
