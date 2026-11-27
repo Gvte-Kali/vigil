@@ -58,6 +58,12 @@ for file in /usr/local/sbin/vigil-hotplug /usr/local/sbin/vigil-mount /etc/udev/
         files+=("$file")
     fi
 done
+if desktop_directory=$(vigil_desktop_directory); then
+    file="$desktop_directory/Vigil.desktop"
+    if vigil_managed_desktop "$file" "$site" /usr/local/bin; then
+        files+=("$file")
+    fi
+fi
 for file in /usr/share/applications/vigil.desktop "$HOME/.local/share/applications/vigil.desktop"; do
     if [[ -e $file || -L $file ]]; then
         vigil_managed_desktop "$file" "$site" /usr/local/bin || die "Unrecognized shortcut: $file"
