@@ -186,10 +186,4 @@ PickerTable > .picker-table--file { color: $foreground; }
     padding: 0 1;
     margin-left: 1;
 }
-#workspace-tabs > ContentTabs {
-    height: auto;
-}
-#workspace-tabs > ContentTabs Tab {
-    height: 3;
-    padding: 1 1;
-}
+/* Keep Textual's native tab strip geometry and hit testing. */
