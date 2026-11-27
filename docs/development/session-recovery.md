@@ -3,6 +3,7 @@ layout: default
 title: Supervision et restauration
 parent: Développement
 nav_order: 23
+grand_parent: Français
 ---
 
 # Supervision, restitution et consultation externe
