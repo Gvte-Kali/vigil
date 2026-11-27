@@ -3,6 +3,7 @@ layout: default
 title: Critères restant à valider
 parent: Développement
 nav_order: 22
+grand_parent: Français
 ---
 
 # Critères restant à valider
