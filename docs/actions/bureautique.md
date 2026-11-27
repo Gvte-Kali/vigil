@@ -4,6 +4,7 @@ parent: Analyse
 title: Bureautique
 nav_order: 269
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Bureautique
