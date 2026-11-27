@@ -215,10 +215,10 @@ echo -e "$(vigil_text "${YELLOW}⚠️  ATTENTION : montage en lecture/écriture
 echo ""
 
 # Refuse an occupied storage zone instead of implicitly unmounting it.
-existing_mounts=$(list_mounts_under_stockage) || fail "État de /stockage non vérifiable."
-[ -z "$existing_mounts" ] || fail "Un montage existe sous /stockage. Démontez le support d’abord."
+existing_mounts=$(list_mounts_under_stockage) || fail "$(vigil_text 'État de /stockage non vérifiable.' 'Unable to verify /stockage mount state.')"
+[ -z "$existing_mounts" ] || fail "$(vigil_text 'Un montage existe sous /stockage. Démontez le support d’abord.' 'A device is already mounted under /stockage. Unmount it first.')"
 if [ ! -e "$STOCKAGE_DIR" ] && [ ! -L "$STOCKAGE_DIR" ]; then
-    sudo install -d -o root -g root -m 0755 -- "$STOCKAGE_DIR" || fail "Impossible de créer $STOCKAGE_DIR."
+    sudo install -d -o root -g root -m 0755 -- "$STOCKAGE_DIR" || fail "$(vigil_text "Impossible de créer $STOCKAGE_DIR." "Cannot create $STOCKAGE_DIR.")"
 fi
 if ! storage_error=$(vigil_storage_root_check "$STOCKAGE_DIR"); then
     printf '%s\n' "$storage_error"
@@ -339,15 +339,15 @@ _mount_single_rw() {
 }
 
 # --- 1. Detection des peripheriques USB/Disques ---
-detect_usb_devices || fail "Impossible de relever les périphériques de stockage."
+detect_usb_devices || fail "$(vigil_text 'Impossible de relever les périphériques de stockage.' 'Unable to inventory storage devices.')"
 if [ -n "${VIGIL_DEVICE_SELECTION:-}" ]; then
-    select_device_path "$VIGIL_DEVICE_SELECTION" || fail "Périphérique sélectionné indisponible."
+    select_device_path "$VIGIL_DEVICE_SELECTION" || fail "$(vigil_text 'Périphérique sélectionné indisponible.' 'Selected device unavailable.')"
 else
     while true; do
         display_usb_devices
-        select_usb_device "à monter" && break
+        select_usb_device "$(vigil_text 'à monter' 'to mount')" && break
         case $? in
-            2) detect_usb_devices || fail "Impossible de relever les périphériques de stockage." ;;
+            2) detect_usb_devices || fail "$(vigil_text 'Impossible de relever les périphériques de stockage.' 'Unable to inventory storage devices.')" ;;
             *) exit 0 ;;
         esac
     done
@@ -366,22 +366,22 @@ fi
 selected="/dev/$SELECTED_DEVICE"
 disk="$selected"
 if [ "$SELECTED_KIND" = "part" ]; then
-    parent=$(lsblk -dnro PKNAME -- "$selected") || fail "Disque parent inaccessible."
+    parent=$(lsblk -dnro PKNAME -- "$selected") || fail "$(vigil_text 'Disque parent inaccessible.' 'Parent disk inaccessible.')"
     [ -n "$parent" ] && [ "$parent" = "$SELECTED_PKNAME" ] ||
         fail "$(vigil_text "Impossible de confirmer le disque parent de $selected." "Unable to confirm the parent disk for $selected.")"
     disk="/dev/$parent"
 fi
-disk_info=$(lsblk -dnro TYPE,TRAN,RM -- "$disk") || fail "Disque inaccessible : $disk."
+disk_info=$(lsblk -dnro TYPE,TRAN,RM -- "$disk") || fail "$(vigil_text "Disque inaccessible : $disk." "Disk inaccessible: $disk.")"
 [[ "$disk_info" =~ ^disk[[:space:]]+usb[[:space:]]+[01]$ ]] ||
     fail "$(vigil_text "$disk n’est pas un disque USB confirmé." "$disk is not a confirmed USB disk.")"
-mounts=$(lsblk -nr -o MOUNTPOINTS -- "$disk") || fail "Montages non vérifiables pour $disk."
-[[ "$mounts" =~ [^[:space:]] ]] && fail "$disk contient déjà un montage. Aucun passage en écriture."
+mounts=$(lsblk -nr -o MOUNTPOINTS -- "$disk") || fail "$(vigil_text "Montages non vérifiables pour $disk." "Unable to verify mounts for $disk.")"
+[[ "$mounts" =~ [^[:space:]] ]] && fail "$(vigil_text "$disk contient déjà un montage. Aucun passage en écriture." "$disk has an active mount. Read/write mode refused.")"
 vigil_device_check mount /stockage "$selected" || exit 1
-disk_ro=$(sudo blockdev --getro "$disk") || fail "État bloc non vérifiable pour $disk."
+disk_ro=$(sudo blockdev --getro "$disk") || fail "$(vigil_text "État bloc non vérifiable pour $disk." "Unable to verify block read-only status for $disk.")"
 case "$disk_ro" in
     0) ;;
-    1) sudo blockdev --setrw "$disk" || fail "Impossible de rendre $disk inscriptible." ;;
-    *) fail "État bloc inconnu pour $disk." ;;
+    1) sudo blockdev --setrw "$disk" || fail "$(vigil_text "Impossible de rendre $disk inscriptible." "Unable to enable write access to $disk.")" ;;
+    *) fail "$(vigil_text "État bloc inconnu pour $disk." "Unknown block-device state for $disk.")" ;;
 esac
 
 # --- 4. Montage selon le kind d'entrée sélectionnée ---
