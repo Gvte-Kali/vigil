@@ -99,6 +99,7 @@ class Workspace(App):
         self.sidebar_manual = False
         self.cpu_sample = None
         self.disk_rows = None
+        self.disk_details = {}
         self.dashboard_refreshing = False
         self.workspace_refreshing = False
         self.initializing = True
@@ -158,6 +159,7 @@ class Workspace(App):
                     yield Static(id="recent-activity", classes="panel")
                     yield Static(t("Disques et partitions", "Disks and partitions"), classes="heading")
                     yield Tree(t("Périphériques bloc", "Block devices"), id="disk-tree")
+                    yield Static(t("Sélectionnez un disque ou une partition.", "Select a disk or partition."), id="disk-detail", classes="panel")
                 with Vertical(id="cases"):
                     yield Static(t("Gestionnaire d’affaires", "Case manager"), classes="heading", id="manager-title")
                     with Horizontal(id="case-tools"):
@@ -607,10 +609,19 @@ class Workspace(App):
         with storage.database(self.state) as connection:
             storage.require_active_case(connection, case_id)
 
-    async def on_button_pressed(self, event):
+    def on_button_pressed(self, event):
+        action = event.button.id
+        if action and action.startswith("nav-"):
+            event.stop()
+            self.show_page(action[4:])
+            return
+        self.dispatch_button(action)
+
+    @work(group="button-actions", exit_on_error=False)
+    async def dispatch_button(self, action):
         t = self.tr
         try:
-            match event.button.id:
+            match action:
                 case "set-operator":
                     field = self.query_one("#operator-name", Input)
                     key = self.selected_key("operator-table")
@@ -652,8 +663,9 @@ class Workspace(App):
                     else:
                         self.notify(t("Montage non vérifié.", "Mount verification failed."), severity="warning")
                 case _:
-                    await self.handle_action(event.button.id)
-        except CORE_ERRORS as error:
+                    await self.handle_action(action)
+        except Exception as error:
+            logging.getLogger(__name__).exception("TUI button action failed")
             self.notify_error(error)
 
     def start_evidence_operation(self, operation, case_id, operator, argument):
@@ -721,6 +733,7 @@ class Workspace(App):
         expanded = {node.data for node in walk(tree.root) if node.is_expanded}
         selected = tree.cursor_node.data if tree.cursor_node else None
         tree.clear()
+        self.disk_details.clear()
         for row in rows:
             self.add_disk(tree.root, row)
         tree.root.expand()
@@ -907,7 +920,9 @@ class Workspace(App):
     def add_disk(self, parent, row):
         access = "RO" if row.get("ro") in {1, "1", True} else "RW"
         label = f"{row['name']} · {row.get('size') or '—'} · {access}"
-        node = parent.add(Text(label), data=str(row.get("path") or row["name"]),
+        key = str(row.get("path") or row["name"])
+        self.disk_details[key] = row
+        node = parent.add(Text(label), data=key,
                           allow_expand=bool(row.get("children")))
         for child in row.get("children", []):
             self.add_disk(node, child)
@@ -992,6 +1007,13 @@ class Workspace(App):
             self.notify_error(error)
 
     async def on_tree_node_highlighted(self, event):
+        if event.control.id == "disk-tree":
+            row = self.disk_details.get(event.node.data)
+            if row:
+                fields = [f"{key}: {value}" for key, value in row.items()
+                          if key != "children" and value is not None and value != ""]
+                self.query_one("#disk-detail", Static).update(Text("\n".join(fields)))
+            return
         if event.control.id != "file-tree" or not event.node.data:
             return
         path, root, mount_id, directory = event.node.data
