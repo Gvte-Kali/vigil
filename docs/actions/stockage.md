@@ -3,6 +3,7 @@ layout: default
 parent: Actions
 title: Stockage
 nav_order: 23
+grand_parent: Français
 ---
 
 # Stockage de travail
