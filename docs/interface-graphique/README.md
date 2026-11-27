@@ -3,6 +3,7 @@ layout: default
 title: Interface
 nav_order: 40
 has_children: true
+parent: Français
 ---
 
 # Guide de l'interface graphique
