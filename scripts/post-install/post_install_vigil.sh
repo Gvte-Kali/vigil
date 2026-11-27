@@ -35,9 +35,10 @@ case "$(python3 -c 'import sys; print(int(sys.version_info >= (3, 11)))')" in
 esac
 vigil_launchers_preflight /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop
 sudo -v
+vigil_maintenance_language
 vigil_maintenance_start install 7 'Vigil · Installation'
 trap 'vigil_maintenance_exit "$?"' EXIT
-vigil_maintenance_step 'Contrôles système / System checks'
+vigil_maintenance_step "$(vigil_text 'Contrôles système' 'System checks')"
 if sudo test -e /etc/sudoers.d/vigil; then
     echo "Règle sudoers Vigil existante : faites-la examiner et retirer par l'administrateur."
     echo "Voir docs/installation/README.md#reprendre-le-post-install."
@@ -70,7 +71,7 @@ apt_snapshot() {
 }
 apt_work=$(mktemp -d)
 trap 'status=$?; rm -rf -- "$apt_work"; vigil_maintenance_exit "$status"' EXIT
-vigil_maintenance_step 'Dépôts et dépendances / Repositories and dependencies'
+vigil_maintenance_step "$(vigil_text 'Dépôts et dépendances' 'Repositories and dependencies')"
 if (( ! skip_update )); then vigil_maintenance_run sudo apt-get update; fi
 missing=()
 for pkg in "${packages[@]}"; do
@@ -90,7 +91,7 @@ install -m 0600 "$apt_work/manifest" "$manifest"
 [ "$apt_status" -eq 0 ] || exit "$apt_status"
 
 # --- 1. Verifier et creer les repertoires necessaires ---
-vigil_maintenance_step 'Répertoires et zones / Directories and zones'
+vigil_maintenance_step "$(vigil_text 'Répertoires et zones' 'Directories and zones')"
 if [ -L /investigation ] || { [ -e /investigation ] && [ ! -d /investigation ]; }; then
     echo "/investigation doit être un vrai répertoire." >&2
     exit 1
@@ -117,14 +118,14 @@ touch /opt/vigil/data/active_project
 touch /opt/vigil/data/usb/whitelist.txt /opt/vigil/data/usb/blacklist.txt
 
 # --- 6.1. Installer Qt dans /opt/vigil ---
-vigil_maintenance_step 'Environnement Python et Vigil / Python environment and Vigil'
-vigil_install_cli /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop >>"$VIGIL_LOG" 2>&1
+vigil_maintenance_step "$(vigil_text 'Environnement Python et Vigil' 'Python environment and Vigil')"
+vigil_maintenance_run vigil_install_cli /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop
 . "$script_directory/../lib/vigil-freshclam.sh"
-vigil_maintenance_step 'ClamAV et AppArmor'
-vigil_prepare_freshclam /opt/vigil/data/state/clamav >>"$VIGIL_LOG" 2>&1
+vigil_maintenance_step "$(vigil_text 'ClamAV et AppArmor' 'ClamAV and AppArmor')"
+vigil_maintenance_run vigil_prepare_freshclam /opt/vigil/data/state/clamav
 
 # --- 8. Créer le raccourci bureau (item 6 du checklist) ---
-vigil_maintenance_step 'Raccourcis / Shortcuts'
+vigil_maintenance_step "$(vigil_text 'Raccourcis' 'Shortcuts')"
 # Installer l'icône SVG de l'application dans le chemin système des icônes.
 # Le nom 'vigil' est référencé par Icon= dans le fichier .desktop ; KDE/Qt
 # résolvent le nom vers /usr/share/icons/hicolor/scalable/apps/vigil.svg.
@@ -161,10 +162,10 @@ fi
 
 
 # Install the hotplug rule without replaying events for devices already connected.
-vigil_maintenance_step 'Protection USB et vérification / USB protection and checks'
+vigil_maintenance_step "$(vigil_text 'Protection USB et vérification' 'USB protection and checks')"
 vigil_maintenance_run sh /opt/vigil/scripts/post-install/install-hotplug.sh
 vigil_maintenance_run /opt/vigil/.venv/bin/vigil --version
 vigil_maintenance_finish
 
-echo "Installation terminée. Pour initialiser les signatures, ouvrez Vigil puis Actions rapides > Mettre à jour l’antivirus."
+echo "$(vigil_text 'Installation terminée. Initialisez les signatures depuis Actions rapides.' 'Installation complete. Initialize signatures from Quick actions.')"
 echo "Inventaire des paquets nouvellement installés : $manifest"
