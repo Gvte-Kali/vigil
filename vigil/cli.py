@@ -145,12 +145,12 @@ def verify_devices(target: Optional[str] = None):
 @app.command("tui")
 def launch_tui(
     db: DatabaseOption = None,
-    lang: Annotated[str, typer.Option("--lang", help="fr or en")] = "fr",
+    lang: Annotated[Optional[str], typer.Option("--lang", help="Français (fr) / English (en)")] = None,
     operator: Annotated[Optional[str], typer.Option("--operator")] = None,
 ):
     """Open the terminal workspace / Ouvrir l’espace de travail terminal."""
-    if lang not in {"fr", "en"}:
-        raise typer.BadParameter("fr or en", param_hint="--lang")
+    if lang is not None and lang not in {"fr", "en"}:
+        raise typer.BadParameter("Français (fr) / English (en)", param_hint="--lang")
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         typer.echo("Un terminal interactif est requis / An interactive terminal is required.", err=True)
         raise typer.Exit(1)
@@ -161,6 +161,14 @@ def launch_tui(
             raise
         typer.echo("Textual manquant : réinstallez Vigil / Textual missing: reinstall Vigil.", err=True)
         raise typer.Exit(1) from error
+    if lang is None:
+        typer.echo("Sélection de la langue / Language selection")
+        typer.echo("  1. Français (FR)\n  2. English (EN)")
+        choice = typer.prompt("Votre choix / Your choice", type=str)
+        while choice.strip().lower() not in {"1", "2", "fr", "en"}:
+            typer.echo("Choix invalide / Invalid choice", err=True)
+            choice = typer.prompt("Votre choix / Your choice")
+        lang = "fr" if choice.strip().lower() in {"1", "fr"} else "en"
     from .session import supervise
 
     state = (db or storage.default_database()).absolute()
