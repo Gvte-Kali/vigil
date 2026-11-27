@@ -23,10 +23,10 @@ from .terminal import show_logo
 
 class VigilCLI(typer.Typer):
     def __call__(self, *args, **kwargs):
-        # Existing editable installs still launch app() directly.
+        # Bare invocation displays help, including in non-interactive shells.
         if (not sys.argv[1:] and not args and kwargs.get("args") is None
-                and sys.stdin.isatty() and sys.stdout.isatty() and "_VIGIL_COMPLETE" not in os.environ):
-            kwargs["args"] = ["tui"]
+                and "_VIGIL_COMPLETE" not in os.environ):
+            kwargs["args"] = ["--help"]
         if sys.stderr.isatty() and "_VIGIL_COMPLETE" not in os.environ:
             if os.environ.get("TERM") not in (None, "dumb"):
                 print("\033[H\033[2J", end="", file=sys.stderr, flush=True)
