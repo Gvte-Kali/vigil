@@ -38,7 +38,7 @@ class PDFLocalizationTest(unittest.TestCase):
         with patch.dict(os.environ, {"VIGIL_LANG": "en"}):
             self.assertEqual(self.pdf._display("Résultat de l'analyse"), "Analysis results")
             self.assertEqual(self.pdf._display("Généré le 28/11/2026"), "Generated on 28/11/2026")
-            self.assertIn("Detected", self.pdf._display("3 MENACE(S) DÉTECTÉE(S)") .title())
+            self.assertIn("THREAT(S) DETECTED", self.pdf._display("3 MENACE(S) DÉTECTÉE(S)"))
             self.assertIn("unavailable", self.pdf._display(
                 "Cette analyse n'a pas pu être exécutée correctement (statut : failed). "
                 "Les résultats ne sont pas disponibles."))
