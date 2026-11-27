@@ -165,5 +165,13 @@ vigil_install_desktop_shortcut() {
             return 0
         }
     fi
-    install -m 0755 -- /usr/share/applications/vigil.desktop "$target"
+    local temporary
+    temporary=$(mktemp) || return 1
+    if ! awk '/^Icon=/ { $0 = "Icon=/opt/vigil/data/icons/vigil.svg" } { print }' \
+        /usr/share/applications/vigil.desktop > "$temporary" ||
+        ! install -m 0755 -- "$temporary" "$target"; then
+        rm -f -- "$temporary"
+        return 1
+    fi
+    rm -f -- "$temporary"
 }
