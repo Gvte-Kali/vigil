@@ -2,6 +2,7 @@
 layout: default
 title: FAQ et dépannage
 nav_order: 7
+parent: Français
 ---
 
 # FAQ et dépannage
