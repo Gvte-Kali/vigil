@@ -573,6 +573,8 @@ def _display(text):
     if text in _EN_LABELS:
         return _EN_LABELS[text]
     dynamic = (
+        (r"^Cette analyse n'a pas pu être exécutée correctement \(statut : (.*?)\)\. Les résultats ne sont pas disponibles\.$",
+         r"This analysis could not be completed (status: \1). Results are unavailable."),
         (r"^Généré le (.*)$", r"Generated on \1"),
         (r"^([0-9]+) analyse\(s\) effectuée\(s\) sur le périphérique :$",
          r"\1 analysis section(s) completed on the device:"),
