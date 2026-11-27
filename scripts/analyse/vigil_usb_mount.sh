@@ -63,12 +63,12 @@ fi
 final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
-        echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
+        echo -e "$(vigil_text "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}" "${RED}❌ Script finished with $ERRORS error(s).${NC}")"
         echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
-        echo -e "${GREEN}✅ Script terminé sans erreur.${NC}"
+        echo -e "$(vigil_text "${GREEN}✅ Script terminé sans erreur.${NC}" "${GREEN}✅ Script finished without errors.${NC}")"
     fi
 }
 
@@ -154,42 +154,42 @@ list_mounts_under_investigation() {
 
 # Créer les dossiers de logs et d'investigation s'ils n'existent pas
 mkdir -p "$PROJECT_LOG_DIR" 2>/dev/null || {
-    echo -e "${RED}❌ Impossible de créer $PROJECT_LOG_DIR${NC}"
-    echo -e "${YELLOW}    Vérifiez les droits d'écriture sur $VIGIL_BASE/data/projects/${NC}"
+    echo -e "$(vigil_text "${RED}❌ Impossible de créer $PROJECT_LOG_DIR${NC}" "${RED}❌ Unable to create $PROJECT_LOG_DIR${NC}")"
+    echo -e "$(vigil_text "${YELLOW}    Vérifiez les droits d'écriture sur $VIGIL_BASE/data/projects/${NC}" "${YELLOW}    Check write permissions on $VIGIL_BASE/data/projects/${NC}")"
     ERRORS=$((ERRORS + 1))
     final_pause
     exit 1
 }
 if [ ! -e /investigation ] && [ ! -L /investigation ]; then
-    sudo mkdir -m 0755 -- /investigation || fail "Impossible de créer /investigation."
+    sudo mkdir -m 0755 -- /investigation || fail "$(vigil_text "Impossible de créer /investigation." "Unable to create /investigation.")"
 fi
 [ "$(realpath -e -- /investigation)" = /investigation ] &&
     [ "$(stat -c '%u:%a' -- /investigation)" = 0:755 ] ||
-    fail "/investigation doit être un répertoire réel root:root 0755."
+    fail "$(vigil_text "/investigation doit être un répertoire réel root:root 0755." "/investigation must be a real root:root 0755 directory.")"
 
 # --- Vérifications des privilèges et dépendances ---
 if [ "$(id -u)" -ne 0 ] && ! sudo -n true 2>/dev/null; then
-    echo -e "${YELLOW}⚠️  Ce script nécessite des privilèges root pour monter les périphériques.${NC}"
-    echo -e "${YELLOW}    Vérifiez la configuration sudo de l'utilisateur courant.${NC}"
+    echo -e "$(vigil_text "${YELLOW}⚠️  Ce script nécessite des privilèges root pour monter les périphériques.${NC}" "${YELLOW}⚠️  Root privileges are required to mount devices.${NC}")"
+    echo -e "$(vigil_text "${YELLOW}    Vérifiez la configuration sudo de l'utilisateur courant.${NC}" "${YELLOW}    Check the current user's sudo configuration.${NC}")"
 fi
 
-echo -e "${BLUE}=== Vérification des dépendances ===${NC}"
+echo -e "$(vigil_text "${BLUE}=== Vérification des dépendances ===${NC}" "${BLUE}=== Checking dependencies ===${NC}")"
 MISSING_DEPS=0
 for cmd in lsblk mount find sha256sum; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo -e "${RED}❌ Outil requis absent : $cmd${NC}"
+        echo -e "$(vigil_text "${RED}❌ Outil requis absent : $cmd${NC}" "${RED}❌ Required tool missing: $cmd${NC}")"
         MISSING_DEPS=$((MISSING_DEPS + 1))
     fi
 done
 # Outils optionnels (avertissement seulement)
 for cmd in jq cryptsetup clamscan jmtpfs eject blockdev; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Outil optionnel absent : $cmd (certaines fonctionnalités seront désactivées)${NC}"
+        echo -e "$(vigil_text "${YELLOW}⚠️  Outil optionnel absent : $cmd (certaines fonctionnalités seront désactivées)${NC}" "${YELLOW}⚠️  Optional tool missing: $cmd (some features will be unavailable)${NC}")"
     fi
 done
 
 if [ "$MISSING_DEPS" -gt 0 ]; then
-    fail "Dépendances obligatoires manquantes ($MISSING_DEPS). Installez-les avant de continuer."
+    fail "$(vigil_text "Dépendances obligatoires manquantes ($MISSING_DEPS). Installez-les avant de continuer." "Required dependencies missing ($MISSING_DEPS). Install them before continuing.")"
 fi
 
 
@@ -202,8 +202,8 @@ printf '%b%s%b\n' "$BLUE" "$(vigil_text "Projet :" "Project:") $ACTIVE_PROJECT |
 echo ""
 
 # Never replace a mounted resource implicitly.
-existing_mounts=$(list_mounts_under_investigation) || fail "État de /investigation non vérifiable."
-[ -z "$existing_mounts" ] || fail "Démontez d’abord les supports déjà présents dans /investigation."
+existing_mounts=$(list_mounts_under_investigation) || fail "$(vigil_text "État de /investigation non vérifiable." "Unable to verify /investigation mount status.")"
+[ -z "$existing_mounts" ] || fail "$(vigil_text "Démontez d’abord les supports déjà présents dans /investigation." "Unmount existing media under /investigation first.")"
 
 # Nettoyage des dossiers vides résiduels
 while IFS= read -r -d '' dir; do
@@ -241,13 +241,13 @@ finish_mount_triage() {
        && [ "$unblockable" -eq 0 ] \
        && [ "$_usb_storage_count" -eq 0 ]; then
         echo ""
-        echo -e "${RED}${BOLD}🚨 Le seul périphérique détecté est un clavier suspect (bloqué).${NC}"
-        echo -e "${RED}Il ne peut pas être monté ni analysé : débranchez-le et jugez ${NC}"
-        echo -e "${RED}s'il s'agit d'un clavier de travail (relancez alors le script).${NC}"
+        echo -e "$(vigil_text "${RED}${BOLD}🚨 Le seul périphérique détecté est un clavier suspect (bloqué).${NC}" "${RED}${BOLD}🚨 The only detected device is a suspicious keyboard (blocked).${NC}")"
+        echo -e "$(vigil_text "${RED}Il ne peut pas être monté ni analysé : débranchez-le et jugez ${NC}" "${RED}It cannot be mounted or analyzed: disconnect it and decide${NC}")"
+        echo -e "$(vigil_text "${RED}s'il s'agit d'un clavier de travail (relancez alors le script).${NC}" "${RED}whether this is a trusted work keyboard (then restart the script).${NC}")"
         if [ -n "${VIGIL_MOUNT_TRIAGE_JSON_OUT:-}" ]; then
-            echo -e "${GREEN}Le triage est consolidé dans le rapport final (recherche de menaces).${NC}"
+            echo -e "$(vigil_text "${GREEN}Le triage est consolidé dans le rapport final (recherche de menaces).${NC}" "${GREEN}Triage is included in the final threat-hunting report.${NC}")"
         else
-            echo -e "${GREEN}Le rapport PDF de triage a été généré (rapport_usbhid_*).${NC}"
+            echo -e "$(vigil_text "${GREEN}Le rapport PDF de triage a été généré (rapport_usbhid_*).${NC}" "${GREEN}The USB triage PDF has been generated (rapport_usbhid_*).${NC}")"
         fi
         log_action "usb_triage_end" "" "$after_file" "alert" "Fin du montage : seul périphérique détecté = clavier suspect bloqué"
         END_AFTER_TRIAGE=1
@@ -259,13 +259,13 @@ finish_mount_triage() {
        && [ "$new_count" -eq "$BL_COUNT" ] \
        && [ "$_usb_storage_count" -eq 0 ]; then
         echo ""
-        echo -e "${RED}${BOLD}🚨 Le seul périphérique détecté est BLACKLISTÉ (bloqué).${NC}"
-        echo -e "${RED}Il ne peut pas être monté ni analysé. Pour l'autoriser à nouveau,${NC}"
-        echo -e "${RED}retirez-le de la blacklist (Accueil > Configuration > Périphériques USB).${NC}"
+        echo -e "$(vigil_text "${RED}${BOLD}🚨 Le seul périphérique détecté est BLACKLISTÉ (bloqué).${NC}" "${RED}${BOLD}🚨 The only detected device is DENYLISTED (blocked).${NC}")"
+        echo -e "$(vigil_text "${RED}Il ne peut pas être monté ni analysé. Pour l'autoriser à nouveau,${NC}" "${RED}It cannot be mounted or analyzed. To allow it again,${NC}")"
+        echo -e "$(vigil_text "${RED}retirez-le de la blacklist (Accueil > Configuration > Périphériques USB).${NC}" "${RED}remove it from the denylist (Home > Configuration > USB devices).${NC}")"
         if [ -n "${VIGIL_MOUNT_TRIAGE_JSON_OUT:-}" ]; then
-            echo -e "${GREEN}Le triage est consolidé dans le rapport final (recherche de menaces).${NC}"
+            echo -e "$(vigil_text "${GREEN}Le triage est consolidé dans le rapport final (recherche de menaces).${NC}" "${GREEN}Triage is included in the final threat-hunting report.${NC}")"
         else
-            echo -e "${GREEN}Le rapport PDF de triage a été généré (rapport_usbhid_*).${NC}"
+            echo -e "$(vigil_text "${GREEN}Le rapport PDF de triage a été généré (rapport_usbhid_*).${NC}" "${GREEN}The USB triage PDF has been generated (rapport_usbhid_*).${NC}")"
         fi
         log_action "usb_triage_end" "" "$after_file" "alert" "Fin du montage : seul périphérique détecté = blacklisté bloqué"
         END_AFTER_TRIAGE=1
@@ -295,33 +295,33 @@ fi
 # --- 1. Sélection du type de périphérique ---
 echo ""
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}  Sélection du type de périphérique          ${NC}"
+echo -e "$(vigil_text "${BLUE}  Sélection du type de périphérique          ${NC}" "${BLUE}  Select device type                         ${NC}")"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${GREY}$(vigil_text "Quel type de périphérique souhaitez-vous analyser ?" "Which device type do you want to examine?")${NC}"
 echo ""
 echo -e "  ${BOLD}${BLUE}[1]${NC}  ${BOLD}Smartphone${NC}  ${GREY}(MTP/PTP)${NC}"
-echo -e "  ${BOLD}${BLUE}[2]${NC}  ${BOLD}Périphérique de stockage USB${NC}  ${GREY}(clé, disque dur, etc.)${NC}"
-echo -e "  ${BOLD}${BLUE}[3]${NC}  ${BOLD}Autre${NC}  ${GREY}(scanner tous les types de périphériques)${NC}"
+echo -e "$(vigil_text "  ${BOLD}${BLUE}[2]${NC}  ${BOLD}Périphérique de stockage USB${NC}  ${GREY}(clé, disque dur, etc.)${NC}" "  ${BOLD}${BLUE}[2]${NC}  ${BOLD}USB storage device${NC}  ${GREY}(flash drive, hard disk, etc.)${NC}")"
+echo -e "$(vigil_text "  ${BOLD}${BLUE}[3]${NC}  ${BOLD}Autre${NC}  ${GREY}(scanner tous les types de périphériques)${NC}" "  ${BOLD}${BLUE}[3]${NC}  ${BOLD}Other${NC}  ${GREY}(scan all device types)${NC}")"
 echo ""
-echo -e "  ${BOLD}${BLUE}[q]${NC}  ${BOLD}Quitter${NC}"
+echo -e "$(vigil_text "  ${BOLD}${BLUE}[q]${NC}  ${BOLD}Quitter${NC}" "  ${BOLD}${BLUE}[q]${NC}  ${BOLD}Quit${NC}")"
 echo ""
-echo -ne "${BOLD}${YELLOW}Entrez votre choix (1-3, q pour quitter) : ${NC}"
+echo -ne "$(vigil_text "${BOLD}${YELLOW}Entrez votre choix (1-3, q pour quitter) : ${NC}" "${BOLD}${YELLOW}Enter your choice (1-3, q to quit): ${NC}")"
 read -r DEVICE_TYPE_CHOICE
 
 case "$DEVICE_TYPE_CHOICE" in
     1)
         DEVICE_MODE="smartphone"
-        echo -e "${GREEN}Mode : Détection des smartphones (MTP/PTP)${NC}"
+        echo -e "$(vigil_text "${GREEN}Mode : Détection des smartphones (MTP/PTP)${NC}" "${GREEN}Mode: Detect smartphones (MTP/PTP)${NC}")"
         log_action "device_type_selection" "" "" "success" "Type : Smartphone (MTP/PTP)"
         ;;
     2)
         DEVICE_MODE="usb_storage"
-        echo -e "${GREEN}Mode : Périphériques de stockage USB uniquement${NC}"
+        echo -e "$(vigil_text "${GREEN}Mode : Périphériques de stockage USB uniquement${NC}" "${GREEN}Mode: USB storage devices only${NC}")"
         log_action "device_type_selection" "" "" "success" "Type : Stockage USB"
         ;;
     3)
         DEVICE_MODE="all"
-        echo -e "${GREEN}Mode : Détection de tous les types de périphériques${NC}"
+        echo -e "$(vigil_text "${GREEN}Mode : Détection de tous les types de périphériques${NC}" "${GREEN}Mode: Detect all device types${NC}")"
         log_action "device_type_selection" "" "" "success" "Type : Tous"
         ;;
     q|Q)
@@ -331,7 +331,7 @@ case "$DEVICE_TYPE_CHOICE" in
         exit 0
         ;;
     *)
-        fail "Choix invalide : $DEVICE_TYPE_CHOICE"
+        fail "$(vigil_text "Choix invalide : $DEVICE_TYPE_CHOICE" "Invalid choice: $DEVICE_TYPE_CHOICE")"
         ;;
 esac
 
@@ -341,18 +341,18 @@ esac
 clear
 if [ "$HID_ALERT_COUNT" -gt 0 ]; then
     print_banner
-    echo -e "${RED}${BOLD}  ⚠ ATTENTION : $HID_ALERT_COUNT périphérique(s) suspect(s) détecté(s)${NC}"
-    echo -e "${RED}  Un périphérique se fait passer pour un clavier : ses frappes sont${NC}"
-    echo -e "${RED}  bloquées et il ne peut PAS être monté. Voir le rapport PDF de triage.${NC}"
+    echo -e "$(vigil_text "${RED}${BOLD}  ⚠ ATTENTION : $HID_ALERT_COUNT périphérique(s) suspect(s) détecté(s)${NC}" "${RED}${BOLD}  ⚠ WARNING: $HID_ALERT_COUNT suspicious device(s) detected${NC}")"
+    echo -e "$(vigil_text "${RED}  Un périphérique se fait passer pour un clavier : ses frappes sont${NC}" "${RED}  A device is impersonating a keyboard: its keystrokes are${NC}")"
+    echo -e "$(vigil_text "${RED}  bloquées et il ne peut PAS être monté. Voir le rapport PDF de triage.${NC}" "${RED}  blocked and it CANNOT be mounted. See the USB triage PDF.${NC}")"
     echo ""
 elif [ "$HID_PROTECTED_COUNT" -gt 0 ]; then
     print_banner
-    echo -e "${GREEN}${BOLD}  Contrôle USB terminé : $HID_PROTECTED_COUNT périphérique(s) protégé(s) par vos soins${NC}"
-    echo -e "${GREEN}  (clavier/souris de travail) — ils fonctionnent normalement.${NC}"
+    echo -e "$(vigil_text "${GREEN}${BOLD}  Contrôle USB terminé : $HID_PROTECTED_COUNT périphérique(s) protégé(s) par vos soins${NC}" "${GREEN}${BOLD}  USB check complete: $HID_PROTECTED_COUNT device(s) protected by the operator${NC}")"
+    echo -e "$(vigil_text "${GREEN}  (clavier/souris de travail) — ils fonctionnent normalement.${NC}" "${GREEN}  (trusted keyboard/mouse) — they continue working normally.${NC}")"
     echo ""
 else
     print_banner
-    echo -e "${GREEN}  ✅ Contrôle USB terminé : aucun périphérique suspect détecté.${NC}"
+    echo -e "$(vigil_text "${GREEN}  ✅ Contrôle USB terminé : aucun périphérique suspect détecté.${NC}" "${GREEN}  ✅ USB check complete: no suspicious devices found.${NC}")"
     echo ""
 fi
 
@@ -368,17 +368,17 @@ fi
 
 # --- 2.1. Détection des DVD/CD-ROM (uniquement en mode "Autre") ---
 if [ "$DEVICE_MODE" = "all" ] && [ -e /dev/cdrom ]; then
-    echo -e "${YELLOW}Recherche de lecteurs CD-ROM...${NC}"
+    echo -e "$(vigil_text "${YELLOW}Recherche de lecteurs CD-ROM...${NC}" "${YELLOW}Looking for CD-ROM drives...${NC}")"
     if command -v eject >/dev/null 2>&1 && eject -t /dev/cdrom 2>/dev/null; then
         sleep 2
         sudo mkdir -p /investigation/cdrom 2>/dev/null || true
         if mount /dev/cdrom /investigation/cdrom -o ro,noexec,nosuid,nodev,noatime 2>/dev/null; then
-            echo -e "${GREEN}✅ Média optique monté dans /investigation/cdrom${NC}"
+            echo -e "$(vigil_text "${GREEN}✅ Média optique monté dans /investigation/cdrom${NC}" "${GREEN}✅ Optical media mounted at /investigation/cdrom${NC}")"
             log_action "mount" "/dev/cdrom" "/investigation/cdrom" "success" "Média optique monté en lecture seule"
-            echo -e "\n${GREEN}✅ Montage terminé sans erreur.${NC}"
+            echo -e "$(vigil_text "\n${GREEN}✅ Montage terminé sans erreur.${NC}" "\n${GREEN}✅ Mount completed without errors.${NC}")"
             exit 0
         else
-            echo -e "${YELLOW}⚠️  Aucun média optique détecté ou échec du montage.${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  Aucun média optique détecté ou échec du montage.${NC}" "${YELLOW}⚠️  No optical media detected or mount failed.${NC}")"
             log_action "mount_attempt" "/dev/cdrom" "/investigation/cdrom" "warning" "Échec du montage du média optique"
             sudo rmdir /investigation/cdrom 2>/dev/null || true
         fi
@@ -388,30 +388,30 @@ fi
 # --- 2.2. Détection des périphériques MTP (Smartphone ou Autre) ---
 if [ "$DEVICE_MODE" = "smartphone" ] || [ "$DEVICE_MODE" = "all" ]; then
     if command -v jmtpfs >/dev/null 2>&1; then
-        echo -e "${YELLOW}Recherche de périphériques MTP...${NC}"
+        echo -e "$(vigil_text "${YELLOW}Recherche de périphériques MTP...${NC}" "${YELLOW}Looking for MTP devices...${NC}")"
         MTP_DEVICES=$(jmtpfs -l 2>/dev/null | grep -E "^Device [0-9]+" || true)
         if [ -n "$MTP_DEVICES" ]; then
-            echo -e "${GREEN}✅ Périphérique MTP détecté :${NC}"
+            echo -e "$(vigil_text "${GREEN}✅ Périphérique MTP détecté :${NC}" "${GREEN}✅ MTP device detected:${NC}")"
             echo "$MTP_DEVICES" | while IFS= read -r line; do
                 echo -e "   ${line}"
             done
             sudo mkdir -p /investigation/mtp 2>/dev/null || true
             if sudo jmtpfs /investigation/mtp -o ro 2>/dev/null; then
-                echo -e "${GREEN}✅ Périphérique MTP monté dans /investigation/mtp${NC}"
+                echo -e "$(vigil_text "${GREEN}✅ Périphérique MTP monté dans /investigation/mtp${NC}" "${GREEN}✅ MTP device mounted at /investigation/mtp${NC}")"
                 log_action "mount" "MTP" "/investigation/mtp" "success" "Périphérique MTP monté en lecture seule"
-                echo -e "\n${GREEN}✅ Montage terminé sans erreur.${NC}"
+                echo -e "$(vigil_text "\n${GREEN}✅ Montage terminé sans erreur.${NC}" "\n${GREEN}✅ Mount completed without errors.${NC}")"
                 exit 0
             else
-                echo -e "${YELLOW}⚠️  Échec du montage MTP.${NC}"
+                echo -e "$(vigil_text "${YELLOW}⚠️  Échec du montage MTP.${NC}" "${YELLOW}⚠️  MTP mount failed.${NC}")"
                 log_action "mount_attempt" "MTP" "/investigation/mtp" "failed" "Échec du montage MTP"
                 sudo rmdir /investigation/mtp 2>/dev/null || true
             fi
         else
-            echo -e "${YELLOW}⚠️  Aucun périphérique MTP détecté.${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  Aucun périphérique MTP détecté.${NC}" "${YELLOW}⚠️  No MTP device detected.${NC}")"
             log_action "mount_attempt" "MTP" "" "warning" "Aucun périphérique MTP détecté"
         fi
     else
-        echo -e "${YELLOW}⚠️  jmtpfs non installé. Impossible de détecter les périphériques MTP.${NC}"
+        echo -e "$(vigil_text "${YELLOW}⚠️  jmtpfs non installé. Impossible de détecter les périphériques MTP.${NC}" "${YELLOW}⚠️  jmtpfs is not installed. MTP devices cannot be detected.${NC}")"
         log_action "mount_attempt" "MTP" "" "warning" "jmtpfs non disponible"
     fi
 fi
@@ -422,7 +422,7 @@ fi
 # on réessaie, jusqu'à 3 passes. On détecte les partitions ET les disques USB
 # sans partition (filesystem direct sur le disque, ex. /dev/sdb sans table).
 if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
-    echo -e "${YELLOW}Recherche des périphériques USB/Disques...${NC}"
+    echo -e "$(vigil_text "${YELLOW}Recherche des périphériques USB/Disques...${NC}" "${YELLOW}Looking for USB devices/disks...${NC}")"
 
     # Boucle de retry : jusqu'à 3 passes. À chaque passe on tente la détection ;
     # si rien n'est trouvé on autorise les USB bloqués puis on réessaie.
@@ -436,40 +436,40 @@ if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
         fi
         [ -z "${VIGIL_DEVICE_SELECTION:-}" ] || break
         if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
-            echo -e "${GREY}    (tentative $ATTEMPT/$MAX_ATTEMPTS : aucun périphérique, vérification des USB bloqués...)${NC}"
+            echo -e "$(vigil_text "${GREY}    (tentative $ATTEMPT/$MAX_ATTEMPTS : aucun périphérique, vérification des USB bloqués...)${NC}" "${GREY}    (attempt $ATTEMPT/$MAX_ATTEMPTS: no device, checking blocked USB devices...)${NC}")"
             authorize_blocked_usb
         fi
     done
 
     if [ "$DEVICE_NUM" -eq 0 ]; then
-        echo -e "${RED}❌ Aucun périphérique USB/Disque non monté détecté.${NC}"
+        echo -e "$(vigil_text "${RED}❌ Aucun périphérique USB/Disque non monté détecté.${NC}" "${RED}❌ No unmounted USB/disk device detected.${NC}")"
         # Cas fréquent : un périphérique USB est déjà monté ailleurs
         # (ex. dans /stockage via le montage de stockage). On le signale et
         # on propose de le démonter pour pouvoir l'analyser en lecture seule.
         if [ "$MOUNTED_NUM" -gt 0 ] && [ "${VIGIL_CASE_CENSUS:-0}" != "1" ] && [ -z "${VIGIL_DEVICE_SELECTION:-}" ]; then
             echo ""
-            echo -e "${YELLOW}⚠️  ${MOUNTED_NUM} périphérique(s) USB déjà monté(s) :${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  ${MOUNTED_NUM} périphérique(s) USB déjà monté(s) :${NC}" "${YELLOW}⚠️  ${MOUNTED_NUM} USB device(s) already mounted:${NC}")"
             for i in "${!MOUNTED_USB[@]}"; do
                 IFS='|' read -r m_name m_mount m_size m_model <<< "${MOUNTED_USB[$i]}"
-                echo -e "  ${BOLD}/dev/$m_name${NC}  ${GREY}• Monté dans :${NC} ${BOLD}$m_mount${NC}  ${GREY}• Taille :${NC} ${BOLD}$m_size${NC}"
+                echo -e "$(vigil_text "  ${BOLD}/dev/$m_name${NC}  ${GREY}• Monté dans :${NC} ${BOLD}$m_mount${NC}  ${GREY}• Taille :${NC} ${BOLD}$m_size${NC}" "  ${BOLD}/dev/$m_name${NC}  ${GREY}• Mounted at:${NC} ${BOLD}$m_mount${NC}  ${GREY}• Size:${NC} ${BOLD}$m_size${NC}")"
             done
             echo ""
             echo -ne "${BOLD}${YELLOW}$(vigil_text "Démonter ces périphériques et relancer la détection ? (o/n, q pour quitter) :" "Unmount these devices and rescan? (o=yes, n=no, q=quit):") ${NC}"
             read -r UM_ANSWER
             if [ "$UM_ANSWER" = "q" ] || [ "$UM_ANSWER" = "Q" ]; then
-                echo -e "${YELLOW}Quitter.${NC}"
+                echo -e "$(vigil_text "${YELLOW}Quitter.${NC}" "${YELLOW}Quit.${NC}")"
                 final_pause
                 exit 0
             fi
             if [ "$UM_ANSWER" = "o" ] || [ "$UM_ANSWER" = "O" ] || [ "$UM_ANSWER" = "y" ] || [ "$UM_ANSWER" = "Y" ]; then
                 for i in "${!MOUNTED_USB[@]}"; do
                     IFS='|' read -r m_name m_mount m_size m_model <<< "${MOUNTED_USB[$i]}"
-                    echo -e "${YELLOW}Démontage de /dev/$m_name ($m_mount)...${NC}"
+                    echo -e "$(vigil_text "${YELLOW}Démontage de /dev/$m_name ($m_mount)...${NC}" "${YELLOW}Unmounting /dev/$m_name ($m_mount)...${NC}")"
                     if sudo umount "$m_mount" 2>/dev/null; then
-                        echo -e "  ${GREEN}✅ /dev/$m_name démonté.${NC}"
+                        echo -e "$(vigil_text "  ${GREEN}✅ /dev/$m_name démonté.${NC}" "  ${GREEN}✅ /dev/$m_name unmounted.${NC}")"
                         log_action "umount_for_ro" "/dev/$m_name" "$m_mount" "success" "Démonté pour analyse RO"
                     else
-                        echo -e "  ${RED}❌ Échec du démontage de /dev/$m_name.${NC}"
+                        echo -e "$(vigil_text "  ${RED}❌ Échec du démontage de /dev/$m_name.${NC}" "  ${RED}❌ Failed to unmount /dev/$m_name.${NC}")"
                     fi
                 done
                 # Replacer le disque en read-only après démontage
@@ -479,16 +479,16 @@ if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
                 done
                 sleep 1
                 # Relancer la détection une dernière fois
-                detect_usb_devices || fail "Impossible de relever les périphériques de stockage."
+                detect_usb_devices || fail "$(vigil_text "Impossible de relever les périphériques de stockage." "Unable to inventory storage devices.")"
             fi
         fi
         if [ "$DEVICE_NUM" -eq 0 ]; then
             echo ""
-            echo -e "${YELLOW}Diagnostic : si votre clé USB est branchée mais invisible dans lsblk :${NC}"
-            echo -e "${GREY}  • Vérifiez : lsblk (la clé doit apparaître, ex. /dev/sdb)${NC}"
-            echo -e "${GREY}  • Vérifiez : sudo dmesg | tail -20 (cherchez 'authorized' ou 'not authorized')${NC}"
-            echo -e "${GREY}  • Vérifiez : systemctl is-enabled usbguard (doit être disabled/masked)${NC}"
-            echo -e "${GREY}  • Débranchez puis rebranchez physiquement la clé${NC}"
+            echo -e "$(vigil_text "${YELLOW}Diagnostic : si votre clé USB est branchée mais invisible dans lsblk :${NC}" "${YELLOW}Diagnostics: if your USB drive is connected but missing from lsblk:${NC}")"
+            echo -e "$(vigil_text "${GREY}  • Vérifiez : lsblk (la clé doit apparaître, ex. /dev/sdb)${NC}" "${GREY}  • Check: lsblk (the drive should appear, e.g. /dev/sdb)${NC}")"
+            echo -e "$(vigil_text "${GREY}  • Vérifiez : sudo dmesg | tail -20 (cherchez 'authorized' ou 'not authorized')${NC}" "${GREY}  • Check: sudo dmesg | tail -20 (look for 'authorized' or 'not authorized')${NC}")"
+            echo -e "$(vigil_text "${GREY}  • Vérifiez : systemctl is-enabled usbguard (doit être disabled/masked)${NC}" "${GREY}  • Check: systemctl is-enabled usbguard (should be disabled/masked)${NC}")"
+            echo -e "$(vigil_text "${GREY}  • Débranchez puis rebranchez physiquement la clé${NC}" "${GREY}  • Physically unplug and reconnect the drive${NC}")"
             log_action "mount_attempt" "" "/investigation" "failed" "Aucun périphérique détecté"
             if [ "$DEVICE_MODE" = "usb_storage" ]; then
                 final_pause
@@ -502,11 +502,11 @@ fi
         local dev="$1"
         if ! sudo blockdev --setro "$dev" ||
            [ "$(sudo blockdev --getro "$dev")" != "1" ]; then
-            echo "Montage refusé : lecture seule au niveau bloc non confirmée pour $dev."
+            echo "$(vigil_text "Montage refusé : lecture seule au niveau bloc non confirmée pour $dev." "Mount refused: block-level read-only mode could not be confirmed for $dev.")"
             log_action "set_ro" "$dev" "" "failed" "Protection bloc RO non confirmée"
             return 1
         fi
-        echo "Lecture seule au niveau bloc confirmée : $dev"
+        echo "$(vigil_text "Lecture seule au niveau bloc confirmée : $dev" "Block-level read-only mode confirmed: $dev")"
         log_action "set_ro" "$dev" "" "success" "Protection bloc RO confirmée"
     }
 
@@ -515,7 +515,7 @@ fi
         if [ "$(lsblk -dnro TYPE -- "$disk")" != "disk" ] ||
            ! mountpoints=$(lsblk -nr -o MOUNTPOINTS -- "$disk") ||
            [[ "$mountpoints" =~ [^[:space:]] ]]; then
-            echo "Montage refusé : disque $disk déjà utilisé ou absence de montage non vérifiable."
+            echo "$(vigil_text "Montage refusé : disque $disk déjà utilisé ou absence de montage non vérifiable." "Mount refused: disk $disk is already in use or its mount status cannot be verified.")"
             log_action "set_ro" "$disk" "" "failed" "Disque parent non vérifié ou déjà monté"
             return 1
         fi
@@ -530,7 +530,7 @@ fi
 
         [ ! -e "$mnt" ] && [ ! -L "$mnt" ] || return 1
         sudo mkdir -p "$mnt" 2>/dev/null || {
-            echo -e "${RED}❌ Impossible de créer le point de montage $mnt.${NC}"
+            echo -e "$(vigil_text "${RED}❌ Impossible de créer le point de montage $mnt.${NC}" "${RED}❌ Cannot create mountpoint $mnt.${NC}")"
             log_action "mkdir_mountpoint" "$dev" "$mnt" "failed" "Échec de la création du répertoire"
             return 1
         }
@@ -557,7 +557,7 @@ fi
         local mount_rc=0
         vigil_mount_volume /investigation "$dev" "$mnt" $mount_opts || mount_rc=$?
         if [ "$mount_rc" -ne 0 ]; then
-            echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
+            echo -e "$(vigil_text "${RED}❌ Échec du montage de $dev → $mnt${NC}" "${RED}❌ Failed to mount $dev → $mnt${NC}")"
             log_action "mount" "$dev" "$mnt" "failed" "Échec du montage"
             sudo rmdir "$mnt" 2>/dev/null || true
             return 1
@@ -565,7 +565,7 @@ fi
 
         ro_check=$(lsblk -o RO "$dev" 2>/dev/null | tail -n 1 | awk '{print $1}' || echo "")
         if [ "$ro_check" != "1" ]; then
-            echo -e "${RED}❌ $dev n'est pas monté en lecture seule !${NC}"
+            echo -e "$(vigil_text "${RED}❌ $dev n'est pas monté en lecture seule !${NC}" "${RED}❌ $dev is not mounted read-only!${NC}")"
             sudo umount "$mnt" 2>/dev/null || true
             sudo rmdir "$mnt" 2>/dev/null || true
             if [ "${VIGIL_CASE_CENSUS:-0}" != "1" ]; then
@@ -619,10 +619,10 @@ fi
         sudo rm -f "$hash_file"
         if [ -n "$(ls -A "$mnt" 2>/dev/null)" ]; then
             find "$mnt" -type f -exec sha256sum {} + 2>/dev/null | sort | sha256sum | awk '{print $1}' > "$hash_file" || true
-            echo -e "${GREEN}✅ Hash SHA-256 ($tag) :${NC} $(cat "$hash_file" 2>/dev/null)  ${GREY}→ $hash_file${NC}"
+            echo -e "$(vigil_text "${GREEN}✅ Hash SHA-256 ($tag) :${NC} $(cat "$hash_file" 2>/dev/null)  ${GREY}→ $hash_file${NC}" "${GREEN}✅ SHA-256 hash ($tag):${NC} $(cat "$hash_file" 2>/dev/null)  ${GREY}→ $hash_file${NC}")"
             log_action "hash_calculation" "$dev" "$hash_file" "success" "Hash SHA-256 calculé ($tag) : $(cat "$hash_file" 2>/dev/null) — arbre complet des fichiers (find+sha256sum+sort)"
         else
-            echo -e "${YELLOW}⚠️  $mnt est vide, aucun hash généré ($tag).${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  $mnt est vide, aucun hash généré ($tag).${NC}" "${YELLOW}⚠️  $mnt is empty; no hash generated ($tag).${NC}")"
             log_action "hash_calculation" "$dev" "" "warning" "$mnt est vide ($tag)"
         fi
     }
@@ -631,10 +631,10 @@ fi
     # --- Affichage des peripheriques (regroupe par disque, reutilise par 'r') ---
         # Le montage utilise le même menu et sait relancer sa détection.
         if [ -n "${VIGIL_DEVICE_SELECTION:-}" ]; then
-            select_device_path "$VIGIL_DEVICE_SELECTION" || fail "Périphérique sélectionné indisponible."
+            select_device_path "$VIGIL_DEVICE_SELECTION" || fail "$(vigil_text "Périphérique sélectionné indisponible." "Selected device is unavailable.")"
         else
         while true; do
-            echo -e "${GREEN}✅ $DEVICE_NUM périphérique(s) détecté(s) :${NC}"
+            echo -e "$(vigil_text "${GREEN}✅ $DEVICE_NUM périphérique(s) détecté(s) :${NC}" "${GREEN}✅ $DEVICE_NUM device(s) detected:${NC}")"
             display_usb_devices
             select_usb_device "à monter" && break
             case $? in
@@ -656,26 +656,26 @@ fi
         IFS='|' read -r SELECTED_KIND SELECTED_DEVICE SELECTED_SIZE SELECTED_MODEL SELECTED_FSTYPE SELECTED_LABEL SELECTED_PARTTYPE SELECTED_PKNAME <<< "${USB_DEVICES[$SELECTED_INDEX]}"
 
         if triage_disk_blocked "${SELECTED_PKNAME:-$SELECTED_DEVICE}"; then
-            fail "Montage refusé : périphérique exclu du triage."
+            fail "$(vigil_text "Montage refusé : périphérique exclu du triage." "Mount refused: device excluded during triage.")"
         fi
 
         VIGIL_DEVICE_IDENTITY=$(vigil_device_check capture /investigation "/dev/$SELECTED_DEVICE") || exit 1
         export VIGIL_DEVICE_IDENTITY
 
         # --- 5/6. Montage selon le kind d'entrée sélectionnée ---
-        echo -e "\n${YELLOW}Montage en lecture seule...${NC}"
+        echo -e "$(vigil_text "\n${YELLOW}Montage en lecture seule...${NC}" "\n${YELLOW}Mounting read-only...${NC}")"
 
         if [ "$SELECTED_KIND" = "whole" ]; then
             # Monter toutes les partitions du disque sous /investigation/<disk>/<part>
-            echo -e "${YELLOW}Montage de toutes les partitions de /dev/$SELECTED_DEVICE...${NC}"
+            echo -e "$(vigil_text "${YELLOW}Montage de toutes les partitions de /dev/$SELECTED_DEVICE...${NC}" "${YELLOW}Mounting all partitions on /dev/$SELECTED_DEVICE...${NC}")"
             if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ]; then
                 _case_lock_disk_ro "/dev/$SELECTED_DEVICE" || exit 1
             elif command -v blockdev >/dev/null 2>&1; then
                 if sudo blockdev --setro "/dev/$SELECTED_DEVICE" 2>/dev/null; then
-                    echo -e "${GREEN}✅ Mode RO forcé au niveau block device (/dev/$SELECTED_DEVICE).${NC}"
+                    echo -e "$(vigil_text "${GREEN}✅ Mode RO forcé au niveau block device (/dev/$SELECTED_DEVICE).${NC}" "${GREEN}✅ Enforced block-device read-only mode (/dev/$SELECTED_DEVICE).${NC}")"
                     log_action "set_ro" "/dev/$SELECTED_DEVICE" "" "success" "Mode RO forcé au niveau block device"
                 else
-                    echo -e "${YELLOW}⚠️  blockdev --setro a échoué. Poursuite avec montage read-only standard.${NC}"
+                    echo -e "$(vigil_text "${YELLOW}⚠️  blockdev --setro a échoué. Poursuite avec montage read-only standard.${NC}" "${YELLOW}⚠️  blockdev --setro failed. Continuing with standard read-only mounting.${NC}")"
                     log_action "set_ro" "/dev/$SELECTED_DEVICE" "" "warning" "blockdev --setro a échoué (non bloquant)"
                 fi
             fi
@@ -686,7 +686,7 @@ fi
                 _dev="/dev/$_part"; _mnt="/investigation/$SELECTED_DEVICE/$_part"
                 _enc=$(_is_encrypted "$_dev")
                 if [ -n "$_enc" ]; then
-                    echo -e "${RED}❌ $_dev est chiffré ($_enc). Ignoré.${NC}"
+                    echo -e "$(vigil_text "${RED}❌ $_dev est chiffré ($_enc). Ignoré.${NC}" "${RED}❌ $_dev is encrypted ($_enc). Skipped.${NC}")"
                     log_action "mount_attempt" "$_dev" "$_mnt" "failed" "Partition chiffrée ($_enc)"
                     _fail=$((_fail + 1))
                     continue
@@ -702,7 +702,7 @@ fi
             done
 
             echo ""
-            echo -e "${GREEN}✅ $_ok partition(s) montée(s), $_fail échec(s) sous /investigation/$SELECTED_DEVICE/${NC}"
+            echo -e "$(vigil_text "${GREEN}✅ $_ok partition(s) montée(s), $_fail échec(s) sous /investigation/$SELECTED_DEVICE/${NC}" "${GREEN}✅ $_ok partition(s) mounted, $_fail failure(s) under /investigation/$SELECTED_DEVICE/${NC}")"
             log_action "mount_whole" "/dev/$SELECTED_DEVICE" "/investigation/$SELECTED_DEVICE" "success" "$_ok partition(s) montée(s), $_fail échec(s)"
 
             if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ] && [ "$_ok" -eq 0 ]; then
@@ -719,22 +719,22 @@ fi
             DEVICE_PATH="/dev/$SELECTED_DEVICE"
             _enc=$(_is_encrypted "$DEVICE_PATH")
             if [ -n "$_enc" ]; then
-                echo -e "${RED}❌ Ce périphérique est chiffré ($_enc).${NC}"
-                echo -e "${YELLOW}Utilisez un outil de déchiffrement avant de continuer.${NC}"
+                echo -e "$(vigil_text "${RED}❌ Ce périphérique est chiffré ($_enc).${NC}" "${RED}❌ This device is encrypted ($_enc).${NC}")"
+                echo -e "$(vigil_text "${YELLOW}Utilisez un outil de déchiffrement avant de continuer.${NC}" "${YELLOW}Use a decryption tool before continuing.${NC}")"
                 log_action "mount_attempt" "$DEVICE_PATH" "/investigation" "failed" "Périphérique chiffré ($_enc)"
                 final_pause
                 exit 1
             fi
 
             MOUNT_POINT="/investigation/$SELECTED_DEVICE"
-            echo -e "${YELLOW}Montage de ${GREEN}$DEVICE_PATH${YELLOW} dans $MOUNT_POINT...${NC}"
+            echo -e "$(vigil_text "${YELLOW}Montage de ${GREEN}$DEVICE_PATH${YELLOW} dans $MOUNT_POINT...${NC}" "${YELLOW}Mounting ${GREEN}$DEVICE_PATH${YELLOW} at $MOUNT_POINT...${NC}")"
 
             if [ "${VIGIL_CASE_CENSUS:-0}" = "1" ]; then
                 _disk="$DEVICE_PATH"
                 if [ "$SELECTED_KIND" = "part" ]; then
                     _parent=$(lsblk -dnro PKNAME -- "$DEVICE_PATH")
                     if [ -z "$_parent" ] || [ "$_parent" != "$SELECTED_PKNAME" ]; then
-                        echo "Montage refusé : disque parent non confirmé pour $DEVICE_PATH."
+                        echo "$(vigil_text "Montage refusé : disque parent non confirmé pour $DEVICE_PATH." "Mount refused: parent disk could not be confirmed for $DEVICE_PATH.")"
                         exit 1
                     fi
                     _disk="/dev/$_parent"
@@ -742,14 +742,14 @@ fi
                 _case_lock_disk_ro "$_disk" || exit 1
             elif command -v blockdev >/dev/null 2>&1; then
                 if sudo blockdev --setro "$DEVICE_PATH" 2>/dev/null; then
-                    echo -e "${GREEN}✅ Mode RO forcé au niveau block device.${NC}"
+                    echo -e "$(vigil_text "${GREEN}✅ Mode RO forcé au niveau block device.${NC}" "${GREEN}✅ Enforced block-device read-only mode.${NC}")"
                     log_action "set_ro" "$DEVICE_PATH" "" "success" "Mode RO forcé au niveau block device"
                 else
-                    echo -e "${YELLOW}⚠️  blockdev --setro a échoué. Poursuite avec montage read-only standard.${NC}"
+                    echo -e "$(vigil_text "${YELLOW}⚠️  blockdev --setro a échoué. Poursuite avec montage read-only standard.${NC}" "${YELLOW}⚠️  blockdev --setro failed. Continuing with standard read-only mounting.${NC}")"
                     log_action "set_ro" "$DEVICE_PATH" "" "warning" "blockdev --setro a échoué (non bloquant)"
                 fi
             else
-                echo -e "${YELLOW}⚠️  blockdev non disponible. Montage read-only standard uniquement.${NC}"
+                echo -e "$(vigil_text "${YELLOW}⚠️  blockdev non disponible. Montage read-only standard uniquement.${NC}" "${YELLOW}⚠️  blockdev unavailable. Only standard read-only mounting is possible.${NC}")"
             fi
 
             if ! _mount_single_ro "$DEVICE_PATH" "$MOUNT_POINT"; then
@@ -765,5 +765,5 @@ fi
         exit 0
     fi
 
-echo -e "\n${GREEN}Script terminé.${NC}"
+echo -e "$(vigil_text "\n${GREEN}Script terminé.${NC}" "\n${GREEN}Script finished.${NC}")"
 final_pause
