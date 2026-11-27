@@ -590,7 +590,7 @@ def _display(text):
          r"Partial inventory (\1 diagnostics in SQLite)"),
     )
     for expression, replacement in dynamic:
-        updated = re.sub(expression, replacement, text)
+        updated = re.sub(expression, replacement, text, flags=re.DOTALL)
         if updated != text:
             return updated
     return text
@@ -1571,8 +1571,8 @@ def _section_formataudit(story, styles, data):
             "l'opérateur.",
             styles["StatusDesc"]))
         story.append(Spacer(1, 6))
-        rows = [("Chemin relatif", "Ext.", "Format réel",
-                 "Entropie", "Signatures trouvées")]
+        rows = [tuple(_display(label) for label in ("Chemin relatif", "Ext.", "Format réel",
+                 "Entropie", "Signatures trouvées"))]
         for f in files:
             rel = f.get("path", "")
             if rel.startswith("/investigation/"):
@@ -1795,8 +1795,8 @@ def _section_census(story, styles, data):
             "prioritaires pour l'analyse de contenu.",
             styles["StatusDesc"]))
         story.append(Spacer(1, 6))
-        rows = [("Chemin relatif", "Extension", "Format réel",
-                 "Format attendu")]
+        rows = [tuple(_display(label) for label in ("Chemin relatif", "Extension", "Format réel",
+                 "Format attendu"))]
         for m in mismatch_files:
             rows.append((esc(m.get("path", "")),
                          esc(m.get("extension", "")),
@@ -2098,20 +2098,20 @@ def _section_usbhid(story, styles, data):
             is_protected = bool(dev.get("protected", False))
             is_blacklisted = bool(dev.get("blacklisted", False))
             if is_blacklisted:
-                status_text = "Blacklisté — bloqué"
+                status_text = _display("Blacklisté — bloqué")
             elif is_hid and is_protected:
-                status_text = "Clavier — protégé par l'analyste"
+                status_text = _display("Clavier — protégé par l'analyste")
             elif is_hid:
-                status_text = "Clavier — frappes bloquées"
+                status_text = _display("Clavier — frappes bloquées")
             else:
-                status_text = "Stockage"
+                status_text = _display("Stockage")
             rows.append([
                 Paragraph(esc(dev.get("manufacturer", "") or "(inconnu)"), val_style),
                 Paragraph(esc(dev.get("product", "") or "(inconnu)"), val_style),
                 Paragraph(esc("{}:{}".format(dev.get("vid", "?"),
                                              dev.get("pid", "?"))), key_style),
                 Paragraph(esc(dev.get("serial", "") or "(absent)"), key_style),
-                Paragraph("OUI — clavier détecté" if is_hid else "Non",
+                Paragraph("OUI — clavier détecté" if is_hid else _display("Non"),
                           val_style),
                 Paragraph(status_text, val_style),
             ])
@@ -2278,7 +2278,7 @@ def _section_clamav(story, styles, log_paths, action, options, *, status=None):
         story.append(Spacer(1, 14))
         story.append(Paragraph("Résultat par dossier scanné",
                                styles["SectionTitle"]))
-        rows = [("Dossier", "Fichiers scannés", "Fichiers infectés")]
+        rows = [tuple(_display(label) for label in ("Dossier", "Fichiers scannés", "Fichiers infectés"))]
         for s in summaries:
             try:
                 sc = int(s["scanned"] or "0")
@@ -2420,7 +2420,7 @@ def build_multi_report(sections, user, project, out_dir, sys_config=None,
         story.append(PageBreak())
         sec_meta = _report_meta(kind) if kind in REPORT_META else {}
         sec_title = sec_meta.get("title", kind)
-        marker = "[OK]" if status == "ok" else "[ERREUR]"
+        marker = "[OK]" if status == "ok" else _display("[ERREUR]")
         sec_para = Paragraph(
             f"<para><a name=\"sec_{idx}\"/>{esc(sec_title)}</para>",
             styles["SectionTitle"])
