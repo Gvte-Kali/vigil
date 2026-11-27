@@ -2,6 +2,7 @@
 layout: default
 title: Premiers pas
 nav_order: 5
+parent: Français
 ---
 
 # Ma première investigation avec Vigil
