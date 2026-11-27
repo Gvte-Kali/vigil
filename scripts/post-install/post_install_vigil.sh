@@ -16,7 +16,7 @@ case "${1:-}" in
     --dry-run)
         printf 'APT :'
         printf ' %s' "${packages[@]}"
-        printf '\nLe post-install prépare /opt/vigil/.venv, les zones, les lanceurs, udev et AppArmor si présent.\n'
+        printf '\n%s\n' "$(vigil_text 'Le post-install prépare /opt/vigil/.venv, les zones, les lanceurs, udev et AppArmor si présent.' 'Post-install prepares /opt/vigil/.venv, mount zones, launchers, udev and AppArmor when available.')"
         exit 0 ;;
     --skip-apt-update) skip_update=1 ;;
     '') ;;
@@ -36,12 +36,12 @@ case "$(python3 -c 'import sys; print(int(sys.version_info >= (3, 11)))')" in
 esac
 vigil_launchers_preflight /opt/vigil /usr/local/bin /usr/bin /usr/share/applications/vigil.desktop
 sudo -v
-vigil_maintenance_start install 7 'Vigil · Installation'
+vigil_maintenance_start install 7 "$(vigil_text 'Vigil · Installation' 'Vigil · Installation')"
 trap 'vigil_maintenance_exit "$?"' EXIT
 vigil_maintenance_step "$(vigil_text 'Contrôles système' 'System checks')"
 if sudo test -e /etc/sudoers.d/vigil; then
     echo "$(vigil_text "Règle sudoers Vigil existante : faites-la examiner et retirer par l'administrateur." "Existing Vigil sudoers rule: have an administrator review and remove it.")"
-    echo "Voir docs/installation/README.md#reprendre-le-post-install."
+    echo "$(vigil_text 'Voir' 'See') docs/installation/README.md#reprendre-le-post-install."
     exit 1
 fi
 check_vigil_zones_unmounted() {
@@ -59,7 +59,7 @@ check_vigil_zones_unmounted
 
 if [ ! -w /opt/vigil ] || [ ! -w /opt/vigil/data ] || [ ! -w /opt/vigil/logs ] || [ ! -w /opt/vigil/rapports ]; then
     echo "$(vigil_text "Faites préparer les répertoires de données par l'administrateur." "Have an administrator prepare the data directories.")"
-    echo "Voir docs/development/phase-01-transition.md."
+    echo "$(vigil_text 'Voir' 'See') docs/development/phase-01-transition.md."
     exit 1
 fi
 
@@ -137,7 +137,7 @@ if [ -f /opt/vigil/data/icons/vigil.svg ]; then
     sudo touch /usr/share/icons/hicolor
     VIGIL_ICON="vigil"
 else
-    echo "⚠️  /opt/vigil/data/icons/vigil.svg introuvable — icône générique utilisée."
+    echo "$(vigil_text '⚠️  /opt/vigil/data/icons/vigil.svg introuvable — icône générique utilisée.' '⚠️  /opt/vigil/data/icons/vigil.svg missing — using a generic icon.')"
     VIGIL_ICON="utilities-terminal"
 fi
 sudo tee /usr/share/applications/vigil.desktop >/dev/null <<DESKTOP_EOF
