@@ -41,3 +41,7 @@ python3 /opt/vigil/scripts/pdf/vigil_pdf.py \
 ```
 
 ClamAV supports `--log` and consolidated reports accept repeated `--section` arguments. See `--help` for `--comment`, `--config-dir`, `--fname-prefix` and others. The Graphite website theme does not style PDF output.
+
+## Report language
+
+Reports created from the GUI or TUI inherit the interface language at the start of the operation (`VIGIL_LANG=fr` or `VIGIL_LANG=en`). Report headings, summaries and labels are localized, while original paths, checksums, collected observations and technical logs remain unchanged. For standalone generation, set `VIGIL_LANG=en` before the command to request an English report.
