@@ -6,7 +6,7 @@
 
 **Vigil** est un environnement Linux d'investigation numérique : triage USB, montage en lecture seule, analyse de fichiers, conservation de preuves, empreintes SHA-256 et rapports PDF.
 
-**État du projet :** la documentation utilisateur se base sur la branche `main` et la GUI Qt. La TUI Textual est expérimentale et non fonctionnelle à ce stade ; elle ne doit pas être utilisée pour des investigations. Plusieurs fonctionnalités du Core restent en développement ou en recette. Les essais de référence ont surtout été réalisés sur Debian et ses dérivés.
+**État du projet :** la documentation utilisateur se base sur la branche `main` et la GUI Qt. La TUI Textual est utilisable et a fait l’objet de tests interactifs sous Parrot OS ; sa validation forensique complète reste en cours. Plusieurs fonctionnalités du Core restent en développement ou en recette. Les essais de référence ont surtout été réalisés sur Debian et ses dérivés.
 
 **Pour commencer :** [documentation](https://gvte-kali.github.io/vigil/) · [installation](https://gvte-kali.github.io/vigil/installation/README.html) · [première investigation](https://gvte-kali.github.io/vigil/getting-started.html) · [FAQ](https://gvte-kali.github.io/vigil/faq.html).
 
@@ -29,7 +29,7 @@ Les protections RO sont logicielles et ne remplacent pas systématiquement un bl
 
 **Vigil** is a Linux digital forensics workspace for USB triage, read-only media mounting, file analysis, preserved evidence, SHA-256 integrity checking and PDF reports.
 
-**Project status:** user documentation targets the `main` branch and Qt GUI. The Textual TUI is experimental and not functional at this stage; do not use it for investigations. Parts of the Core are still under development or validation. Reference testing has mainly covered Debian-based Linux systems.
+**Project status:** user documentation targets the `main` branch and Qt GUI. The Textual TUI is usable and has undergone interactive testing on Parrot OS; full forensic validation is still ongoing. Parts of the Core are still under development or validation. Reference testing has mainly covered Debian-based Linux systems.
 
 **Start here:** [documentation](https://gvte-kali.github.io/vigil/en/) · [installation](https://gvte-kali.github.io/vigil/en/installation.html) · [first investigation](https://gvte-kali.github.io/vigil/en/getting-started.html) · [FAQ](https://gvte-kali.github.io/vigil/en/faq.html).
 
