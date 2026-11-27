@@ -63,6 +63,7 @@ class Form(ModalScreen):
     def __init__(self, title, tr, fields=(), *, choices=(), message=""):
         super().__init__()
         self.title_text, self.tr, self.fields, self.choices, self.message = title, tr, fields, choices, message
+        self._dismissed = False
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(classes="dialog"):
@@ -84,23 +85,33 @@ class Form(ModalScreen):
         else:
             self.query_one("#cancel").focus()
 
+    def dismiss_once(self, result):
+        if self._dismissed or not self.is_current:
+            return
+        self._dismissed = True
+        self.dismiss(result)
+
     def action_cancel(self):
-        self.dismiss(None)
+        self.dismiss_once(None)
 
     def on_button_pressed(self, event):
+        event.stop()
         if event.button.id == "cancel":
             self.action_cancel()
         elif event.button.id == "confirm":
             self.confirm()
 
-    def on_input_submitted(self):
+    def on_input_submitted(self, event):
+        event.stop()
         self.confirm()
 
     def confirm(self):
+        if self._dismissed or not self.is_current:
+            return
         fields = {key: self.query_one(f"#field-{key}", Input).value.strip() for key, _, _ in self.fields}
         if self.choices:
             fields["choice"] = self.query_one(Select).value
-        self.dismiss(fields)
+        self.dismiss_once(fields)
 
 
 class Operation(ModalScreen):
@@ -116,6 +127,7 @@ class Operation(ModalScreen):
         self.terminal = None
         self.status = None
         self.stages = {}
+        self._dismissed = False
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(classes="dialog operation"):
@@ -188,7 +200,7 @@ class Operation(ModalScreen):
             ))
             self.query_one("#operation-close", Button).focus()
             if self.close_on_success and self.status == 0:
-                self.call_after_refresh(self.dismiss, self.status)
+                self.call_after_refresh(self.dismiss_once, self.status)
 
     def update_echo(self):
         try:
@@ -227,13 +239,21 @@ class Operation(ModalScreen):
             panel.scroll_end(animate=False)
         self.stages[key].update(labels.get(key, key), percent, detail[:160], done)
 
+    def dismiss_once(self, result):
+        if self._dismissed or not self.is_current:
+            return
+        self._dismissed = True
+        self.dismiss(result)
+
     def on_input_submitted(self, event):
+        event.stop()
         if self.terminal:
             self.terminal.write(event.value.encode() + b"\n")
             event.input.clear()
 
     def on_button_pressed(self, event):
+        event.stop()
         if event.button.id == "operation-close" and self.status is not None:
-            self.dismiss(self.status)
+            self.dismiss_once(self.status)
         elif event.button.id == "interrupt" and self.terminal is not None:
             self.terminal.write(b"\x03")
