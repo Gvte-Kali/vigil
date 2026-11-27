@@ -2,6 +2,7 @@
 layout: default
 parent: Installation
 title: Remise à zéro
+grand_parent: Français
 ---
 
 # Désinstaller Vigil sur Debian ou Parrot
