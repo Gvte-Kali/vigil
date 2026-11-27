@@ -29,7 +29,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image,
+    SimpleDocTemplate, Paragraph as _ReportParagraph, Spacer, Table, TableStyle, PageBreak, Image,
 )
 from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
@@ -275,6 +275,310 @@ REPORT_META = {
     },
 }
 
+
+# Translations apply to report presentation, never to collected evidence or raw logs.
+_EN_LABELS = {
+    "Entité": "Organization",
+    "Établissement": "Establishment",
+    "Adresse": "Address",
+    "Téléphone": "Phone",
+    "Utilisateur": "Operator",
+    "Projet": "Case",
+    "Date de l'analyse": "Analysis date",
+    "(non configurée)": "(not configured)",
+    "(non renseigné)": "(not specified)",
+    "(sans projet)": "(no case)",
+    "(inconnue)": "(unknown)",
+    "(inconnu)": "(unknown)",
+    "(absent)": "(missing)",
+    "(échec)": "(failed)",
+    "(non disponible)": "(unavailable)",
+    "Commentaire": "Comment",
+    "Validation du rapport": "Report validation",
+    "Nom :": "Name:",
+    "Date :": "Date:",
+    "Signature": "Signature",
+    "Identification": "Identification",
+    "Résultat de l'analyse": "Analysis results",
+    "Répartition par type MIME": "Breakdown by MIME type",
+    "Aucune donnée de répartition disponible.": "No breakdown data is available.",
+    "Type MIME": "MIME type",
+    "Taille": "Size",
+    "Date modif.": "Modified",
+    "Chemin": "Path",
+    "Chemin du fichier": "File path",
+    "Chemin relatif": "Relative path",
+    "Nombre de fichiers": "File count",
+    "Fichiers": "Files",
+    "Dossier": "Directory",
+    "Extension": "Extension",
+    "Format": "Format",
+    "Catégorie": "Category",
+    "Statut": "Status",
+    "Détail": "Details",
+    "Horodatage": "Timestamp",
+    "Opérateur": "Operator",
+    "Fichiers totaux analysés": "Total files analyzed",
+    "Fichiers image détectés": "Image files detected",
+    "Fichiers vidéo détectés": "Video files detected",
+    "Fichiers audio détectés": "Audio files detected",
+    "Fichiers bureautiques détectés": "Office files detected",
+    "Fichiers archives détectés": "Archive files detected",
+    "Fichiers verrouillés détectés": "Locked files detected",
+    "Fichiers à forte entropie": "High-entropy files",
+    "Fichiers volumineux détectés": "Large files detected",
+    "Détection des visages": "Face detection",
+    "Visages détectés": "Faces detected",
+    "Aucun visage n'a été découvert lors de l'analyse.": "No faces were detected during the analysis.",
+    "Métadonnées EXIF": "EXIF metadata",
+    "Fichiers avec EXIF": "Files with EXIF",
+    "Fichiers sans EXIF": "Files without EXIF",
+    "exiftool non disponible : extraction EXIF désactivée.": "exiftool is unavailable: EXIF extraction is disabled.",
+    "Liste des fichiers image": "Image file listing",
+    "Aucun fichier image trouvé lors de l'analyse.": "No image files found during the analysis.",
+    "Métadonnées ffprobe": "ffprobe metadata",
+    "Fichiers avec durée extraite": "Files with extracted duration",
+    "Fichiers sans durée": "Files without duration",
+    "ffprobe non disponible : extraction durée/résolution désactivée.": "ffprobe unavailable: duration/resolution extraction is disabled.",
+    "ffprobe non disponible : extraction durée/débit désactivée.": "ffprobe unavailable: duration/bitrate extraction is disabled.",
+    "Liste des fichiers vidéo": "Video file listing",
+    "Aucun fichier vidéo trouvé lors de l'analyse.": "No video files found during the analysis.",
+    "Liste des fichiers audio": "Audio file listing",
+    "Aucun fichier audio trouvé lors de l'analyse.": "No audio files found during the analysis.",
+    "Tableur": "Spreadsheet",
+    "Présentation": "Presentation",
+    "Répartition par catégorie": "Breakdown by category",
+    "Répartition par format": "Breakdown by format",
+    "Aucune donnée de format disponible.": "No format data is available.",
+    "Liste des fichiers bureautiques": "Office file listing",
+    "Aucun fichier bureautique trouvé lors de l'analyse.": "No office files found during the analysis.",
+    "Archives protégées par mot de passe": "Password-protected archives",
+    "Archives protégées détectées": "Protected archives detected",
+    "7za non disponible : détection de la protection par mot de passe désactivée.": "7za unavailable: password protection detection is disabled.",
+    "Liste des fichiers archives": "Archive file listing",
+    "Aucun fichier archive trouvé lors de l'analyse.": "No archive files found during the analysis.",
+    "Fichiers candidats (archives + documents)": "Candidate files (archives and documents)",
+    "Aucun fichier verrouillé : aucune répartition.": "No locked files: no breakdown available.",
+    "Méthode de détection": "Detection method",
+    "Outil utilisé": "Tool used",
+    "7za non disponible : détection limitée à la signature de file.": "7za unavailable: detection is limited to file signatures.",
+    "Liste des fichiers verrouillés": "Locked file listing",
+    "Aucun fichier verrouillé trouvé lors de l'analyse.": "No locked files found during the analysis.",
+    "Paramètres de l'analyse": "Analysis parameters",
+    "Candidats (octet-stream >= seuil)": "Candidates (octet-stream >= threshold)",
+    "Seuil d'entropie": "Entropy threshold",
+    "Taille minimale": "Minimum size",
+    "Fichiers alignés (secteur 512 o)": "Aligned files (512-byte sectors)",
+    "Méthode de calcul": "Calculation method",
+    "zstd non disponible : calcul d'entropie désactivé.": "zstd unavailable: entropy calculation is disabled.",
+    "Liste des fichiers à forte entropie": "High-entropy file listing",
+    "Aucun fichier à forte entropie trouvé lors de l'analyse.": "No high-entropy files found during the analysis.",
+    "Résultat de l'audit": "Audit results",
+    "Fichiers ciblés par l'audit": "Files targeted by audit",
+    "Extensions trompeuses": "Misleading extensions",
+    "Fichiers non audités (limite atteinte)": "Files not audited (limit reached)",
+    "Méthode d'audit": "Audit method",
+    "Signatures forensiques locales": "Local forensic signatures",
+    "Cibles": "Targets",
+    "Seuil de forte entropie": "High entropy threshold",
+    "extensions trompeuses + octet-stream": "misleading extensions + octet-stream",
+    "installé — scan ciblé actif": "installed — targeted scan enabled",
+    "non installé — signatures locales uniquement": "not installed — local signatures only",
+    "Fichiers audités": "Audited files",
+    "Format réel": "Actual format",
+    "Entropie": "Entropy",
+    "Signatures trouvées": "Signatures found",
+    "extension trompeuse": "misleading extension",
+    "forte entropie": "high entropy",
+    "Aucun fichier suspect détecté : aucune extension trompeuse et aucun octet-stream à forte entropie dans l'index du recensement.": "No suspicious files detected: no misleading extensions or high-entropy octet-stream files in the inventory index.",
+    "Fichiers creux (octets nuls)": "Sparse files (zero bytes)",
+    "Fichiers non creux": "Non-sparse files",
+    "Liste des fichiers volumineux": "Large file listing",
+    "Aucun fichier volumineux trouvé lors de l'analyse.": "No large files found during the analysis.",
+    "Résultat de la traçabilité": "Chain-of-custody results",
+    "Aucun événement de custody enregistré.": "No chain-of-custody events recorded.",
+    "Action": "Action",
+    "Résultat du recensement": "File inventory results",
+    "Fichiers recensés": "Files inventoried",
+    "Doublons marqués (conservés)": "Duplicates marked (preserved)",
+    "Groupes de doublons": "Duplicate groups",
+    "Fichiers sains filtrés (checksafe)": "Known-safe files filtered (checksafe)",
+    "Couverture": "Coverage",
+    "Filtrage checksafe": "Checksafe filtering",
+    "base de noms (files.safe.name)": "filename database (files.safe.name)",
+    "base de signatures (files.safe.hash)": "hash database (files.safe.hash)",
+    "Base(s) externe(s) utilisée(s)": "External database(s) used",
+    "Fichiers retirés comme sains": "Files excluded as known safe",
+    "Base SQLite (livrable forensique)": "SQLite database (forensic deliverable)",
+    "Chemin de la base": "Database path",
+    "Signature SHA-256": "SHA-256 checksum",
+    "Export TSV (régénérable)": "TSV export (regenerable)",
+    "Doublons (résumé)": "Duplicates (summary)",
+    "Fichiers impliqués": "Files involved",
+    "Copies redondantes": "Redundant copies",
+    "Volume redondant": "Redundant volume",
+    "Fichiers par dossier": "Files per directory",
+    ". (racine de l'analyse)": ". (analysis root)",
+    "Résultat du triage": "Triage results",
+    "Périphériques USB avant branchement (baseline)": "USB devices before connection (baseline)",
+    "Périphériques USB après branchement": "USB devices after connection",
+    "Nouveaux périphériques détectés": "New devices detected",
+    "Périphériques avec interface clavier (HID)": "Devices exposing a keyboard interface (HID)",
+    "Protégés par l'utilisateur (frappes actives)": "User-allowlisted (keystrokes enabled)",
+    "Frappes clavier bloquées (driver usbhid délié)": "Keyboard inputs blocked (usbhid unbound)",
+    "Échecs de blocage": "Blocking failures",
+    "Périphériques blacklistés bloqués": "Blocked denylisted devices",
+    "Périphériques apparus lors du branchement": "Devices detected after connection",
+    "Fabricant": "Manufacturer",
+    "Produit": "Product",
+    "N° de série": "Serial number",
+    "Interface clavier": "Keyboard interface",
+    "Blacklisté — bloqué": "Denylisted — blocked",
+    "Clavier — protégé par l'analyste": "Keyboard — allowlisted by analyst",
+    "Clavier — frappes bloquées": "Keyboard — keystrokes blocked",
+    "Stockage": "Storage",
+    "OUI — clavier détecté": "YES — keyboard detected",
+    "Non": "No",
+    "Procédure de triage": "Triage procedure",
+    "Résultat du scan": "Scan results",
+    "SCAN INCOMPLET": "INCOMPLETE SCAN",
+    "ÉCHEC DU SCAN": "SCAN FAILED",
+    "AUCUNE MENACE DÉTECTÉE": "NO THREATS DETECTED",
+    "MENACES DÉTECTÉES": "THREATS DETECTED",
+    "Dossiers analysés": "Directories analyzed",
+    "Fichiers scannés": "Files scanned",
+    "Fichiers infectés": "Infected files",
+    "Dossiers scannés (total)": "Directories scanned (total)",
+    "Données analysées": "Data scanned",
+    "Durée du scan": "Scan duration",
+    "Configuration du scan": "Scan configuration",
+    "Action sur infectés": "Action on infected files",
+    "aucune": "none",
+    "Options clamscan": "clamscan options",
+    "défaut": "default",
+    "Moteur antivirus": "Antivirus engine",
+    "Version ClamAV": "ClamAV version",
+    "Signatures connues": "Known signatures",
+    "Début du scan": "Scan start",
+    "Fin du scan": "Scan end",
+    "Résultat par dossier scanné": "Results by scanned directory",
+    "Détail des menaces détectées": "Detected threats detail",
+    "Signature détectée": "Detected signature",
+    "Sommaire": "Table of contents",
+    "[ERREUR]": "[ERROR]",
+    "Type d'analyse inconnu": "Unknown analysis type",
+    "Le scan ne garantit pas l'absence de menaces.": "A scan does not guarantee the absence of threats."
+}
+_EN_REPORTS = {
+    "images": [
+        "Image file analysis report",
+        "extraction and classification of image files detected on the examined device."
+    ],
+    "videos": [
+        "Video file analysis report",
+        "extraction and classification of video files detected on the examined device."
+    ],
+    "audio": [
+        "Audio file analysis report",
+        "extraction and classification of audio files detected on the examined device."
+    ],
+    "office": [
+        "Office file analysis report",
+        "extraction and classification of office documents detected on the examined device."
+    ],
+    "archives": [
+        "Archive file analysis report",
+        "inspection of archive files detected on the examined device."
+    ],
+    "crypto": [
+        "Encrypted and locked file analysis report",
+        "identification of password-protected or encrypted archives and documents."
+    ],
+    "entropy": [
+        "High-entropy file analysis report",
+        "identification of potentially compressed or encrypted high-entropy files."
+    ],
+    "formataudit": [
+        "File format audit report",
+        "verification of actual file formats and misleading extensions using local forensic signatures and binwalk."
+    ],
+    "bigfiles": [
+        "Large file analysis report",
+        "identification of large and sparse files on the examined device."
+    ],
+    "clamav": [
+        "Antivirus analysis report",
+        "results of ClamAV scanning with the virus signatures available at scan time."
+    ],
+    "usbhid": [
+        "USB triage report (Rubber Ducky detection)",
+        "assessment of USB devices seen between baseline and reconnection, including suspicious HID keyboard interfaces."
+    ],
+    "census": [
+        "File inventory report",
+        "file inventory, duplicate identification and checksafe filtering, with SQLite and SHA-256 deliverables where available."
+    ],
+    "custody": [
+        "Chain-of-custody report",
+        "chronological audit trail of examination operations, including mounting, analyses and unmounting."
+    ],
+    "multi": [
+        "Consolidated forensic analysis report",
+        "results of the selected analyses carried out on the examined device."
+    ]
+}
+_RAW_EVIDENCE_STYLES = {"FilePath", "FileHash", "FileVal", "ThreatPath", "ThreatSig",
+                        "DirPath", "CustodyTs", "CustodyCell", "CustodyMsg", "HidKey"}
+
+
+def _english():
+    return os.environ.get("VIGIL_LANG", "fr").lower() == "en"
+
+
+def _display(text):
+    if not _english() or not isinstance(text, str):
+        return text
+    if text in _EN_LABELS:
+        return _EN_LABELS[text]
+    dynamic = (
+        (r"^Généré le (.*)$", r"Generated on \1"),
+        (r"^([0-9]+) analyse\\(s\\) effectuée\\(s\\) sur le périphérique :$",
+         r"\1 analysis section(s) completed on the device:"),
+        (r"^\\.\\.\\. et ([0-9]+) autre\\(s\\) fichier\\(s\\)\\.$", r"... and \1 other file(s)."),
+        (r"^Le scan de ([0-9]+) fichier\\(s\\) n'a révélé aucune infection dans les fichiers analysés\\.$",
+         r"The scan of \1 file(s) detected no infection in the scanned files."),
+        (r"^([0-9]+) MENACE\\(S\\) DÉTECTÉE\\(S\\)$", r"\1 THREAT(S) DETECTED"),
+        (r"^Le scan de ([0-9]+) fichier\\(s\\) a détecté ([0-9]+) fichier\\(s\\) infecté\\(s\\)\\. Le détail des menaces est présenté ci-dessous\\.$",
+         r"The scan of \1 file(s) detected \2 infected file(s). The threats are listed below."),
+        (r"^([0-9]+) fichier\\(s\\) infecté\\(s\\) ont été identifiés lors du scan\\. Le tableau ci-dessous présente le chemin de chaque fichier et la signature du malware détecté\\.$",
+         r"\1 infected file(s) were identified. The table lists each file path and detected malware signature."),
+        (r"^Inventaire partiel \\(\\(([0-9]+) diagnostics dans SQLite\\)\\)$",
+         r"Partial inventory (\1 diagnostics in SQLite)"),
+    )
+    for expression, replacement in dynamic:
+        updated = re.sub(expression, replacement, text)
+        if updated != text:
+            return updated
+    return text
+
+
+class Paragraph(_ReportParagraph):
+    def __init__(self, text, style, *args, **kwargs):
+        if getattr(style, "name", "") not in _RAW_EVIDENCE_STYLES:
+            text = _display(text)
+        super().__init__(text, style, *args, **kwargs)
+
+
+def _report_meta(kind):
+    source = REPORT_META[kind]
+    if not _english():
+        return source
+    title, purpose = _EN_REPORTS[kind]
+    return {**source, "title": title,
+            "header": "Consolidated report" if kind == "multi" else title,
+            "doc_title": f"{title} - Vigil", "doc_subject": title,
+            "footer_desc": ("Automatically generated by Vigil, a Linux digital forensics "
+                            "workspace. This report covers " + purpose)}
 
 # --------------------------------------------------------------------------- #
 #  Configuration statique du système
@@ -2023,7 +2327,7 @@ def build_multi_report(sections, user, project, out_dir, sys_config=None,
 
     styles = build_styles()
     story = []
-    meta = REPORT_META["multi"]
+    meta = _report_meta("multi")
 
     story.append(Paragraph(meta["title"], styles["ReportTitle"]))
     story.append(Paragraph(
@@ -2080,7 +2384,7 @@ def build_multi_report(sections, user, project, out_dir, sys_config=None,
     # --- Sections de résultats ---
     for idx, (kind, source_path, status) in enumerate(sections):
         story.append(PageBreak())
-        sec_meta = REPORT_META.get(kind, {})
+        sec_meta = _report_meta(kind) if kind in REPORT_META else {}
         sec_title = sec_meta.get("title", kind)
         marker = "[OK]" if status == "ok" else "[ERREUR]"
         sec_para = Paragraph(
@@ -2187,7 +2491,7 @@ def build_report(kind, source_path, user, project, out_dir,
     """Assemble le rapport PDF : page d'accueil commune + section résultats."""
     if kind not in REPORT_META:
         raise ValueError(f"Type de rapport inconnu : {kind}")
-    meta = REPORT_META[kind]
+    meta = _report_meta(kind)
     if sys_config is None:
         sys_config = load_system_config()
 
@@ -2318,7 +2622,7 @@ def build_antivirus_report(path, run, summary, started, user, project):
         return en if english else fr
 
     config = load_system_config(os.environ.get("VIGIL_DATA_DIR"))
-    meta = REPORT_META["clamav"]
+    meta = _report_meta("clamav")
     styles = build_styles()
     story = [Paragraph(tr("Rapport antivirus consolidé", "Consolidated antivirus report"), styles["ReportTitle"])]
     build_front_page(story, styles, config, user, project, started)
