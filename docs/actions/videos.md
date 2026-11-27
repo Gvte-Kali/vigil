@@ -4,6 +4,7 @@ parent: Analyse
 title: Vidéos
 nav_order: 267
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Vidéos
