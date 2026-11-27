@@ -1,5 +1,7 @@
 """Regression tests for the language of generated Vigil PDF presentation."""
 import importlib.util
+import json
+import tempfile
 import os
 import unittest
 from pathlib import Path
@@ -45,6 +47,35 @@ class PDFLocalizationTest(unittest.TestCase):
             style = self.pdf.ParagraphStyle("StatusDesc", fontName="Helvetica")
             self.assertEqual(self.pdf.Paragraph("Résultat de l'analyse", style).text,
                              "Analysis results")
+
+    @unittest.skipUnless(importlib.util.find_spec("pypdf"), "pypdf not installed")
+    def test_rendered_english_and_french_reports(self):
+        from pypdf import PdfReader
+
+        with tempfile.TemporaryDirectory() as directory:
+            sample = Path(directory) / "result.json"
+            sample.write_text(json.dumps({"date": "2026-11-28",
+                                          "total_files": 0, "image_count": 0}),
+                              encoding="utf-8")
+            for language in ("fr", "en"):
+                with self.subTest(language=language):
+                    with patch.dict(os.environ, {"VIGIL_LANG": language}):
+                        output = self.pdf.build_report(
+                            "images", str(sample), "Operator", "Test case", directory,
+                            sys_config={"entity_name": "Test organization"},
+                        )
+                    document = PdfReader(output)
+                    rendered = " ".join(page.extract_text() or "" for page in document.pages)
+                    with patch.dict(os.environ, {"VIGIL_LANG": language}):
+                        expected_title = self.pdf._report_meta("images")["title"]
+                    self.assertIn(expected_title, rendered)
+                    if language == "en":
+                        self.assertIn("Analysis results", rendered)
+                        self.assertIn("Organization", rendered)
+                        self.assertNotIn("Résultat de l'analyse", rendered)
+                    else:
+                        self.assertIn("Identification", rendered)
+                        self.assertIn("Résultat de l'analyse", rendered)
 
     def test_evidence_cell_unchanged(self):
         with patch.dict(os.environ, {"VIGIL_LANG": "en"}):
