@@ -1,0 +1,31 @@
+name: Localization regression checks
+
+on:
+  push:
+    paths:
+      - "scripts/**"
+      - "tests/test_*localization.py"
+      - ".github/workflows/localization.yml"
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "tests/test_*localization.py"
+      - ".github/workflows/localization.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  localization:
+    name: French and English interfaces and reports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install PDF renderer
+        run: python -m pip install reportlab
+      - name: Run non-privileged regression tests
+        run: python -m unittest discover -s tests -p 'test_*localization.py' -v
