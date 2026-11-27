@@ -3,6 +3,7 @@ layout: default
 parent: Actions
 title: Clonage
 nav_order: 25
+grand_parent: Français
 ---
 
 # Clonage d’un disque
