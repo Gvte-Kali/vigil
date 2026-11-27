@@ -3,6 +3,7 @@ layout: default
 parent: Configuration
 title: Système et utilisateurs
 nav_order: 11
+grand_parent: Français
 ---
 
 # Système et utilisateurs
