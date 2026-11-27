@@ -40,3 +40,7 @@ python3 /opt/vigil/scripts/pdf/vigil_pdf.py \
 ```
 
 Utilisez `--log` pour les données ClamAV et `--section` répété pour un rapport multi-sections. Consultez `--help` pour les options `--comment`, `--config-dir`, `--fname-prefix` et autres. Le thème Graphite du site web ne modifie pas les rapports.
+
+## Langue des rapports
+
+Les rapports créés depuis la GUI ou la TUI reprennent la langue de l'interface au lancement de l'opération (`VIGIL_LANG=fr` ou `VIGIL_LANG=en`). Les titres, résumés et libellés sont localisés ; les chemins, empreintes, observations et journaux techniques d'origine sont conservés sans transformation. En génération autonome, définir `VIGIL_LANG=en` avant la commande pour obtenir un rapport en anglais.
