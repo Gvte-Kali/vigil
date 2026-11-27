@@ -4,6 +4,7 @@ parent: Analyse
 title: Fichiers chiffrés
 nav_order: 271
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Fichiers chiffrés
