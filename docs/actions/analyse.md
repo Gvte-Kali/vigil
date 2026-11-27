@@ -4,6 +4,7 @@ title: Analyse
 parent: Actions
 nav_order: 22
 has_children: true
+grand_parent: Français
 ---
 
 # Analyser un support
