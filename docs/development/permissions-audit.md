@@ -3,6 +3,7 @@ layout: default
 title: Audit des autorisations
 parent: Développement
 nav_order: 18
+grand_parent: Français
 ---
 
 # Autorisations des scripts Vigil
