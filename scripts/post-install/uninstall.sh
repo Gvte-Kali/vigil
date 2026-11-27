@@ -27,7 +27,7 @@ done
 [[ -d $site && ! -L $site ]] || die 'Site absent or invalid / Site absent ou invalide.'
 . "$site/scripts/lib/vigil-launchers.sh"
 . "$site/scripts/lib/vigil-terminal.sh"
-vigil_maintenance_language
+vigil_maintenance_choose_language
 check_mounts() {
     local targets
     targets=$(findmnt -rn -o TARGET) || die 'findmnt failed'
