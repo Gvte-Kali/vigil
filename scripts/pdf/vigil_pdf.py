@@ -588,6 +588,16 @@ def _display(text):
          r"\1 infected file(s) were identified. The table lists each file path and detected malware signature."),
         (r"^Inventaire partiel \(([0-9]+) diagnostics dans SQLite\)$",
          r"Partial inventory (\1 diagnostics in SQLite)"),
+        (r"^([0-9]+) fichier\(s\) dont l'extension ne correspond pas au format réel du contenu.*$",
+         r"\1 files have misleading extensions and may contain disguised content. Prioritize these files for content review."),
+        (r"^Liste limitée aux ([0-9]+) premiers fichiers ; ([0-9]+) autre\(s\) dans la base SQLite et l'export TSV du projet\.$",
+         r"List limited to the first \1 files; \2 additional files are recorded in the case SQLite database and TSV export."),
+        (r"^([0-9]+) fichier\(s\) avec extension trompeuse détecté\(s\) \(liste détaillée non transmise\)\.$",
+         r"\1 files with misleading extensions were found; the detailed listing was not supplied."),
+        (r"^⚠ ALERTE : ([0-9]+) périphérique\(s\) se présentent avec une interface clavier \(HID\).*",
+         r"WARNING: \1 devices expose an HID keyboard interface. This may indicate a malicious USB keyboard emulator. Devices not on the allowlist have been excluded from selection; review the blocking results above."),
+        (r"^✔ ([0-9]+) périphérique\(s\) clavier ont été PROTÉGÉS.*",
+         r"\1 HID keyboard devices were protected by the allowlist. Their keystrokes remain enabled."),
     )
     for expression, replacement in dynamic:
         updated = re.sub(expression, replacement, text, flags=re.DOTALL)
@@ -2111,7 +2121,7 @@ def _section_usbhid(story, styles, data):
                 Paragraph(esc("{}:{}".format(dev.get("vid", "?"),
                                              dev.get("pid", "?"))), key_style),
                 Paragraph(esc(dev.get("serial", "") or "(absent)"), key_style),
-                Paragraph("OUI — clavier détecté" if is_hid else _display("Non"),
+                Paragraph(_display("OUI — clavier détecté") if is_hid else _display("Non"),
                           val_style),
                 Paragraph(status_text, val_style),
             ])
