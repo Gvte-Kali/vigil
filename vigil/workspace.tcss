@@ -147,3 +147,10 @@ PickerTable > .picker-table--file { color: $foreground; }
 #quick ActionCard.reports-card, #quick ActionCard.violet-card { color: #B59AF0; }
 #quick ActionCard.amber-card { color: #E4BC72; }
 #quick ActionCard:disabled { color: #94A3B3; }
+
+/* Dashboard device navigation */
+#disk-tree { height: 16; max-height: 24; border: solid $border; }
+#disk-tree:focus { border: solid $cyan; }
+#disk-tree > .tree--cursor { background: $card; color: $cyan; }
+#dashboard > .panel { margin-bottom: 1; }
+#sidebar { background: #131A20; }
