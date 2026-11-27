@@ -184,8 +184,8 @@ class Workspace(App):
                                 b("import-case", "Importer…", "Import…", classes="violet-action"),
                                 b("close-manager", "Revenir à l’affaire active", "Back to active case"))
                     with Vertical(id="case-workspace"):
-                        yield Static(id="case-heading", classes="heading")
-                        with Horizontal(classes="actions"):
+                        with Horizontal(id="case-workspace-header"):
+                            yield Static(id="case-heading", classes="heading")
                             yield b("open-manager", "Choisir l’affaire", "Choose case")
                             yield b("deactivate-case", "Désactiver l’affaire", "Deactivate case")
                         with TabbedContent(initial="explorer", id="workspace-tabs"):
