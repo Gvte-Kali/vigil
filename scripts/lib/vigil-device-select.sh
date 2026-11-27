@@ -32,7 +32,7 @@ run_usb_triage "$2" || exit "$?"
 while true; do
     detect_usb_devices || exit 1
     display_usb_devices
-    select_usb_device "à sélectionner" && break
+    select_usb_device "$(vigil_text 'à sélectionner' 'to select')" && break
     case $? in 2) continue ;; *) exit 1 ;; esac
 done
 IFS='|' read -r kind name _ <<< "${USB_DEVICES[$SELECTED_INDEX]}"
