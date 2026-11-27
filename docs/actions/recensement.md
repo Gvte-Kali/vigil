@@ -4,6 +4,7 @@ parent: Analyse
 title: Recensement
 nav_order: 264
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Recensement des fichiers
