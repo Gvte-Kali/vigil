@@ -4,6 +4,7 @@ parent: Analyse
 title: Orchestrateur
 nav_order: 263
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Orchestrateur de scans
