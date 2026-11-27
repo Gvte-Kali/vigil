@@ -3,6 +3,7 @@ layout: default
 parent: Configuration
 title: Périphériques USB
 nav_order: 13
+grand_parent: Français
 ---
 
 # Périphériques USB
