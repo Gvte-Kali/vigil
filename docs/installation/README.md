@@ -96,3 +96,7 @@ L'administrateur doit sauvegarder et migrer les règles utiles, puis valider `vi
 ## Premier lancement
 
 [Ma première investigation](../getting-started.md) · [ClamAV](../configuration/clamav.md) · [Compatibilité](../compatibility.md).
+
+## Choix de la langue
+
+L'installateur et le désinstallateur demandent au démarrage **Français** ou **English** pour les messages, étapes, confirmations et erreurs propres à Vigil. Sans terminal interactif, ils utilisent `VIGIL_LANG` ou la langue du système. Les sorties brutes d'APT et des outils tiers restent inchangées. Les opérations de montage et d'analyse lancées depuis la GUI/TUI utilisent la langue sélectionnée dans l'interface, indépendamment de la langue choisie lors de l'installation.
