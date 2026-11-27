@@ -367,7 +367,7 @@ def supervise(arguments, *, interface="gui", state=None):
         status, error = 1, str(failure)
     finally:
         if caretaker is not None:
-            if operations and supervisor_record and not terminal_workspace:
+            if operations and supervisor_record:
                 _, preferred = session_preferences(state)
                 try:
                     launch_terminal([sys.executable, "-m", "vigil.session", "--wait-session", str(supervisor_record)],
@@ -417,13 +417,10 @@ def supervise(arguments, *, interface="gui", state=None):
         else:
             show_report(report, None, interactive=sys.stdin.isatty())
     else:
-        if terminal_workspace:
-            show_compact_report(report, output)
-            return status if status >= 0 else 128 - status
         try:
             if not waiting_terminal:
                 launch_terminal([sys.executable, "-m", "vigil.session", "--show-report", str(output)],
-                            preferred, detached=True)
+                                preferred, detached=True)
         except (OSError, ValueError):
             show_report(report, output, interactive=sys.stdin.isatty())
     return status if status >= 0 else 128 - status
