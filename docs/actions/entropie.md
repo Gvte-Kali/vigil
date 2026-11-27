@@ -4,6 +4,7 @@ parent: Analyse
 title: Entropie
 nav_order: 272
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Forte entropie
