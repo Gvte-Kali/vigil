@@ -3,6 +3,7 @@ layout: default
 title: Portabilité Linux
 parent: Développement
 nav_order: 16
+grand_parent: Français
 ---
 
 # Vigil 2.0 sur Linux
