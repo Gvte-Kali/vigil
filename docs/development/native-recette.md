@@ -3,6 +3,7 @@ layout: default
 title: Recette native
 parent: Développement
 nav_order: 17
+grand_parent: Français
 ---
 
 # Recette native de Vigil 2.0
