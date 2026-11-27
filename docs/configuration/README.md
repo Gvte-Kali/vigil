@@ -3,6 +3,7 @@ layout: default
 title: Configuration
 nav_order: 10
 has_children: true
+parent: Français
 ---
 
 # Configurer Vigil
