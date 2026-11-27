@@ -219,7 +219,7 @@ run_usb_triage() {
                 echo "$ifname" | triage_tee "/sys/bus/usb/drivers/usbhid/unbind" >/dev/null 2>&1 || true
             done < <(usb_hid_keyboard_ifaces "$devdir")
             if echo 0 | triage_tee "$devdir/authorized" >/dev/null 2>&1; then
-                echo -e "${RED}🚨 $(vigil_text "Périphérique blacklisté bloqué :" "Blocked denylisted device:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— non analysable (blacklist)${NC}"
+                echo -e "$(vigil_text "${RED}🚨 $(vigil_text "Périphérique blacklisté bloqué :" "Blocked denylisted device:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— non analysable (blacklist)${NC}" "${RED}🚨 $(vigil_text \"Périphérique blacklisté bloqué :\" \"Blocked denylisted device:\")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— cannot be analyzed (denylist)${NC}")"
             else
                 echo -e "${RED}🚨 $(vigil_text "Périphérique blacklisté détecté :" "Denylisted device detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}$(vigil_text "— ÉCHEC du blocage, DÉBRANCHEZ-LE" "— blocking FAILED, DISCONNECT IT")${NC}"
             fi
@@ -233,7 +233,7 @@ run_usb_triage() {
             if usb_is_listed "$devdir" "$USB_WHITELIST_FILE"; then
                 protected=$((protected + 1))
                 echo "$busdev" >> "$prot_file"
-                echo -e "${GREEN}  ✅ $(vigil_text "Clavier HID whitelisté :" "Allowlisted HID keyboard:") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — frappes actives (whitelist).${NC}"
+                echo -e "$(vigil_text "${GREEN}  ✅ $(vigil_text "Clavier HID whitelisté :" "Allowlisted HID keyboard:") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — frappes actives (whitelist).${NC}" "${GREEN}  ✅ $(vigil_text \"Clavier HID whitelisté :\" \"Allowlisted HID keyboard:\") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — keystrokes enabled (allowlist).${NC}")"
                 log_action "usb_triage_hid" "" "$devdir" "warning" "Clavier HID whitelisté (non bloqué) : ${mfr:-?} ${prod:-?} ($vid:$pid)"
                 continue
             fi
@@ -241,14 +241,14 @@ run_usb_triage() {
             for (( _i=0; _i<66; _i++ )); do _bar="${_bar}━"; done
             echo ""
             echo -e "${RED}┏${_bar}┓${NC}"
-            echo -e "${RED}┃  ⚠ PÉRIPHÉRIQUE SUSPECT DÉTECTÉ${NC}"
+            echo -e "$(vigil_text "${RED}┃  ⚠ PÉRIPHÉRIQUE SUSPECT DÉTECTÉ${NC}" "${RED}┃  ⚠ SUSPICIOUS DEVICE DETECTED${NC}")"
             echo -e "${RED}┗${_bar}┛${NC}"
             echo ""
             echo -e "  ${BOLD}$(vigil_text "Périphérique détecté :" "Device detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid)${NC}"
-            echo -e "  ${GREY}Un périphérique de stockage ne se présente jamais comme un clavier :${NC}"
-            echo -e "  ${GREY}par sécurité ses frappes sont BLOQUÉES automatiquement et il ne peut${NC}"
-            echo -e "  ${GREY}pas être monté. Pour whitelister un clavier/souris de travail, utilisez${NC}"
-            echo -e "  ${GREY}la GUI USB (Accueil > Configuration > Périphériques USB).${NC}"
+            echo -e "$(vigil_text "  ${GREY}Un périphérique de stockage ne se présente jamais comme un clavier :${NC}" "  ${GREY}A storage device should not appear as a keyboard:${NC}")"
+            echo -e "$(vigil_text "  ${GREY}par sécurité ses frappes sont BLOQUÉES automatiquement et il ne peut${NC}" "  ${GREY}for safety, its keystrokes are BLOCKED automatically and it${NC}")"
+            echo -e "$(vigil_text "  ${GREY}pas être monté. Pour whitelister un clavier/souris de travail, utilisez${NC}" "  ${GREY}cannot be mounted. To allowlist a trusted keyboard/mouse, use${NC}")"
+            echo -e "$(vigil_text "  ${GREY}la GUI USB (Accueil > Configuration > Périphériques USB).${NC}" "  ${GREY}the USB GUI (Home > Configuration > USB devices).${NC}")"
             echo ""
             HID_ALERT_COUNT=$((HID_ALERT_COUNT + 1))
             echo "${busdev}|${vid}|${pid}|${mfr}|${prod}|${ser}" >> "$hid_file"
@@ -286,7 +286,7 @@ run_usb_triage() {
     fi
     if [ "$HID_ALERT_COUNT" -eq 0 ]; then
         echo ""
-        echo -e "${GREEN}✅ Aucun clavier HID détecté parmi les $new_count nouveau(x) périphérique(s).${NC}"
+        echo -e "$(vigil_text "${GREEN}✅ Aucun clavier HID détecté parmi les $new_count nouveau(x) périphérique(s).${NC}" "${GREEN}✅ No HID keyboard found among the $new_count new device(s).${NC}")"
     fi
     log_action "usb_triage" "" "$after_file" "success" "Triage terminé : $new_count nouveau(x), $HID_ALERT_COUNT HID clavier, $protected protégé(s), $blocked bloqué(s)"
 }
@@ -295,7 +295,7 @@ display_usb_devices() {
     # --- 3. Affichage des périphériques (regroupé par disque) ---
     echo ""
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}  ${1:-Périphériques disponibles                 }${NC}"
+    echo -e "$(vigil_text "${BLUE}  ${1:-Périphériques disponibles                 }${NC}" "${BLUE}  ${1:-Available devices                       }${NC}")"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
@@ -323,7 +323,7 @@ display_usb_devices() {
     for _disk_key in ${_DISK_SEQ[@]+"${_DISK_SEQ[@]}"}; do
         _dsize=${PARENT_SIZE["$_disk_key"]:-?}
         _dmodel=${PARENT_MODEL["$_disk_key"]:-?}
-        echo -e "  ${BOLD}${BLUE} Disque /dev/$_disk_key${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Modèle:${NC} ${BOLD}$_dmodel${NC}"
+        echo -e "$(vigil_text "  ${BOLD}${BLUE} Disque /dev/$_disk_key${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Modèle:${NC} ${BOLD}$_dmodel${NC}" "  ${BOLD}${BLUE} Disk /dev/$_disk_key${NC}  ${GREY}• $(vigil_text \"Taille:\" \"Size:\")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Model:${NC} ${BOLD}$_dmodel${NC}")"
         for i in "${!USB_DEVICES[@]}"; do
             IFS='|' read -r KIND DEVICE_NAME DEVICE_SIZE DEVICE_MODEL FSTYPE LABEL PARTTYPE PKNAME <<< "${USB_DEVICES[$i]}"
             if [ "$KIND" = "part" ]; then _key="$PKNAME"; else _key="$DEVICE_NAME"; fi
@@ -335,7 +335,7 @@ display_usb_devices() {
                 RW) access="${GREY}• Bloc :${NC} ${YELLOW}RW${NC}" ;;
             esac
             if [ "$KIND" = "whole" ]; then
-                echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD} Monter tout le disque${NC}  ${GREY}(${FSTYPE} partition(s))${NC}  $access"
+                echo -e "$(vigil_text "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD} Monter tout le disque${NC}  ${GREY}(${FSTYPE} partition(s))${NC}  $access" "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD} Mount entire disk${NC}  ${GREY}(${FSTYPE} partition(s))${NC}  $access")"
             elif [ "$KIND" = "disk" ]; then
                 echo -e "    ${BOLD}${BLUE}[$((i+1))]${NC}  ${BOLD}/dev/$DEVICE_NAME${NC}  $access"
             elif [ "$KIND" = "rawdisk" ]; then
@@ -353,16 +353,16 @@ display_usb_devices() {
     # --- Périphériques HID détectés au triage (non montables) ---
     if [ "${HID_ALERT_COUNT:-0}" -gt 0 ]; then
         echo ""
-        echo -e "${RED}${BOLD}🚨 PÉRIPHÉRIQUE(S) SUSPECT(S) — exclus de la sélection :${NC}"
+        echo -e "$(vigil_text "${RED}${BOLD}🚨 PÉRIPHÉRIQUE(S) SUSPECT(S) — exclus de la sélection :${NC}" "${RED}${BOLD}🚨 SUSPICIOUS DEVICE(S) — excluded from selection:${NC}")"
         local _hid
         for _hid in "${HID_LISTING[@]}"; do
             IFS='|' read -r _name _vidpid _ser <<< "$_hid"
-            echo -e "  ${RED}${BOLD}• ${_name}${NC}  ${GREY}(réf. ${_vidpid}, n° série ${_ser:-absent})${NC}"
+            echo -e "$(vigil_text "  ${RED}${BOLD}• ${_name}${NC}  ${GREY}(réf. ${_vidpid}, n° série ${_ser:-absent})${NC}" "  ${RED}${BOLD}• ${_name}${NC}  ${GREY}(ref. ${_vidpid}, serial ${_ser:-missing})${NC}")"
         done
-        echo -e "${RED}    Ces périphériques se font passer pour des claviers : leurs frappes${NC}"
-        echo -e "${RED}    sont bloquées et ils ne peuvent PAS être sélectionnés.${NC}"
+        echo -e "$(vigil_text "${RED}    Ces périphériques se font passer pour des claviers : leurs frappes${NC}" "${RED}    These devices impersonate keyboards: their keystrokes${NC}")"
+        echo -e "$(vigil_text "${RED}    sont bloquées et ils ne peuvent PAS être sélectionnés.${NC}" "${RED}    are blocked and they CANNOT be selected.${NC}")"
         if declare -F report_usb_triage >/dev/null; then
-            echo -e "${RED}    Voir le rapport PDF de triage ou le rapport consolidé.${NC}"
+            echo -e "$(vigil_text "${RED}    Voir le rapport PDF de triage ou le rapport consolidé.${NC}" "${RED}    See the USB triage PDF or consolidated report.${NC}")"
         fi
     fi
 }
@@ -371,13 +371,13 @@ display_usb_devices() {
 select_usb_device() {
     local number
     while true; do
-        echo -ne "${BOLD}${YELLOW}Entrez le numéro du périphérique $1, \"r\" pour rafraîchir la liste, ou \"q\" pour quitter : ${NC}"
+        echo -ne "$(vigil_text "${BOLD}${YELLOW}Entrez le numéro du périphérique $1, \"r\" pour rafraîchir la liste, ou \"q\" pour quitter : ${NC}" "${BOLD}${YELLOW}Enter the device number $1, \"r\" to refresh, or \"q\" to quit: ${NC}")"
         if ! read -r number || [[ "$number" == [qQ] ]]; then
             echo -e "${YELLOW}$(vigil_text "Annulé." "Cancelled.")${NC}"
             return 1
         fi
         if [[ "$number" == [rR] ]]; then
-            echo -e "${YELLOW}Rafraîchissement de la liste des périphériques...${NC}"
+            echo -e "$(vigil_text "${YELLOW}Rafraîchissement de la liste des périphériques...${NC}" "${YELLOW}Refreshing device list...${NC}")"
             return 2
         fi
         if [[ "$number" =~ ^[0-9]{1,8}$ ]] && (( 10#$number >= 1 && 10#$number <= DEVICE_NUM )); then
