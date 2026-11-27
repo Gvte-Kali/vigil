@@ -151,6 +151,7 @@ Type=Application
 Categories=Utility;System;
 Keywords=forensique;USB;analyse;investigation;
 DESKTOP_EOF
+vigil_install_desktop_shortcut
 sudo update-desktop-database 2>/dev/null || true
 # Rafraîchir le menu KDE : sans kbuildsycoca, la nouvelle entrée (et son icône)
 # n'apparaît dans le lanceur qu'après la prochaine reconnexion.
