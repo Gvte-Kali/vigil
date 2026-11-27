@@ -27,6 +27,7 @@ done
 [[ -d $site && ! -L $site ]] || die 'Site absent or invalid / Site absent ou invalide.'
 . "$site/scripts/lib/vigil-launchers.sh"
 . "$site/scripts/lib/vigil-terminal.sh"
+vigil_maintenance_language
 check_mounts() {
     local targets
     targets=$(findmnt -rn -o TARGET) || die 'findmnt failed'
@@ -66,7 +67,7 @@ done
 packages=()
 if ((deps)); then
     manifest="$site/data/apt-installed-by-vigil.txt"
-    [[ -f $manifest ]] || die 'Missing APT inventory'
+    [[ -f $manifest && ! -L $manifest ]] || die 'Missing APT inventory'
     while IFS= read -r pkg; do
         [[ $pkg =~ ^[a-z0-9][a-z0-9+.-]*(:[a-z0-9-]+)?$ ]] || die "Invalid package: $pkg"
         case "${pkg%%:*}" in sudo|git|python3|python3-minimal|apt|dpkg|udisks2|clamav*) continue ;; esac
@@ -94,18 +95,33 @@ if ((legacy)); then
     echo 'Legacy archives / Archives historiques:'
     find /opt -maxdepth 1 -type d \( -name 'vigil-1.0-backup.*' -o -name 'vigil-ancien.*' \) -print
 fi
-((dry == 0)) || exit 0
+check_sessions() {
+    local sessions
+    sessions=$(ps -eo pid=,args= | awk '$2 ~ /^\/opt\/vigil\/\.venv\/bin\// || $0 ~ /[v]igil-hotplug activate [0-9]+$/') || die 'ps failed'
+    if [[ -n "$sessions" ]]; then
+        vigil_style 33 "[ WARN ] $(vigil_text 'Fermez Vigil avant de continuer.' 'Close Vigil before continuing.')"
+        printf '%s\n' "$sessions"
+        return 1
+    fi
+}
+if ((dry)); then check_sessions || exit 1; exit 0; fi
+while ! check_sessions; do
+    [[ -t 0 ]] || exit 1
+    read -r -p "$(vigil_text 'Entrée pour revérifier, Ctrl+C pour annuler : ' 'Enter to retry, Ctrl+C to cancel: ')" answer || exit 1
+done
+check_mounts
 read -r -p 'Type UNINSTALL to continue / Saisir UNINSTALL : ' answer
 [[ $answer == UNINSTALL ]] || die 'Cancelled'
 if [[ $mode == purge ]]; then
     read -r -p 'Permanent data loss. Type PURGE / Suppression définitive : ' answer
     [[ $answer == PURGE ]] || die 'Cancelled'
 fi
-vigil_maintenance_start uninstall 5 "Vigil · Désinstallation / Uninstall"
+check_sessions || exit 1
+vigil_maintenance_start uninstall 5 "$(vigil_text 'Vigil · Désinstallation' 'Vigil · Uninstall')"
 trap 'vigil_maintenance_exit "$?"' EXIT
-vigil_maintenance_step "Restitution USB / USB recovery"
+vigil_maintenance_step "$(vigil_text 'Restitution USB' 'USB recovery')"
 if sudo test -x /usr/local/sbin/vigil-hotplug; then
-    sudo /usr/local/sbin/vigil-hotplug recover | python3 -c 'import json,sys
+    sudo /usr/local/sbin/vigil-hotplug recover 2>>"$VIGIL_LOG" | python3 -c 'import json,sys
 r=json.load(sys.stdin)
 print(json.dumps(r))
 sys.exit(not (r["status"]=="complete" and all(d["state"] in {"restored","absent"} for d in r["devices"])))' >>"$VIGIL_LOG" 2>&1
@@ -114,10 +130,10 @@ elif sudo test -d /run/vigil-hotplug; then
 fi
 check_mounts
 backup=$(mktemp -d "$HOME/vigil-uninstall.XXXXXX")
-vigil_maintenance_step "Lanceurs et protections / Launchers and protections"
+vigil_maintenance_step "$(vigil_text 'Lanceurs et protections' 'Launchers and protections')"
 printf "\nArchive: %s\n" "$backup"
 for file in "${launchers[@]}" "${files[@]}"; do
-    sudo rm -- "$file"
+    if [[ $file == "$HOME/"* ]]; then rm -- "$file"; else sudo rm -- "$file"; fi
 done
 sudo udevadm control --reload-rules
 profile=/etc/apparmor.d/local/usr.bin.freshclam
@@ -128,7 +144,7 @@ if sudo test -f "$profile"; then
         sudo apparmor_parser -r /etc/apparmor.d/usr.bin.freshclam
     fi
 fi
-vigil_maintenance_step "Données et préférences / Data and preferences"
+vigil_maintenance_step "$(vigil_text 'Données et préférences' 'Data and preferences')"
 for name in vigil-hotplug vigil-mount; do
     if sudo test -d "/run/$name"; then sudo mv -T "/run/$name" "$backup/$name"; fi
 done
@@ -141,10 +157,10 @@ for path in "$HOME/.config/Vigil" "$HOME/.local/share/Vigil" "$HOME/.cache/Vigil
         mv -- "$path" "$backup/user${path#"$HOME"}"
     fi
 done
-vigil_maintenance_step "Dépendances et site / Dependencies and site"
+vigil_maintenance_step "$(vigil_text 'Dépendances et site' 'Dependencies and site')"
 if (("${#packages[@]}")); then
     printf "\n"
-    sudo apt-get purge -- "${packages[@]}"
+    sudo apt-get purge --no-auto-remove -- "${packages[@]}"
 fi
 check_mounts
 cd "$HOME"
@@ -156,13 +172,25 @@ if ((legacy)); then
         sudo mv -- "$path" "$backup/"
     done < <(find /opt -maxdepth 1 -type d \( -name 'vigil-1.0-backup.*' -o -name 'vigil-ancien.*' \) -print0)
 fi
-vigil_maintenance_step "Vérification finale / Final checks"
-if [[ $mode == purge ]]; then sudo rm -rf --one-file-system -- "$backup"; fi
+vigil_maintenance_step "$(vigil_text 'Vérification finale' 'Final checks')"
+if [[ $mode == purge ]]; then
+    targets=$(findmnt -rn -o TARGET) || die 'findmnt failed'
+    [[ $backup == "$HOME"/vigil-uninstall.* && -d $backup && ! -L $backup ]] || die 'Invalid archive'
+    if grep -Fqx "$backup" <<< "$targets" || grep -Fq "$backup/" <<< "$targets"; then die 'Mounted archive'; fi
+    sudo rm -rf --one-file-system -- "$backup"
+fi
 printf '\n'
-if ! sudo find /etc /usr/local /opt /run -xdev -path /run/user -prune -o -iname '*vigil*' -print >>"$VIGIL_LOG" 2>&1; then
+if ! sudo find /etc /usr/local /opt /run -xdev -path /run/user -prune -o -iname '*vigil*' -print >"$VIGIL_LOG.residuals" 2>>"$VIGIL_LOG"; then
     vigil_style 33 '[ WARN ] Vérification des résidus incomplète / Residual scan incomplete'
     exit 1
 fi
+if [[ -s "$VIGIL_LOG.residuals" ]]; then
+    vigil_style 33 "[ WARN ] $(vigil_text 'Résidus à examiner' 'Residuals to review')"
+    cat "$VIGIL_LOG.residuals" | tee -a "$VIGIL_LOG"
+else
+    vigil_style 32 "[ OK ] $(vigil_text 'Aucun résidu système détecté' 'No system residuals detected')"
+fi
+rm -- "$VIGIL_LOG.residuals"
 vigil_maintenance_finish
 echo 'Désinstallation terminée / Uninstall complete'
 printf 'Residuals and details: %s\n' "$VIGIL_LOG"
