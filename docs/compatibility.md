@@ -2,6 +2,7 @@
 layout: default
 title: Compatibilité et versions
 nav_order: 6
+parent: Français
 ---
 
 # Compatibilité et état du projet
