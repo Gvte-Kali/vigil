@@ -3,6 +3,7 @@ layout: default
 parent: Configuration
 title: Mise à jour ClamAV
 nav_order: 14
+grand_parent: Français
 ---
 
 # Mise à jour ClamAV
