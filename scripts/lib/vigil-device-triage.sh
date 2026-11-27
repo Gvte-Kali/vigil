@@ -219,7 +219,7 @@ run_usb_triage() {
                 echo "$ifname" | triage_tee "/sys/bus/usb/drivers/usbhid/unbind" >/dev/null 2>&1 || true
             done < <(usb_hid_keyboard_ifaces "$devdir")
             if echo 0 | triage_tee "$devdir/authorized" >/dev/null 2>&1; then
-                echo -e "$(vigil_text "${RED}🚨 $(vigil_text "Périphérique blacklisté bloqué :" "Blocked denylisted device:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— non analysable (blacklist)${NC}" "${RED}🚨 $(vigil_text \"Périphérique blacklisté bloqué :\" \"Blocked denylisted device:\")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— cannot be analyzed (denylist)${NC}")"
+                echo -e "$(vigil_text "${RED}🚨 $(vigil_text "Périphérique blacklisté bloqué :" "Blocked denylisted device:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— non analysable (blacklist)${NC}" "${RED}🚨 Blocked denylisted device:${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${YELLOW}— cannot be analyzed (denylist)${NC}")"
             else
                 echo -e "${RED}🚨 $(vigil_text "Périphérique blacklisté détecté :" "Denylisted device detected:")${NC} ${BOLD}${mfr:-?} ${prod:-?}${NC} ${GREY}($vid:$pid)${NC} ${RED}$(vigil_text "— ÉCHEC du blocage, DÉBRANCHEZ-LE" "— blocking FAILED, DISCONNECT IT")${NC}"
             fi
@@ -233,7 +233,7 @@ run_usb_triage() {
             if usb_is_listed "$devdir" "$USB_WHITELIST_FILE"; then
                 protected=$((protected + 1))
                 echo "$busdev" >> "$prot_file"
-                echo -e "$(vigil_text "${GREEN}  ✅ $(vigil_text "Clavier HID whitelisté :" "Allowlisted HID keyboard:") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — frappes actives (whitelist).${NC}" "${GREEN}  ✅ $(vigil_text \"Clavier HID whitelisté :\" \"Allowlisted HID keyboard:\") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — keystrokes enabled (allowlist).${NC}")"
+                echo -e "$(vigil_text "${GREEN}  ✅ $(vigil_text "Clavier HID whitelisté :" "Allowlisted HID keyboard:") ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — frappes actives (whitelist).${NC}" "${GREEN}  ✅ Allowlisted HID keyboard: ${BOLD}${mfr:-?} ${prod:-?}${NC}  ${GREY}($vid:$pid) — keystrokes enabled (allowlist).${NC}")"
                 log_action "usb_triage_hid" "" "$devdir" "warning" "Clavier HID whitelisté (non bloqué) : ${mfr:-?} ${prod:-?} ($vid:$pid)"
                 continue
             fi
@@ -323,7 +323,7 @@ display_usb_devices() {
     for _disk_key in ${_DISK_SEQ[@]+"${_DISK_SEQ[@]}"}; do
         _dsize=${PARENT_SIZE["$_disk_key"]:-?}
         _dmodel=${PARENT_MODEL["$_disk_key"]:-?}
-        echo -e "$(vigil_text "  ${BOLD}${BLUE} Disque /dev/$_disk_key${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Modèle:${NC} ${BOLD}$_dmodel${NC}" "  ${BOLD}${BLUE} Disk /dev/$_disk_key${NC}  ${GREY}• $(vigil_text \"Taille:\" \"Size:\")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Model:${NC} ${BOLD}$_dmodel${NC}")"
+        echo -e "$(vigil_text "  ${BOLD}${BLUE} Disque /dev/$_disk_key${NC}  ${GREY}• $(vigil_text "Taille:" "Size:")${NC} ${BOLD}$_dsize${NC}  ${GREY}• Modèle:${NC} ${BOLD}$_dmodel${NC}" "  ${BOLD}${BLUE} Disk /dev/$_disk_key${NC}  ${GREY}• Size:${NC} ${BOLD}$_dsize${NC}  ${GREY}• Model:${NC} ${BOLD}$_dmodel${NC}")"
         for i in "${!USB_DEVICES[@]}"; do
             IFS='|' read -r KIND DEVICE_NAME DEVICE_SIZE DEVICE_MODEL FSTYPE LABEL PARTTYPE PKNAME <<< "${USB_DEVICES[$i]}"
             if [ "$KIND" = "part" ]; then _key="$PKNAME"; else _key="$DEVICE_NAME"; fi
