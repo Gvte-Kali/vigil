@@ -10,34 +10,9 @@ translation_of: installation/README.md
 
 This guide covers the **`main`** branch with Qt as the primary user workflow. Privileged device operations require system administration; test a site installation in a snapshot-equipped VM first.
 
-## Choose a mode
+## Complete installation (Debian / Parrot)
 
-| Mode | For | System impact |
-|---|---|---|
-| **User development** | Try the GUI, cases and test files | Local venv and files, no privileged mount configuration |
-| **Site installation** | Dedicated Debian/Parrot forensic workstation | APT, `/opt/vigil`, launchers, udev and controlled protection |
-| **Other Linux** | Developers and testers | `install_native.py --dry-run`; hardware workflows remain to be verified |
-
-## Requirements
-
-Debian/Parrot or a derivative for the documented site installer, an ordinary account with `sudo`, Git, Python **3.11+**, sufficient disk space and backups of any existing case data.
-
-## Try Qt without a privileged post-install
-
-```bash
-git clone --branch main https://github.com/Gvte-Kali/vigil.git
-cd vigil
-python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[desktop]'
-.venv/bin/vigil doctor
-.venv/bin/vigil-gui
-```
-
-This does **not** configure udev rules, system protections or privileged mounts. Hardware functions may be unavailable. See the [native test guide](development/native-recette.md) for synthetic fixtures.
-
-## Site installation on Debian/Parrot
-
-**Warning: the following changes the host.** Use a disposable VM and review the plan before proceeding.
+Requirements: ordinary account with sudo, Python 3.11+, Internet access and sufficient disk space. Back up cases and test in a VM first. Close operations and disconnect media after verified restoration.
 
 ```bash
 sudo apt-get update
@@ -47,20 +22,28 @@ sudo chown -- "$(id -u):$(id -g)" /opt/vigil
 git clone --branch main --single-branch https://github.com/Gvte-Kali/vigil.git /opt/vigil
 cd /opt/vigil
 install -d -m 0700 logs rapports
-bash scripts/post-install/post_install_vigil.sh --dry-run
+bash scripts/post-install/post_install_vigil.sh --skip-apt-update
 ```
 
-After reviewing dependencies, system changes, backups and any legacy sudoers rule:
+The installer configures dependencies, Python, mount zones, udev, FreshClam and launchers. The log path is displayed. To inspect the plan without installing, use `--dry-run` instead of `--skip-apt-update`.
 
 ```bash
-bash scripts/post-install/post_install_vigil.sh
 hash -r
-vigil --version
 vigil doctor
 vigil gui
 ```
 
-The installer prepares `/opt/vigil/.venv`, `/investigation`, `/stockage`, launchers, the udev helper and appropriate FreshClam/AppArmor integration. Newly added APT packages are recorded in `/opt/vigil/data/apt-installed-by-vigil.txt`.
+## Uninstall
+
+Close Vigil, back up cases and unmount media. Review the plan:
+
+```bash
+cd /opt/vigil
+bash scripts/post-install/uninstall.sh --dry-run
+bash scripts/post-install/uninstall.sh --keep-data
+```
+
+`--purge` permanently deletes data after confirmation. Dependencies are retained by default; `--purge-dependencies` is experimental. See [removal and rollback](reset.md). The uninstaller still requires VM validation.
 
 ## Launch Vigil
 
