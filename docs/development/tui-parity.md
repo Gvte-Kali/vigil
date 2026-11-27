@@ -3,6 +3,7 @@ layout: default
 title: Parité Textual
 parent: Développement
 nav_order: 25
+grand_parent: Français
 ---
 
 # Parité du workspace Textual
