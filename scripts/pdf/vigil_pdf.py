@@ -542,17 +542,19 @@ def _display(text):
         return _EN_LABELS[text]
     dynamic = (
         (r"^Généré le (.*)$", r"Generated on \1"),
-        (r"^([0-9]+) analyse\\(s\\) effectuée\\(s\\) sur le périphérique :$",
+        (r"^([0-9]+) analyse\(s\) effectuée\(s\) sur le périphérique :$",
          r"\1 analysis section(s) completed on the device:"),
-        (r"^\\.\\.\\. et ([0-9]+) autre\\(s\\) fichier\\(s\\)\\.$", r"... and \1 other file(s)."),
-        (r"^Le scan de ([0-9]+) fichier\\(s\\) n'a révélé aucune infection dans les fichiers analysés\\.$",
+        (r"^\.\.\. et ([0-9]+) autre\(s\) fichier\(s\)\.$",
+         r"... and \1 other file(s)."),
+        (r"^Le scan de ([0-9]+) fichier\(s\) n'a révélé aucune infection dans les fichiers analysés\.$",
          r"The scan of \1 file(s) detected no infection in the scanned files."),
-        (r"^([0-9]+) MENACE\\(S\\) DÉTECTÉE\\(S\\)$", r"\1 THREAT(S) DETECTED"),
-        (r"^Le scan de ([0-9]+) fichier\\(s\\) a détecté ([0-9]+) fichier\\(s\\) infecté\\(s\\)\\. Le détail des menaces est présenté ci-dessous\\.$",
+        (r"^([0-9]+) MENACE\(S\) DÉTECTÉE\(S\)$",
+         r"\1 THREAT(S) DETECTED"),
+        (r"^Le scan de ([0-9]+) fichier\(s\) a détecté ([0-9]+) fichier\(s\) infecté\(s\)\. Le détail des menaces est présenté ci-dessous\.$",
          r"The scan of \1 file(s) detected \2 infected file(s). The threats are listed below."),
-        (r"^([0-9]+) fichier\\(s\\) infecté\\(s\\) ont été identifiés lors du scan\\. Le tableau ci-dessous présente le chemin de chaque fichier et la signature du malware détecté\\.$",
+        (r"^([0-9]+) fichier\(s\) infecté\(s\) ont été identifiés lors du scan\. Le tableau ci-dessous présente le chemin de chaque fichier et la signature du malware détecté\.$",
          r"\1 infected file(s) were identified. The table lists each file path and detected malware signature."),
-        (r"^Inventaire partiel \\(\\(([0-9]+) diagnostics dans SQLite\\)\\)$",
+        (r"^Inventaire partiel \(([0-9]+) diagnostics dans SQLite\)$",
          r"Partial inventory (\1 diagnostics in SQLite)"),
     )
     for expression, replacement in dynamic:
