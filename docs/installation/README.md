@@ -3,6 +3,7 @@ layout: default
 title: Installation
 nav_order: 50
 has_children: true
+parent: Français
 ---
 
 # Installer Vigil
