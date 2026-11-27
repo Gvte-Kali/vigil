@@ -3,6 +3,7 @@ layout: default
 title: Actions
 nav_order: 20
 has_children: true
+parent: Français
 ---
 
 # Choisir une opération dans Vigil
