@@ -3,6 +3,7 @@ layout: default
 title: Migration des commandes
 parent: Développement
 nav_order: 13
+grand_parent: Français
 ---
 
 # Transition de la commande Vigil
