@@ -4,6 +4,7 @@ parent: Analyse
 title: Export du projet
 nav_order: 275
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Exporter un projet
