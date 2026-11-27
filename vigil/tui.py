@@ -13,6 +13,8 @@ from uuid import uuid4
 from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
+from textual.binding import Binding
+import logging
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, ContentSwitcher, DataTable, Footer, Input, Select, Static, TabbedContent, TabPane, Tree, ProgressBar
 
@@ -76,7 +78,7 @@ def organization_logo(data, relative_path):
 class Workspace(App):
     TITLE = "Vigil"
     CSS_PATH = "workspace.tcss"
-    BINDINGS = [("ctrl+r", "refresh_workspace", "↻"), ("ctrl+q", "quit", "Quitter / Quit")]
+    BINDINGS = [Binding("ctrl+r", "refresh_workspace", "↻"), Binding("ctrl+q", "quit", "Quitter / Quit", priority=True)]
 
     def __init__(self, state, language="fr", operator=None):
         super().__init__()
@@ -98,6 +100,8 @@ class Workspace(App):
         self.cpu_sample = None
         self.disk_rows = None
         self.dashboard_refreshing = False
+        self.workspace_refreshing = False
+        self.initializing = True
         try:
             self.release = version("vigil-dfir")
         except PackageNotFoundError:
@@ -312,9 +316,20 @@ class Workspace(App):
         yield StatusIndicator(id="status-bar")
         yield Footer()
 
-    async def on_mount(self):
-        await self.initialize_workspace()
+    def on_mount(self):
         self.adjust_sidebar()
+        self.start_workspace()
+
+    @work(group="startup", exit_on_error=False)
+    async def start_workspace(self):
+        try:
+            await self.initialize_workspace()
+        except Exception as error:
+            logging.getLogger(__name__).exception("TUI initialization failed")
+            self.notify_error(error)
+            return
+        finally:
+            self.initializing = False
         self.set_interval(3, self.refresh_dashboard)
         if os.environ.get("VIGIL_SESSION_ID") or dev_mode.active():
             if not self.operator:
@@ -373,10 +388,10 @@ class Workspace(App):
         else:
             self.notify(self.tr("Protection USB inactive. Consultez le diagnostic de l’opération.",
                                 "USB protection inactive. Check the operation diagnostics."), severity="warning")
-        await self.action_refresh_workspace()
+        await self.refresh_workspace_data()
 
     async def finish_session_review(self):
-        await self.action_refresh_workspace()
+        await self.refresh_workspace_data()
         if not await self.pending_protection_reports():
             await self.offer_protection()
 
@@ -400,7 +415,7 @@ class Workspace(App):
         self.query_one("#brand", Static).update(self.brand)
         self.show_page(self.current_page)
         self.show_case_manager(self.manager_open)
-        await self.action_refresh_workspace()
+        await self.refresh_workspace_data()
 
     def table(self, name):
         return self.query_one(f"#{name}", DataTable)
@@ -515,7 +530,17 @@ class Workspace(App):
         )
         return rows
 
-    async def action_refresh_workspace(self):
+    def action_refresh_workspace(self):
+        return self.refresh_workspace()
+
+    @work(group="workspace-refresh", exit_on_error=False)
+    async def refresh_workspace(self):
+        await self.refresh_workspace_data()
+
+    async def refresh_workspace_data(self):
+        if self.workspace_refreshing:
+            return
+        self.workspace_refreshing = True
         t = self.tr
         try:
             await self.refresh_cases()
@@ -544,8 +569,11 @@ class Workspace(App):
             self.query_one("#module-errors", Static).update(Text("\n".join(map(str, errors))))
             self.render_disk_tree(await asyncio.to_thread(device_manager.inventory), force=True)
             await self.refresh_case_views()
-        except CORE_ERRORS as error:
+        except Exception as error:
+            logging.getLogger(__name__).exception("TUI workspace refresh failed")
             self.notify_error(error)
+        finally:
+            self.workspace_refreshing = False
 
     def on_data_table_row_highlighted(self, event):
         if event.data_table.id == "case-table":
@@ -665,7 +693,9 @@ class Workspace(App):
         if isinstance(self.screen, Operation) or self.evidence_busy:
             self.notify(self.tr("Attendez la fin de la vérification ou de la copie.",
                                 "Wait for the verification or copy to finish."), severity="warning")
-        elif len(self.screen_stack) == 1:
+        elif len(self.screen_stack) > 1:
+            self.pop_screen()
+        else:
             self.push_screen(Form(self.tr("Fermer Vigil", "Close Vigil"), self.tr,
                                   message=self.tr("Confirmer la fermeture de Vigil ?", "Confirm closing Vigil?")),
                              lambda answer: self.call_later(self.confirm_quit) if answer is not None else None)
@@ -684,13 +714,28 @@ class Workspace(App):
             return
         self.disk_rows = rows
         tree = self.query_one("#disk-tree", Tree)
+        def walk(node):
+            for child in node.children:
+                yield child
+                yield from walk(child)
+        expanded = {node.data for node in walk(tree.root) if node.is_expanded}
+        selected = tree.cursor_node.data if tree.cursor_node else None
         tree.clear()
         for row in rows:
             self.add_disk(tree.root, row)
         tree.root.expand()
+        for node in walk(tree.root):
+            if node.data in expanded:
+                node.expand()
+        if selected is not None:
+            for node in walk(tree.root):
+                if node.data == selected:
+                    tree.select_node(node)
+                    break
 
+    @work(group="dashboard-refresh", exit_on_error=False)
     async def refresh_dashboard(self):
-        if len(self.screen_stack) != 1 or self.current_page != "dashboard" or self.dashboard_refreshing:
+        if len(self.screen_stack) != 1 or self.current_page != "dashboard" or self.dashboard_refreshing or self.workspace_refreshing or self.initializing:
             return
         self.dashboard_refreshing = True
         try:
@@ -862,7 +907,8 @@ class Workspace(App):
     def add_disk(self, parent, row):
         access = "RO" if row.get("ro") in {1, "1", True} else "RW"
         label = f"{row['name']} · {row.get('size') or '—'} · {access}"
-        node = parent.add(Text(label), allow_expand=bool(row.get("children")))
+        node = parent.add(Text(label), data=str(row.get("path") or row["name"]),
+                          allow_expand=bool(row.get("children")))
         for child in row.get("children", []):
             self.add_disk(node, child)
 
@@ -930,6 +976,11 @@ class Workspace(App):
                 if copy.is_file():
                     tree.root.add_leaf(Text(Path(row["path"]).name), data=(copy, None, None, False))
         tree.root.expand()
+
+    def on_tree_node_selected(self, event):
+        if event.control.id == "disk-tree" and event.node.allow_expand:
+            # Textual already toggles expandable nodes on selection; do not toggle twice.
+            event.stop()
 
     async def on_tree_node_expanded(self, event):
         if event.control.id != "file-tree" or not event.node.data:
@@ -1030,7 +1081,7 @@ class Workspace(App):
                     await self.refresh_cases()
                 case "edit-entity":
                     await asyncio.to_thread(save_entity, data_directory(), response)
-                    await self.action_refresh_workspace()
+                    await self.refresh_workspace_data()
                 case "entity-logo":
                     from .entity import read_logo_png
 
@@ -1041,7 +1092,7 @@ class Workspace(App):
                         save_entity(data, {key: saved.get(key, "") for key in FIELDS}, image)
 
                     await asyncio.to_thread(update_logo)
-                    await self.action_refresh_workspace()
+                    await self.refresh_workspace_data()
                 case "create-module":
                     result = await asyncio.to_thread(create_module_draft, self.state, response["name"])
                     self.info(t("Brouillon du module", "Module draft"), result)
