@@ -3,6 +3,7 @@ layout: default
 title: Architecture Vigil 2.0
 parent: Développement
 nav_order: 10
+grand_parent: Français
 ---
 
 # Architecture cible Vigil 2.0
