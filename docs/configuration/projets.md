@@ -3,6 +3,7 @@ layout: default
 parent: Configuration
 title: Affaires et projets
 nav_order: 12
+grand_parent: Français
 ---
 
 # Affaires et projets
