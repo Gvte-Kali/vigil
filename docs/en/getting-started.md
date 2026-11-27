@@ -18,7 +18,7 @@ This walkthrough uses the **Qt GUI from the `main` branch**. Work only with an a
 
 ## Walkthrough
 
-1. **Start Vigil.** Run `vigil gui` or `vigil-gui`; check the header and status bar.
+1. **Start Vigil.** Double-click the Vigil desktop shortcut or run `vigil gui` or `vigil-gui`; check the header and status bar.
 2. **Set up the organization.** Under **System → Configuration → Entity**, enter the organization details and an optional logo.
 3. **Select an operator.** Choose the identity recorded for audited operations. Operator identities do not enforce access permissions.
 4. **Create a case.** Open **Investigation → Current case**, create a case and explicitly activate it.
