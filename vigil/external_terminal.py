@@ -58,7 +58,12 @@ def launch_terminal(arguments, preferred="", *, detached=False):
     failures = []
     for command in terminal_commands(arguments, preferred):
         try:
-            terminal = subprocess.Popen(command, start_new_session=True)
+            # Do not retain the invoking shell's terminal descriptors.
+            terminal = subprocess.Popen(command, start_new_session=True,
+                                        stdin=subprocess.DEVNULL,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL,
+                                        close_fds=True)
             try:
                 status = terminal.wait(timeout=0.25)
             except subprocess.TimeoutExpired:
