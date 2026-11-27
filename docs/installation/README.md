@@ -32,6 +32,20 @@ vigil doctor
 vigil gui
 ```
 
+## Raccourci bureau
+
+Le post-install crée automatiquement `Vigil.desktop` dans le bureau XDG de l’opérateur, avec le logo officiel et un lancement GUI sans terminal intermédiaire. Aucun raccourci n’est créé si le bureau XDG est absent ou invalide. Un raccourci tiers existant est conservé.
+
+Pour actualiser ou créer le raccourci sur une installation existante, sans réinstaller :
+
+```bash
+cd /opt/vigil
+source scripts/lib/vigil-launchers.sh
+vigil_install_desktop_shortcut
+```
+
+La GUI et la TUI ouvrent un terminal indépendant de bilan à la fermeture normale ; vérifiez la restitution USB et les montages résiduels avant de retirer les supports.
+
 ## Désinstaller
 
 Fermez Vigil, sauvegardez les affaires et démontez les supports. Examinez le plan :
@@ -47,7 +61,8 @@ Le mode `--purge` supprime définitivement les données après confirmation. Les
 ## Démarrer les interfaces
 
 - `vigil gui` / `vigil-gui` : GUI Qt, parcours principal.
-- `vigil` / `vigil tui` / `vigil-tui` : lanceurs expérimentaux de la TUI, **non fonctionnelle actuellement**. Utiliser `vigil gui` pour les investigations.
+- `vigil tui` / `vigil-tui` : interface terminal Textual, testée interactivement sous Parrot OS ; validation forensique complète en cours.
+- `vigil` : aide CLI.
 - `vigil doctor` : diagnostic des dépendances.
 
 Une installation de site utilise normalement `/opt/vigil/data/state`. En développement, Vigil peut utiliser les chemins XDG. Si plusieurs `cases.sqlite` existent, **ne les superposez pas** : sauvegardez et vérifiez leur provenance.
