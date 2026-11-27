@@ -60,6 +60,12 @@ exclude:
 
 defaults:
   - scope:
+      path: ""
+      type: pages
+    values:
+      parent: Français
+  - scope:
       path: "en"
     values:
       lang: en
+      parent: English
