@@ -1092,7 +1092,7 @@ def build_signature_page(story, styles, user, report_title=""):
     """
     story.append(PageBreak())
     story.append(Paragraph("Validation du rapport", styles["SectionTitle"]))
-    if report_title and "antivir" in report_title.lower():
+    if report_title and ("antivir" in report_title.lower() or "clamav" in report_title.lower()):
         attestation = (
             "Je soussigné(e), atteste avoir procédé au scan antiviral "
             "documenté dans ce rapport et en valide les résultats."
@@ -1591,9 +1591,9 @@ def _section_formataudit(story, styles, data):
             sigs = ", ".join(f.get("signatures", []))
             marks = []
             if f.get("extension_mismatch"):
-                marks.append("extension trompeuse")
+                marks.append(_display("extension trompeuse"))
             if f.get("high_entropy"):
-                marks.append("forte entropie")
+                marks.append(_display("forte entropie"))
             if sigs:
                 marks.append(sigs)
             rows.append((esc(rel), esc(ext), esc(f.get("mime_type", "")),
