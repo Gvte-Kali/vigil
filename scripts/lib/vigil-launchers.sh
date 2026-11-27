@@ -143,3 +143,27 @@ vigil_install_cli() {
     "$site/.venv/bin/python" -m pip install -e "$site[desktop]" || return 1
     vigil_publish_launchers "$@"
 }
+
+# Resolve the current operator's desktop without guessing its localized name.
+vigil_desktop_directory() {
+    local directory
+    command -v xdg-user-dir >/dev/null 2>&1 || return 1
+    directory=$(xdg-user-dir DESKTOP) || return 1
+    [[ "$directory" = "$HOME/"* && "$directory" != "$HOME/" && -d "$directory" ]] || return 1
+    directory=$(realpath -e -- "$directory") || return 1
+    [[ "$directory" = "$(realpath -e -- "$HOME")/"* && -O "$directory" ]] || return 1
+    printf '%s\n' "$directory"
+}
+
+vigil_install_desktop_shortcut() {
+    local directory target
+    directory=$(vigil_desktop_directory) || return 0
+    target="$directory/Vigil.desktop"
+    if [[ -e "$target" || -L "$target" ]]; then
+        vigil_managed_desktop "$target" /opt/vigil /usr/local/bin || {
+            printf 'Vigil: raccourci existant conservé / existing shortcut retained: %s\n' "$target" >&2
+            return 0
+        }
+    fi
+    install -m 0755 -- /usr/share/applications/vigil.desktop "$target"
+}
