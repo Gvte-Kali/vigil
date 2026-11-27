@@ -36,7 +36,7 @@ vigil_device_lease() {
 
 vigil_device_begin() {
     vigil_device_lease || {
-        echo "Périphériques Vigil occupés / Vigil devices are busy" >&2
+        echo "$(vigil_text "Périphériques Vigil occupés / Vigil devices are busy" "Vigil devices are busy")" >&2
         exit 1
     }
     if [ "${VIGIL_DEVICE_NONINTERACTIVE:-}" = 1 ]; then
@@ -170,20 +170,20 @@ authorize_blocked_usb() {
             triage_port_blocked "${devpath##*/}" && continue
             usb_is_listed "$devpath" "$USB_BLACKLIST_FILE" && continue
             if [ "$found" -eq 0 ]; then
-                echo -e "${YELLOW}Réparation des périphériques USB bloqués (authorized=0)...${NC}"
+                echo -e "$(vigil_text "${YELLOW}Réparation des périphériques USB bloqués (authorized=0)...${NC}" "${YELLOW}Restoring blocked USB devices (authorized=0)...${NC}")"
             fi
             found=1
             prod=$(cat "$devpath/product" 2>/dev/null || echo "?")
             mfr=$(cat "$devpath/manufacturer" 2>/dev/null || echo "?")
             if echo 1 | sudo tee "$authfile" >/dev/null 2>&1; then
-                echo -e "  ${GREEN}✅ Autorisé :${NC} ${GREY}${mfr} / ${prod}${NC}"
+                echo -e "$(vigil_text "  ${GREEN}✅ Autorisé :${NC} ${GREY}${mfr} / ${prod}${NC}" "  ${GREEN}✅ Authorized:${NC} ${GREY}${mfr} / ${prod}${NC}")"
             else
-                echo -e "  ${RED}❌ Échec d'autorisation :${NC} ${GREY}${mfr} / ${prod}${NC}"
+                echo -e "$(vigil_text "  ${RED}❌ Échec d'autorisation :${NC} ${GREY}${mfr} / ${prod}${NC}" "  ${RED}❌ Authorization failed:${NC} ${GREY}${mfr} / ${prod}${NC}")"
             fi
         fi
     done
     if [ "$found" -eq 1 ]; then
-        echo -e "${YELLOW}    Attente de la reconnaissance par le noyau...${NC}"
+        echo -e "$(vigil_text "${YELLOW}    Attente de la reconnaissance par le noyau...${NC}" "${YELLOW}    Waiting for kernel device recognition...${NC}")"
         udevadm settle --timeout=10 2>/dev/null || sleep 2
         sleep 1
     fi
@@ -227,10 +227,10 @@ report_usb_triage() {
     # le JSON est copie vers le chemin demande pour etre assemble plus tard.
     if [ -n "${VIGIL_MOUNT_TRIAGE_JSON_OUT:-}" ]; then
         if cp -f "$USBHID_JSON" "$VIGIL_MOUNT_TRIAGE_JSON_OUT" 2>/dev/null; then
-            echo -e "${GREEN}✅ Triage USB consolidé dans le rapport final (pas de PDF séparé).${NC}"
+            echo -e "$(vigil_text "${GREEN}✅ Triage USB consolidé dans le rapport final (pas de PDF séparé).${NC}" "${GREEN}✅ USB triage included in the final report (no separate PDF).${NC}")"
             log_action "usb_triage_json" "" "$VIGIL_MOUNT_TRIAGE_JSON_OUT" "success" "Triage USB exporté vers le rapport consolidé"
         else
-            echo -e "${YELLOW}⚠️  Échec de l'export du triage USB vers le rapport consolidé.${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  Échec de l'export du triage USB vers le rapport consolidé.${NC}" "${YELLOW}⚠️  Failed to export USB triage to the consolidated report.${NC}")"
             log_action "usb_triage_json" "" "" "warning" "Échec de l'export du JSON de triage"
         fi
     fi
@@ -241,13 +241,13 @@ report_usb_triage() {
             --user "$ACTIVE_USER" --project "$ACTIVE_PROJECT" \
             --dir "$VIGIL_BASE/rapports" --config-dir "$VIGIL_DATA_DIR" 2>&1)
         if [ -n "$PDF_OUT" ] && [ -f "$PDF_OUT" ]; then
-            echo -e "${GREEN}✅ Rapport de triage USB généré : $PDF_OUT${NC}"
+            echo -e "$(vigil_text "${GREEN}✅ Rapport de triage USB généré : $PDF_OUT${NC}" "${GREEN}✅ USB triage report generated: $PDF_OUT${NC}")"
             log_action "usb_triage_pdf" "" "$PDF_OUT" "success" "Rapport de triage USB généré"
             if [ "$ACTIVE_PROJECT" != "(no-project)" ] && [ -d "$PROJECT_LOG_DIR" ] && [ -w "$PROJECT_LOG_DIR" ]; then
                 cp -f "$PDF_OUT" "$PROJECT_LOG_DIR/" 2>/dev/null || true
             fi
         else
-            echo -e "${YELLOW}⚠️  Échec de la génération du rapport de triage PDF.${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  Échec de la génération du rapport de triage PDF.${NC}" "${YELLOW}⚠️  Failed to generate the USB triage PDF.${NC}")"
             log_action "usb_triage_pdf" "" "" "warning" "Échec de la génération du PDF de triage"
         fi
     fi
