@@ -39,7 +39,7 @@ Vigil est un environnement d'investigation numérique pour Linux : examen des su
 
 ## Quelle version est documentée ?
 
-<div class="vigil-note"><strong>Référence : branche <code>main</code>.</strong> La GUI Qt est le parcours utilisateur principal. La TUI Textual est expérimentale et non fonctionnelle à ce stade ; elle ne doit pas être utilisée pour des investigations. Certaines capacités du Core restent en développement ou en recette. Les essais documentés portent principalement sur Debian et ses dérivés. Aucune compatibilité matérielle ou multi-distribution non vérifiée n'est garantie.</div>
+<div class="vigil-note"><strong>Référence : branche <code>main</code>.</strong> La GUI Qt est le parcours utilisateur principal. La TUI Textual est utilisable et a fait l’objet de tests interactifs sous Parrot OS ; sa validation forensique complète reste en cours. Certaines capacités du Core restent en développement ou en recette. Les essais documentés portent principalement sur Debian et ses dérivés. Aucune compatibilité matérielle ou multi-distribution non vérifiée n'est garantie.</div>
 
 Consultez la [matrice de compatibilité](compatibility.md) et les [limites de sécurité](faq.md#les-sources-sont-elles-vraiment-protegees) avant de travailler sur de véritables preuves.
 
