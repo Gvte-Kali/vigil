@@ -3,6 +3,7 @@ layout: default
 title: Transition des privilèges
 parent: Développement
 nav_order: 20
+grand_parent: Français
 ---
 
 # Transition des privilèges Vigil
