@@ -9,7 +9,7 @@ vigil_style() {
 
 vigil_logo() {
     if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && [ -z "${NO_COLOR+x}" ]; then
-        set -- --format symbols --colors 256 --size 40x20 "${1:-/opt/vigil/data/icons/vigil.svg}"
+        set -- --format symbols --colors 256 --size 32x12 "${1:-/opt/vigil/data/icons/vigil.svg}"
         if [ "$(id -u)" = 0 ]; then
             # Parse the SVG without administrator privileges.
             case "${SUDO_UID:-}:${SUDO_GID:-}" in
@@ -46,48 +46,69 @@ vigil_progress_frame() {
         "$1" "$2" "$3" "${4:-false}"
 }
 
-# Bash maintenance UI; existing POSIX callers need not invoke these functions.
+# Bash maintenance UI.
+vigil_maintenance_language() {
+    case "${VIGIL_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}}" in
+        fr*) VIGIL_LANG=fr ;; *) VIGIL_LANG=en ;;
+    esac
+}
 vigil_maintenance_start() {
+    vigil_maintenance_language
     VIGIL_LOG=$(mktemp "$HOME/vigil-$1.XXXXXX.log") || return 1
     VIGIL_TOTAL=$2
     VIGIL_DONE=0
     VIGIL_STAGE=''
-    vigil_banner "$3"
-    printf 'Log: %s\n' "$VIGIL_LOG"
+    VIGIL_STARTED=$SECONDS
+    vigil_logo
+    vigil_style '1;96' "$3"
+    printf '%s: %s\n' "$(vigil_text Journal Log)" "$VIGIL_LOG"
 }
 vigil_maintenance_step() {
     if [ -n "$VIGIL_STAGE" ]; then
         VIGIL_DONE=$((VIGIL_DONE + 1))
-        if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ]; then printf '\r\033[2K'; fi
-        vigil_style 32 "[ OK ] $VIGIL_STAGE"
+        vigil_style 32 "[ OK ] $VIGIL_STAGE ($((SECONDS-VIGIL_STAGE_START))s)"
     fi
     VIGIL_STAGE=$1
+    VIGIL_STAGE_START=$SECONDS
     vigil_maintenance_bar
 }
 vigil_maintenance_bar() {
     local percent filled bar
     percent=$((100 * VIGIL_DONE / VIGIL_TOTAL))
     filled=$((percent / 5))
-    bar=$(printf '%20s' '' | tr ' ' '-')
-    if [ "$filled" -gt 0 ]; then
-        bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$((20-filled))" '' | tr ' ' '-')
-    fi
-    printf '[%s] %3d%% | %s' "$bar" "$percent" "$VIGIL_STAGE"
-    if [ ! -t 1 ] || [ "${TERM:-dumb}" = dumb ]; then printf '\n'; fi
+    bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$((20-filled))" '' | tr ' ' '-')
+    vigil_style 36 "[$bar] $percent% | $VIGIL_STAGE"
 }
 vigil_maintenance_run() {
-    "$@" >>"$VIGIL_LOG" 2>&1
+    # Keep the command in the foreground so sudo and signals retain their semantics.
+    local ticker='' status=0
+    if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ]; then
+        (
+            trap 'exit 0' TERM INT
+            while sleep 1; do
+                printf '\r\033[2K[ ... ] %s (%ss)' "$VIGIL_STAGE" "$((SECONDS-VIGIL_STAGE_START))"
+            done
+        ) &
+        ticker=$!
+    fi
+    "$@" >>"$VIGIL_LOG" 2>&1 || status=$?
+    if [ -n "$ticker" ]; then
+        kill "$ticker" 2>/dev/null || :
+        wait "$ticker" 2>/dev/null || :
+        printf '\r\033[2K'
+    fi
+    return "$status"
 }
 vigil_maintenance_finish() {
-    vigil_maintenance_step 'Terminé / Complete'
-    printf '\n'
+    vigil_maintenance_step "$(vigil_text Terminé Complete)"
+    VIGIL_STAGE=''
+    printf '%s: %ss\n' "$(vigil_text Durée Duration)" "$((SECONDS-VIGIL_STARTED))"
 }
 vigil_maintenance_exit() {
     local status=$1
     if [ "$status" -ne 0 ]; then
-        printf '\n'
         vigil_style 31 "[ FAIL ] $VIGIL_STAGE"
         tail -n 20 "$VIGIL_LOG" >&2
-        printf 'Log: %s\n' "$VIGIL_LOG" >&2
+        printf '%s: %s\n' "$(vigil_text Journal Log)" "$VIGIL_LOG" >&2
     fi
 }
