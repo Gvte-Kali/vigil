@@ -3,6 +3,7 @@ layout: default
 title: Exécution sous Qt
 parent: Développement
 nav_order: 21
+grand_parent: Français
 ---
 
 # Parcours d’exécution dans le workspace Qt
