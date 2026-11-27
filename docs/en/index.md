@@ -41,7 +41,7 @@ Vigil is a Linux digital forensics workspace for inspecting media, read-only acc
 
 ## Which version is covered?
 
-<div class="vigil-note"><strong>Reference branch: <code>main</code>.</strong> The Qt GUI is the primary user workflow. The Textual TUI is experimental and not functional at this stage; do not use it for investigations. Parts of the Core still require development and testing. Published testing predominantly covers Debian-based Linux systems. Untested hardware or distributions are not certified.</div>
+<div class="vigil-note"><strong>Reference branch: <code>main</code>.</strong> The Qt GUI is the primary user workflow. The Textual TUI is usable and has undergone interactive testing on Parrot OS; full forensic validation is still ongoing. Parts of the Core still require development and testing. Published testing predominantly covers Debian-based Linux systems. Untested hardware or distributions are not certified.</div>
 
 Review the [compatibility matrix](compatibility.md) and [security limitations](faq.md#are-investigation-sources-fully-protected) before handling real evidence.
 
