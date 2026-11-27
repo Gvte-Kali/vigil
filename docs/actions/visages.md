@@ -4,6 +4,7 @@ parent: Analyse
 title: Détection visages
 nav_order: 274
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Détection des visages
