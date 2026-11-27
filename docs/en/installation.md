@@ -33,6 +33,20 @@ vigil doctor
 vigil gui
 ```
 
+## Desktop shortcut
+
+The post-install script automatically creates `Vigil.desktop` in the operator’s XDG desktop directory, with the official logo and direct GUI launch. No shortcut is created if the XDG desktop is missing or invalid. Existing third-party shortcuts are retained.
+
+To create or refresh the shortcut on an existing installation without reinstalling:
+
+```bash
+cd /opt/vigil
+source scripts/lib/vigil-launchers.sh
+vigil_install_desktop_shortcut
+```
+
+Both GUI and TUI open a separate shutdown report terminal on normal exit; verify USB restoration and remaining mounts before disconnecting media.
+
 ## Uninstall
 
 Close Vigil, back up cases and unmount media. Review the plan:
@@ -48,7 +62,8 @@ bash scripts/post-install/uninstall.sh --keep-data
 ## Launch Vigil
 
 - `vigil gui` / `vigil-gui`: Qt workspace, primary documented workflow.
-- `vigil` / `vigil tui` / `vigil-tui`: experimental TUI launchers; the TUI is **currently non-functional**. Use `vigil gui` for investigations.
+- `vigil tui` / `vigil-tui`: Textual terminal workspace, interactively tested on Parrot OS; full forensic validation is ongoing.
+- `vigil`: CLI help.
 - `vigil doctor`: dependency diagnostics.
 
 Site installations usually store state at `/opt/vigil/data/state`. User development may use XDG locations. **Never merge two `cases.sqlite` databases blindly.**
