@@ -62,8 +62,8 @@ fi
 
 # --- Vérification des privilèges root ---
 if [ "$(id -u)" -ne 0 ] && ! sudo -n true 2>/dev/null; then
-    echo -e "${YELLOW}⚠️  Ce script nécessite des privilèges root pour démonter les périphériques.${NC}"
-    echo -e "${YELLOW}    Vérifiez la configuration sudo de l'utilisateur courant.${NC}"
+    echo -e "$(vigil_text "${YELLOW}⚠️  Ce script nécessite des privilèges root pour démonter les périphériques.${NC}" "${YELLOW}⚠️  Root privileges are required to unmount devices.${NC}")"
+    echo -e "$(vigil_text "${YELLOW}    Vérifiez la configuration sudo de l'utilisateur courant.${NC}" "${YELLOW}    Check the current user's sudo configuration.${NC}")"
 fi
 
 # --- Fonction pour logger ---
@@ -148,12 +148,12 @@ list_mounts_under_investigation() {
 final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
-        echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
+        echo -e "$(vigil_text "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}" "${RED}❌ Script finished with $ERRORS error(s).${NC}")"
         echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
-        echo -e "${GREEN}✅ Script terminé sans erreur.${NC}"
+        echo -e "$(vigil_text "${GREEN}✅ Script terminé sans erreur.${NC}" "${GREEN}✅ Script finished without errors.${NC}")"
     fi
 }
 
@@ -168,7 +168,7 @@ echo ""
 sudo mkdir -p /investigation 2>/dev/null || true
 
 # --- 1. Lister tous les points de montage sous /investigation ---
-echo -e "${BLUE}=== Recherche des périphériques montés dans /investigation ===${NC}"
+echo -e "$(vigil_text "${BLUE}=== Recherche des périphériques montés dans /investigation ===${NC}" "${BLUE}=== Searching for mounted devices in /investigation ===${NC}")"
 
 MOUNT_POINTS=()
 while IFS= read -r dir; do
@@ -176,7 +176,7 @@ while IFS= read -r dir; do
 done < <(list_mounts_under_investigation)
 
 if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
-    echo -e "${YELLOW}ℹ️  Aucun périphérique monté dans /investigation.${NC}"
+    echo -e "$(vigil_text "${YELLOW}ℹ️  Aucun périphérique monté dans /investigation.${NC}" "${YELLOW}ℹ️  No devices mounted in /investigation.${NC}")"
     log_action "umount_attempt" "" "/investigation" "info" "Aucun périphérique monté"
 
     # --- Nettoyage des dossiers vides résiduels même si rien n'est monté ---
@@ -184,7 +184,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     while IFS= read -r -d '' dir; do
         if [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
             sudo rmdir "$dir" 2>/dev/null && {
-                echo -e "${GREEN}🧹 Dossier vide supprimé : $dir${NC}"
+                echo -e "$(vigil_text "${GREEN}🧹 Dossier vide supprimé : $dir${NC}" "${GREEN}🧹 Empty directory removed: $dir${NC}")"
                 CLEANED=$((CLEANED + 1))
             }
         fi
@@ -198,7 +198,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     exit 0
 fi
 
-echo -e "${GREEN}Périphériques montés détectés :${NC}"
+echo -e "$(vigil_text "${GREEN}Périphériques montés détectés :${NC}" "${GREEN}Mounted devices found:${NC}")"
 for mount_point in "${MOUNT_POINTS[@]}"; do
     echo -e "${BLUE}  - ${mount_point}${NC}"
 done
@@ -206,20 +206,20 @@ done
 # --- 2. Démontage et vérification d'intégrité pour chaque périphérique ---
 for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo ""
-    echo -e "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}"
+    echo -e "$(vigil_text "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}" "${BLUE}--- Processing $MOUNT_POINT ---${NC}")"
 
     # --- 2.1. Récupérer le périphérique associé ---
     DEVICE=$(findmnt --noheadings --output SOURCE --mountpoint "$MOUNT_POINT" || true)
 
     if [ -z "$DEVICE" ]; then
-        echo -e "${YELLOW}⚠️  Impossible de déterminer le périphérique monté sur $MOUNT_POINT.${NC}"
+        echo -e "$(vigil_text "${YELLOW}⚠️  Impossible de déterminer le périphérique monté sur $MOUNT_POINT.${NC}" "${YELLOW}⚠️  Cannot identify the device mounted at $MOUNT_POINT.${NC}")"
         log_action "umount_attempt" "" "$MOUNT_POINT" "warning" "Périphérique monté introuvable"
         DEVICE=""
     fi
 
     # --- 2.2. Calcul du hash actuel (vérification d'intégrité) ---
     if [ "${VIGIL_CASE_INTEGRITY:-}" = "1" ]; then
-        echo "=== Vérification de l’intégrité de $MOUNT_POINT ==="
+        echo "$(vigil_text "=== Vérification de l’intégrité de $MOUNT_POINT ===" "=== Checking integrity of $MOUNT_POINT ===")"
         status=0
         result=$(python3 "$VIGIL_BASE/scripts/analyse/vigil_mount_integrity.py" verify "$MOUNT_POINT" "$PROJECT_LOG_DIR" 2>&1) || status=$?
         echo "$result"
@@ -232,23 +232,23 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
             *) log_action "integrity_check" "$DEVICE" "$MOUNT_POINT" "warning" "$result" ;;
         esac
     elif [ -n "$DEVICE" ]; then
-        echo -e "${BLUE}=== Vérification de l'intégrité pour $DEVICE ($MOUNT_POINT) ===${NC}"
+        echo -e "$(vigil_text "${BLUE}=== Vérification de l'intégrité pour $DEVICE ($MOUNT_POINT) ===${NC}" "${BLUE}=== Verifying integrity for $DEVICE ($MOUNT_POINT) ===${NC}")"
         CURRENT_HASH=$(find "$MOUNT_POINT" -type f -exec sha256sum {} + 2>/dev/null | sort | sha256sum | awk '{print $1}' 2>/dev/null || true)
         HASH_FILE="$PROJECT_LOG_DIR/device_$(basename "$DEVICE").sha256"
 
         if [ ! -f "$HASH_FILE" ]; then
-            echo -e "${YELLOW}⚠️  Fichier de hash introuvable : $HASH_FILE${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  Fichier de hash introuvable : $HASH_FILE${NC}" "${YELLOW}⚠️  Hash file missing: $HASH_FILE${NC}")"
             log_action "integrity_check" "$DEVICE" "$HASH_FILE" "warning" "Fichier de hash manquant"
         else
             STORED_HASH=$(cat "$HASH_FILE" 2>/dev/null || true)
-            echo -e "${BLUE}Hash stocké :${NC} $STORED_HASH"
-            echo -e "${BLUE}Hash actuel :${NC} $CURRENT_HASH"
+            echo -e "$(vigil_text "${BLUE}Hash stocké :${NC} $STORED_HASH" "${BLUE}Stored hash:${NC} $STORED_HASH")"
+            echo -e "$(vigil_text "${BLUE}Hash actuel :${NC} $CURRENT_HASH" "${BLUE}Current hash:${NC} $CURRENT_HASH")"
 
             if [ "$CURRENT_HASH" = "$STORED_HASH" ] && [ -n "$CURRENT_HASH" ]; then
-                echo -e "${GREEN}✅ Le périphérique $DEVICE n'a pas été corrompu.${NC}"
+                echo -e "$(vigil_text "${GREEN}✅ Le périphérique $DEVICE n'a pas été corrompu.${NC}" "${GREEN}✅ Device $DEVICE has not been corrupted.${NC}")"
                 log_action "integrity_check" "$DEVICE" "$HASH_FILE" "success" "Intégrité vérifiée : hash initial = hash recalculé ($STORED_HASH)"
             else
-                echo -e "${RED}❌ ATTENTION : Le périphérique $DEVICE a été corrompu !${NC}"
+                echo -e "$(vigil_text "${RED}❌ ATTENTION : Le périphérique $DEVICE a été corrompu !${NC}" "${RED}❌ WARNING: device $DEVICE has been corrupted!${NC}")"
                 log_action "integrity_check" "$DEVICE" "$HASH_FILE" "corrupted" "Hash modifié : initial $STORED_HASH → recalculé $CURRENT_HASH — périphérique corrompu"
                 ERRORS=$((ERRORS + 1))
             fi
@@ -256,7 +256,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     fi
 
     # --- 2.3. Démontage du périphérique ---
-    echo -e "${YELLOW}Démontage de $MOUNT_POINT...${NC}"
+    echo -e "$(vigil_text "${YELLOW}Démontage de $MOUNT_POINT...${NC}" "${YELLOW}Unmounting $MOUNT_POINT...${NC}")"
     UMOUNT_OK=0
 
     if vigil_unmount_target /investigation "$MOUNT_POINT"; then
@@ -267,7 +267,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     fi
 
     if [ "$UMOUNT_OK" -eq 1 ]; then
-        echo -e "${GREEN}✅ Périphérique $DEVICE démonté avec succès.${NC}"
+        echo -e "$(vigil_text "${GREEN}✅ Périphérique $DEVICE démonté avec succès.${NC}" "${GREEN}✅ Device $DEVICE unmounted successfully.${NC}")"
         log_action "umount" "$DEVICE" "$MOUNT_POINT" "success" "Périphérique démonté"
 
 
@@ -279,14 +279,14 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     if [ -d "$MOUNT_POINT" ]; then
         if [ -z "$(ls -A "$MOUNT_POINT" 2>/dev/null)" ]; then
             sudo rmdir "$MOUNT_POINT" 2>/dev/null && {
-                echo -e "${GREEN}🧹 Dossier de montage supprimé : $MOUNT_POINT${NC}"
+                echo -e "$(vigil_text "${GREEN}🧹 Dossier de montage supprimé : $MOUNT_POINT${NC}" "${GREEN}🧹 Mount directory removed: $MOUNT_POINT${NC}")"
                 log_action "cleanup" "$DEVICE" "$MOUNT_POINT" "success" "Répertoire de montage supprimé"
             } || {
-                echo -e "${YELLOW}⚠️  Impossible de supprimer $MOUNT_POINT (toujours occupé ?).${NC}"
+                echo -e "$(vigil_text "${YELLOW}⚠️  Impossible de supprimer $MOUNT_POINT (toujours occupé ?).${NC}" "${YELLOW}⚠️  Unable to remove $MOUNT_POINT (still busy?).${NC}")"
                 log_action "cleanup" "$DEVICE" "$MOUNT_POINT" "warning" "Répertoire non supprimé (occupé)"
             }
         else
-            echo -e "${YELLOW}⚠️  $MOUNT_POINT n'est pas vide, non supprimé.${NC}"
+            echo -e "$(vigil_text "${YELLOW}⚠️  $MOUNT_POINT n'est pas vide, non supprimé.${NC}" "${YELLOW}⚠️  $MOUNT_POINT is not empty; not removed.${NC}")"
             log_action "cleanup" "$DEVICE" "$MOUNT_POINT" "warning" "Répertoire non vide"
         fi
     fi
@@ -294,17 +294,17 @@ done
 
 # --- 3. Vérifier qu'aucun périphérique n'est plus monté dans /investigation ---
 echo ""
-echo -e "${BLUE}=== Vérification finale ===${NC}"
+echo -e "$(vigil_text "${BLUE}=== Vérification finale ===${NC}" "${BLUE}=== Final verification ===${NC}")"
 REMAINING_MOUNTS=()
 while IFS= read -r dir; do
     [ -n "$dir" ] && REMAINING_MOUNTS+=("$dir")
 done < <(list_mounts_under_investigation)
 
 if [ ${#REMAINING_MOUNTS[@]} -eq 0 ]; then
-    echo -e "${GREEN}✅ Tous les périphériques ont été démontés avec succès.${NC}"
+    echo -e "$(vigil_text "${GREEN}✅ Tous les périphériques ont été démontés avec succès.${NC}" "${GREEN}✅ All devices were unmounted successfully.${NC}")"
     log_action "umount_all" "" "/investigation" "success" "Tous les périphériques démontés"
 else
-    echo -e "${RED}❌ Certains périphériques n'ont pas pu être démontés :${NC}"
+    echo -e "$(vigil_text "${RED}❌ Certains périphériques n'ont pas pu être démontés :${NC}" "${RED}❌ Some devices could not be unmounted:${NC}")"
     for mount_point in "${REMAINING_MOUNTS[@]}"; do
         echo -e "${RED}  - ${mount_point}${NC}"
     done
@@ -317,7 +317,7 @@ CLEANED=0
 while IFS= read -r -d '' dir; do
     if [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
         sudo rmdir "$dir" 2>/dev/null && {
-            echo -e "${GREEN}🧹 Dossier résiduel supprimé : $dir${NC}"
+            echo -e "$(vigil_text "${GREEN}🧹 Dossier résiduel supprimé : $dir${NC}" "${GREEN}🧹 Leftover directory removed: $dir${NC}")"
             CLEANED=$((CLEANED + 1))
         }
     fi
