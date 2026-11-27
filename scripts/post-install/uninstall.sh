@@ -158,8 +158,12 @@ if ((legacy)); then
 fi
 vigil_maintenance_step "Vérification finale / Final checks"
 if [[ $mode == purge ]]; then sudo rm -rf --one-file-system -- "$backup"; fi
-echo 'Uninstall complete / Désinstallation terminée. Review residuals:'
-sudo find /etc /usr/local /opt /run -iname '*vigil*' -print >>"$VIGIL_LOG"
+printf '\n'
+if ! sudo find /etc /usr/local /opt /run -xdev -path /run/user -prune -o -iname '*vigil*' -print >>"$VIGIL_LOG" 2>&1; then
+    vigil_style 33 '[ WARN ] Vérification des résidus incomplète / Residual scan incomplete'
+    exit 1
+fi
 vigil_maintenance_finish
+echo 'Désinstallation terminée / Uninstall complete'
 printf 'Residuals and details: %s\n' "$VIGIL_LOG"
 echo 'No automatic autoremove. / Aucun autoremove automatique.'
