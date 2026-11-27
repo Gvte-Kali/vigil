@@ -4,6 +4,7 @@ parent: Analyse
 title: Montage lecture seule
 nav_order: 261
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Montage en lecture seule
