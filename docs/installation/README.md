@@ -9,39 +9,9 @@ has_children: true
 
 Cette page décrit les procédures connues pour **`main`**, avec une GUI Qt comme parcours utilisateur principal. Les installations système qui manipulent les périphériques requièrent un administrateur et sont à réaliser d'abord dans une VM de test.
 
-## Quel mode choisir ?
+## Installation complète (Debian / Parrot)
 
-| Mode | Public | Modifications |
-|---|---|---|
-| **Développement utilisateur** | Essayer la GUI, les affaires et les données de démonstration | Venv et fichiers locaux ; pas de configuration de montage privilégié |
-| **Installation de site** | Poste Debian/Parrot dédié aux opérations forensiques | Paquets APT, `/opt/vigil`, lanceurs, règles udev et protections contrôlées |
-| **Autres Linux** | Développeurs et testeurs | Recette `install_native.py --dry-run` ; opérations matérielles à valider |
-
-## Prérequis
-
-- Debian, Parrot ou dérivé pour l'installation de site documentée.
-- Compte utilisateur ordinaire avec `sudo` pour les modifications système.
-- Git, Python **3.11+**, espace disque suffisant et une sauvegarde des affaires existantes.
-- Support de test pour la première recette ; ne pas utiliser de preuve irremplaçable.
-
-## Essayer la GUI sans post-installation
-
-Dans un dossier utilisateur :
-
-```bash
-git clone --branch main https://github.com/Gvte-Kali/vigil.git
-cd vigil
-python3 -m venv .venv
-.venv/bin/python -m pip install -e '.[desktop]'
-.venv/bin/vigil doctor
-.venv/bin/vigil-gui
-```
-
-Cette installation **ne configure pas** les protections système, les règles udev ou les zones de montage privilégiées. Les opérations matérielles nécessitant ces composants peuvent être indisponibles. Pour des tests sans privilèges et avec des fixtures, voir la [recette native](../development/native-recette.md).
-
-## Installation de site sur Debian/Parrot
-
-**Attention : cette procédure modifie le système.** Faites-la d'abord dans une VM avec instantané. Vérifiez le plan avant de confirmer l'installation.
+Prérequis : compte utilisateur avec sudo, Python 3.11+, connexion Internet, espace disque suffisant. Sauvegardez vos affaires et testez d'abord dans une VM. Fermez les opérations et débranchez les supports après restitution.
 
 ```bash
 sudo apt-get update
@@ -51,20 +21,28 @@ sudo chown -- "$(id -u):$(id -g)" /opt/vigil
 git clone --branch main --single-branch https://github.com/Gvte-Kali/vigil.git /opt/vigil
 cd /opt/vigil
 install -d -m 0700 logs rapports
-bash scripts/post-install/post_install_vigil.sh --dry-run
+bash scripts/post-install/post_install_vigil.sh --skip-apt-update
 ```
 
-Après examen du plan APT, des modifications système, de vos sauvegardes et des règles sudoers éventuelles :
+Le script configure les dépendances, Python, les zones de montage, udev, FreshClam et les lanceurs. Le journal est indiqué à l'écran. Pour examiner le plan sans installer, utilisez `--dry-run` à la place de `--skip-apt-update`.
 
 ```bash
-bash scripts/post-install/post_install_vigil.sh
 hash -r
-vigil --version
 vigil doctor
 vigil gui
 ```
 
-Le post-install prépare `/opt/vigil/.venv`, `/investigation`, `/stockage`, les lanceurs, les règles udev et l'intégration FreshClam/AppArmor lorsque pertinente. Les paquets ajoutés par APT sont consignés dans `/opt/vigil/data/apt-installed-by-vigil.txt`.
+## Désinstaller
+
+Fermez Vigil, sauvegardez les affaires et démontez les supports. Examinez le plan :
+
+```bash
+cd /opt/vigil
+bash scripts/post-install/uninstall.sh --dry-run
+bash scripts/post-install/uninstall.sh --keep-data
+```
+
+Le mode `--purge` supprime définitivement les données après confirmation. Les dépendances sont conservées par défaut ; `--purge-dependencies` est expérimental. Voir [désinstallation et restauration](desinstallation.md). Le désinstallateur reste à valider en VM.
 
 ## Démarrer les interfaces
 
