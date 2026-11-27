@@ -2,6 +2,7 @@
 layout: default
 title: Rapports PDF
 nav_order: 30
+parent: Français
 ---
 
 # Lire les rapports Vigil
