@@ -694,7 +694,7 @@ class Workspace(App):
             self.notify(self.tr("Attendez la fin de la vérification ou de la copie.",
                                 "Wait for the verification or copy to finish."), severity="warning")
         elif len(self.screen_stack) > 1:
-            self.pop_screen()
+            self.notify(self.tr("Fermez le dialogue en cours avant de quitter.", "Close the current dialog before quitting."), severity="warning")
         else:
             self.push_screen(Form(self.tr("Fermer Vigil", "Close Vigil"), self.tr,
                                   message=self.tr("Confirmer la fermeture de Vigil ?", "Confirm closing Vigil?")),
@@ -976,11 +976,6 @@ class Workspace(App):
                 if copy.is_file():
                     tree.root.add_leaf(Text(Path(row["path"]).name), data=(copy, None, None, False))
         tree.root.expand()
-
-    def on_tree_node_selected(self, event):
-        if event.control.id == "disk-tree" and event.node.allow_expand:
-            # Textual already toggles expandable nodes on selection; do not toggle twice.
-            event.stop()
 
     async def on_tree_node_expanded(self, event):
         if event.control.id != "file-tree" or not event.node.data:
@@ -1373,7 +1368,7 @@ class Workspace(App):
         run, argv = prepare_tracked(argv, self.state.parent / "terminal-runs",
                                    {"operation": action, "language": self.language, "operator": operator, "case_id": case},
                                    interface="tui")
-        callback = self.finish_session_review if action == "review-session" else self.action_refresh_workspace
+        callback = self.finish_session_review if action == "review-session" else self.refresh_workspace_data
 
         def finish(status):
             if action == "protect":
