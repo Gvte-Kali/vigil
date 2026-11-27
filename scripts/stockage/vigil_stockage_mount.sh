@@ -69,12 +69,12 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         [ "${VIGIL_QT_STORAGE:-}" = "1" ] && exit 1
-        echo -e "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}"
+        echo -e "$(vigil_text "${RED}❌ Script terminé avec $ERRORS erreur(s).${NC}" "${RED}❌ Script finished with $ERRORS error(s).${NC}")"
         echo -e "${YELLOW}$(vigil_text "Appuyez sur Entrée pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
-        echo -e "${GREEN}✅ Script terminé sans erreur.${NC}"
+        echo -e "$(vigil_text "${GREEN}✅ Script terminé sans erreur.${NC}" "${GREEN}✅ Script finished without errors.${NC}")"
     fi
 }
 
@@ -126,26 +126,26 @@ list_mounts_under_stockage() {
 
 # --- Verifications des privileges et dependances ---
 if [ "$(id -u)" -ne 0 ] && ! sudo -n true 2>/dev/null; then
-    echo -e "${YELLOW}⚠️  Ce script nécessite des privilèges root pour monter les périphériques.${NC}"
-    echo -e "${YELLOW}    Vérifiez la configuration sudo de l'utilisateur courant.${NC}"
+    echo -e "$(vigil_text "${YELLOW}⚠️  Ce script nécessite des privilèges root pour monter les périphériques.${NC}" "${YELLOW}⚠️  Root privileges are required to mount devices.${NC}")"
+    echo -e "$(vigil_text "${YELLOW}    Vérifiez la configuration sudo de l'utilisateur courant.${NC}" "${YELLOW}    Check the current user's sudo configuration.${NC}")"
 fi
 
-echo -e "${BLUE}=== Vérification des dépendances ===${NC}"
+echo -e "$(vigil_text "${BLUE}=== Vérification des dépendances ===${NC}" "${BLUE}=== Checking dependencies ===${NC}")"
 MISSING_DEPS=0
 for cmd in lsblk mount find; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo -e "${RED}❌ Outil requis absent : $cmd${NC}"
+        echo -e "$(vigil_text "${RED}❌ Outil requis absent : $cmd${NC}" "${RED}❌ Required tool missing: $cmd${NC}")"
         MISSING_DEPS=$((MISSING_DEPS + 1))
     fi
 done
 # Outils optionnels (avertissement seulement)
 for cmd in jq cryptsetup blockdev; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Outil optionnel absent : $cmd (certaines fonctionnalités seront désactivées)${NC}"
+        echo -e "$(vigil_text "${YELLOW}⚠️  Outil optionnel absent : $cmd (certaines fonctionnalités seront désactivées)${NC}" "${YELLOW}⚠️  Optional tool missing: $cmd (some features will be unavailable)${NC}")"
     fi
 done
 if [ "$MISSING_DEPS" -gt 0 ]; then
-    fail "Dépendances obligatoires manquantes ($MISSING_DEPS)."
+    fail "$(vigil_text "Dépendances obligatoires manquantes ($MISSING_DEPS)." "Required dependencies missing ($MISSING_DEPS).")"
 fi
 
 # --- Sélection de l'utilisateur (la custody en dépend) ---
@@ -163,16 +163,16 @@ select_active_user() {
         done
     fi
     if [ "${#choices[@]}" -eq 0 ]; then
-        echo -e "${RED}❌ Aucun utilisateur configuré.${NC}"
-        echo -e "${GREY}Créez-le dans la GUI : Accueil > Configuration > Utilisateurs.${NC}"
+        echo -e "$(vigil_text "${RED}❌ Aucun utilisateur configuré.${NC}" "${RED}❌ No configured operator.${NC}")"
+        echo -e "$(vigil_text "${GREY}Créez-le dans la GUI : Accueil > Configuration > Utilisateurs.${NC}" "${GREY}Create one in the GUI: Home > Configuration > Operators.${NC}")"
         final_pause
         exit 1
     fi
     clear
     print_banner
-    echo -e "${BLUE}=== Utilisateur ===${NC}"
+    echo -e "$(vigil_text "${BLUE}=== Utilisateur ===${NC}" "${BLUE}=== Operator ===${NC}")"
     echo ""
-    echo -e "Sélectionnez l'utilisateur qui effectue le montage :"
+    echo -e "$(vigil_text "Sélectionnez l'utilisateur qui effectue le montage :" "Select the operator performing the mount:")"
     echo ""
     rank=1
     for name in "${choices[@]}"; do
@@ -180,13 +180,13 @@ select_active_user() {
         rank=$((rank + 1))
     done
     echo ""
-    echo -e "  ${BOLD}${BLUE}[q]${NC}  Quitter"
+    echo -e "$(vigil_text "  ${BOLD}${BLUE}[q]${NC}  Quitter" "  ${BOLD}${BLUE}[q]${NC}  Quit")"
     echo ""
     while true; do
-        echo -ne "${BOLD}${YELLOW}Entrez le numéro de l'utilisateur (ou 'q' pour quitter) : ${NC}"
+        echo -ne "$(vigil_text "${BOLD}${YELLOW}Entrez le numéro de l'utilisateur (ou 'q' pour quitter) : ${NC}" "${BOLD}${YELLOW}Enter the operator number (or 'q' to quit): ${NC}")"
         read -r answer
         if [ "$answer" = "q" ] || [ "$answer" = "Q" ]; then
-            echo -e "${YELLOW}Quitter.${NC}"
+            echo -e "$(vigil_text "${YELLOW}Quitter.${NC}" "${YELLOW}Quit.${NC}")"
             final_pause
             exit 0
         fi
@@ -211,7 +211,7 @@ else
 fi
 echo -e "${BLUE}$(vigil_text "Entité :" "Entity:") ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
 echo ""
-echo -e "${YELLOW}⚠️  ATTENTION : montage en lecture/écriture.${NC}"
+echo -e "$(vigil_text "${YELLOW}⚠️  ATTENTION : montage en lecture/écriture.${NC}" "${YELLOW}⚠️  WARNING: mounting read/write.${NC}")"
 echo ""
 
 # Refuse an occupied storage zone instead of implicitly unmounting it.
@@ -276,7 +276,7 @@ _mount_single_rw() {
         [ "$(realpath -m -- "$mnt")" = "$mnt" ] || return 1
     fi
     sudo mkdir -p "$mnt" 2>/dev/null || {
-        echo -e "${RED}❌ Impossible de créer le point de montage $mnt.${NC}"
+        echo -e "$(vigil_text "${RED}❌ Impossible de créer le point de montage $mnt.${NC}" "${RED}❌ Cannot create mountpoint $mnt.${NC}")"
         log_action "mkdir_mountpoint_stockage" "$dev" "$mnt" "failed" "Échec de la création du répertoire"
         return 1
     }
@@ -294,7 +294,7 @@ _mount_single_rw() {
             if command -v ntfs-3g >/dev/null 2>&1; then
                 mount_opts="-t ntfs-3g -o rw,big_writes,nosuid,nodev,uid=$(id -u),gid=$(id -g)"
             else
-                echo -e "${RED}❌ ntfs-3g absent : impossible d'écrire sur du NTFS.${NC}"
+                echo -e "$(vigil_text "${RED}❌ ntfs-3g absent : impossible d'écrire sur du NTFS.${NC}" "${RED}❌ ntfs-3g missing: NTFS cannot be mounted for writing.${NC}")"
                 return 1
             fi
             ;;
@@ -311,7 +311,7 @@ _mount_single_rw() {
     mount_status=0
     vigil_mount_volume /stockage "$dev" "$mnt" $mount_opts || mount_status=$?
     if [ "$mount_status" -ne 0 ]; then
-        echo -e "${RED}❌ Échec du montage de $dev → $mnt${NC}"
+        echo -e "$(vigil_text "${RED}❌ Échec du montage de $dev → $mnt${NC}" "${RED}❌ Failed to mount $dev → $mnt${NC}")"
         log_action "mount_stockage" "$dev" "$mnt" "failed" "Échec du montage"
         sudo rmdir "$mnt" 2>/dev/null || true
         return 1
@@ -319,7 +319,7 @@ _mount_single_rw() {
     if [ "${VIGIL_QT_STORAGE:-}" = "1" ]; then
         if ! findmnt -n -o VFS-OPTIONS --mountpoint "$mnt" | grep -Eq '(^|,)rw(,|$)'; then
             sudo umount "$mnt" || true
-            echo "Montage en lecture-écriture non confirmé : $mnt"
+            echo "$(vigil_text "Montage en lecture-écriture non confirmé : $mnt" "Read/write mount not confirmed: $mnt")"
             return 1
         fi
         case "$fstype" in
@@ -356,7 +356,7 @@ IFS='|' read -r SELECTED_KIND SELECTED_DEVICE SELECTED_SIZE SELECTED_MODEL SELEC
 VIGIL_DEVICE_IDENTITY=$(vigil_device_check capture /stockage "/dev/$SELECTED_DEVICE") || exit 1
 export VIGIL_DEVICE_IDENTITY
 
-echo "Montage en lecture-écriture de /dev/$SELECTED_DEVICE."
+echo "$(vigil_text "Montage en lecture-écriture de /dev/$SELECTED_DEVICE." "Mounting /dev/$SELECTED_DEVICE read/write.")"
 echo "$(vigil_text "Saisissez OUI (ou YES) si ce périphérique est bien un support de travail." "Type YES (or OUI) if this is a confirmed work drive.")"
 if [ "${VIGIL_DEVICE_NONINTERACTIVE:-}" != 1 ]; then
     read -r confirmation || exit 0
@@ -368,12 +368,12 @@ disk="$selected"
 if [ "$SELECTED_KIND" = "part" ]; then
     parent=$(lsblk -dnro PKNAME -- "$selected") || fail "Disque parent inaccessible."
     [ -n "$parent" ] && [ "$parent" = "$SELECTED_PKNAME" ] ||
-        fail "Impossible de confirmer le disque parent de $selected."
+        fail "$(vigil_text "Impossible de confirmer le disque parent de $selected." "Unable to confirm the parent disk for $selected.")"
     disk="/dev/$parent"
 fi
 disk_info=$(lsblk -dnro TYPE,TRAN,RM -- "$disk") || fail "Disque inaccessible : $disk."
 [[ "$disk_info" =~ ^disk[[:space:]]+usb[[:space:]]+[01]$ ]] ||
-    fail "$disk n’est pas un disque USB confirmé."
+    fail "$(vigil_text "$disk n’est pas un disque USB confirmé." "$disk is not a confirmed USB disk.")"
 mounts=$(lsblk -nr -o MOUNTPOINTS -- "$disk") || fail "Montages non vérifiables pour $disk."
 [[ "$mounts" =~ [^[:space:]] ]] && fail "$disk contient déjà un montage. Aucun passage en écriture."
 vigil_device_check mount /stockage "$selected" || exit 1
@@ -388,7 +388,7 @@ esac
 echo -e "\n${YELLOW}$(vigil_text "Montage en lecture/écriture..." "Mounting read/write...")${NC}"
 if [ "$SELECTED_KIND" = "whole" ]; then
     # Monter toutes les partitions du disque sous /stockage/<disk>/<part>
-    echo -e "${YELLOW}Montage de toutes les partitions de /dev/$SELECTED_DEVICE...${NC}"
+    echo -e "$(vigil_text "${YELLOW}Montage de toutes les partitions de /dev/$SELECTED_DEVICE...${NC}" "${YELLOW}Mounting all partitions on /dev/$SELECTED_DEVICE...${NC}")"
     if command -v blockdev >/dev/null 2>&1; then
         sudo blockdev --setrw "/dev/$SELECTED_DEVICE" 2>/dev/null || true
     fi
@@ -398,7 +398,7 @@ if [ "$SELECTED_KIND" = "whole" ]; then
         _dev="/dev/$_part"; _mnt="/stockage/$SELECTED_DEVICE/$_part"
         _enc=$(_is_encrypted "$_dev")
         if [ -n "$_enc" ]; then
-            echo -e "${RED}❌ $_dev est chiffré ($_enc). Ignoré.${NC}"
+            echo -e "$(vigil_text "${RED}❌ $_dev est chiffré ($_enc). Ignoré.${NC}" "${RED}❌ $_dev is encrypted ($_enc). Skipped.${NC}")"
             log_action "mount_attempt_stockage" "$_dev" "$_mnt" "failed" "Partition chiffrée ($_enc)"
             _fail=$((_fail + 1))
             continue
@@ -410,7 +410,7 @@ if [ "$SELECTED_KIND" = "whole" ]; then
         fi
     done
     echo ""
-    echo -e "${GREEN}✅ $_ok partition(s) montée(s), $_fail échec(s) sous /stockage/$SELECTED_DEVICE/${NC}"
+    echo -e "$(vigil_text "${GREEN}✅ $_ok partition(s) montée(s), $_fail échec(s) sous /stockage/$SELECTED_DEVICE/${NC}" "${GREEN}✅ $_ok partition(s) mounted, $_fail failure(s) under /stockage/$SELECTED_DEVICE/${NC}")"
     [ "${VIGIL_QT_STORAGE:-}" = "1" ] && [ "$_fail" -gt 0 ] && ERRORS=$((_fail + ERRORS))
     log_action "mount_whole_stockage" "/dev/$SELECTED_DEVICE" "/stockage/$SELECTED_DEVICE" "success" "$_ok partition(s) montée(s), $_fail échec(s)"
 else
@@ -418,14 +418,14 @@ else
     DEVICE_PATH="/dev/$SELECTED_DEVICE"
     _enc=$(_is_encrypted "$DEVICE_PATH")
     if [ -n "$_enc" ]; then
-        echo -e "${RED}❌ Ce périphérique est chiffré ($_enc).${NC}"
-        echo -e "${YELLOW}Utilisez un outil de déchiffrement avant de continuer.${NC}"
+        echo -e "$(vigil_text "${RED}❌ Ce périphérique est chiffré ($_enc).${NC}" "${RED}❌ This device is encrypted ($_enc).${NC}")"
+        echo -e "$(vigil_text "${YELLOW}Utilisez un outil de déchiffrement avant de continuer.${NC}" "${YELLOW}Use a decryption tool before continuing.${NC}")"
         log_action "mount_attempt_stockage" "$DEVICE_PATH" "/stockage" "failed" "Périphérique chiffré ($_enc)"
         final_pause
         exit 1
     fi
     MOUNT_POINT="/stockage/$SELECTED_DEVICE"
-    echo -e "${YELLOW}Montage de ${GREEN}$DEVICE_PATH${YELLOW} dans $MOUNT_POINT...${NC}"
+    echo -e "$(vigil_text "${YELLOW}Montage de ${GREEN}$DEVICE_PATH${YELLOW} dans $MOUNT_POINT...${NC}" "${YELLOW}Mounting ${GREEN}$DEVICE_PATH${YELLOW} at $MOUNT_POINT...${NC}")"
     if ! _mount_single_rw "$DEVICE_PATH" "$MOUNT_POINT"; then
         final_pause
         exit 1
@@ -441,12 +441,12 @@ if command -v lsblk >/dev/null 2>&1; then
     fi
     RO_CHECK=$(lsblk -no RO "$_check_dev" 2>/dev/null | tail -n 1 | awk '{print $1}' || echo "")
     if [ "$RO_CHECK" = "1" ]; then
-        echo -e "${RED}❌ Le périphérique est monté en lecture seule (RO=1).${NC}"
-        echo -e "${YELLOW}    Causes possibles : périphérique physique protégé en écriture${NC}"
-        echo -e "${YELLOW}    (interrupteur sur la clé), ou blockdev --setro d'un scan précédent.${NC}"
+        echo -e "$(vigil_text "${RED}❌ Le périphérique est monté en lecture seule (RO=1).${NC}" "${RED}❌ Device is mounted read-only (RO=1).${NC}")"
+        echo -e "$(vigil_text "${YELLOW}    Causes possibles : périphérique physique protégé en écriture${NC}" "${YELLOW}    Possible causes: physical write protection${NC}")"
+        echo -e "$(vigil_text "${YELLOW}    (interrupteur sur la clé), ou blockdev --setro d'un scan précédent.${NC}" "${YELLOW}    (flash drive switch), or blockdev --setro from an earlier scan.${NC}")"
         log_action "mount_stockage_ro_warn" "$_check_dev" "$STOCKAGE_DIR" "warning" "Montage en lecture seule malgré options rw"
     else
-        echo -e "${GREEN}✅ Montage confirmé en lecture/écriture.${NC}"
+        echo -e "$(vigil_text "${GREEN}✅ Montage confirmé en lecture/écriture.${NC}" "${GREEN}✅ Read/write mount verified.${NC}")"
     fi
 fi
 
