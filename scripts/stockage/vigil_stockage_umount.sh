@@ -116,12 +116,12 @@ final_pause() {
     echo ""
     if [ "$ERRORS" -gt 0 ]; then
         [ "${VIGIL_QT_STORAGE:-}" = "1" ] && exit 1
-        echo -e "${RED}\u274c Script termine avec $ERRORS erreur(s).${NC}"
+        echo -e "$(vigil_text "${RED}\u274c Script termine avec $ERRORS erreur(s).${NC}" "${RED}❌ Script finished with $ERRORS error(s).${NC}")"
         echo -e "${YELLOW}$(vigil_text "Appuyez sur Entree pour fermer ce terminal..." "Press Enter to close this terminal...")${NC}"
         read -r
         exit 1
     else
-        echo -e "${GREEN}\u2705 Script termine sans erreur.${NC}"
+        echo -e "$(vigil_text "${GREEN}\u2705 Script termine sans erreur.${NC}" "${GREEN}✅ Script finished without errors.${NC}")"
     fi
 }
 
@@ -133,14 +133,14 @@ if [ "$ACTIVE_PROJECT" = "(no-project)" ]; then
 else
     echo -e "${BLUE}$(vigil_text "Projet :" "Project:") ${ACTIVE_PROJECT}${NC}"
 fi
-echo -e "${BLUE}Entite : ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}"
+echo -e "$(vigil_text "${BLUE}Entite : ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}" "${BLUE}Entity: ${ACTIVE_ENTITY} | $(vigil_text "Utilisateur :" "Operator:") ${ACTIVE_USER}${NC}")"
 echo ""
 
 # S'assurer que /stockage existe
 sudo mkdir -p "$STOCKAGE_DIR" 2>/dev/null || true
 
 # --- 1. Lister tous les points de montage sous /stockage ---
-echo -e "${BLUE}=== Recherche des peripheriques montes dans $STOCKAGE_DIR ===${NC}"
+echo -e "$(vigil_text "${BLUE}=== Recherche des peripheriques montes dans $STOCKAGE_DIR ===${NC}" "${BLUE}=== Searching for mounted devices in $STOCKAGE_DIR ===${NC}")"
 
 MOUNT_POINTS=()
 while IFS= read -r dir; do
@@ -148,7 +148,7 @@ while IFS= read -r dir; do
 done < <(list_mounts_under_stockage)
 
 if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
-    echo -e "${YELLOW}\u2139\ufe0f  Aucun peripherique monte dans $STOCKAGE_DIR.${NC}"
+    echo -e "$(vigil_text "${YELLOW}\u2139\ufe0f  Aucun peripherique monte dans $STOCKAGE_DIR.${NC}" "${YELLOW}ℹ️  No devices mounted in $STOCKAGE_DIR.${NC}")"
     log_action "umount_attempt_stockage" "" "$STOCKAGE_DIR" "info" "Aucun peripherique monte"
 
     # Nettoyage des dossiers vides residuels
@@ -156,7 +156,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     while IFS= read -r -d '' dir; do
         if [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
             sudo rmdir "$dir" 2>/dev/null && {
-                echo -e "${GREEN}\ud83e\uddf9 Dossier vide supprime : $dir${NC}"
+                echo -e "$(vigil_text "${GREEN}\ud83e\uddf9 Dossier vide supprime : $dir${NC}" "${GREEN}🧹 Empty directory removed: $dir${NC}")"
                 CLEANED=$((CLEANED + 1))
             }
         fi
@@ -170,7 +170,7 @@ if [ ${#MOUNT_POINTS[@]} -eq 0 ]; then
     exit 0
 fi
 
-echo -e "${GREEN}Peripheriques montes detectes :${NC}"
+echo -e "$(vigil_text "${GREEN}Peripheriques montes detectes :${NC}" "${GREEN}Mounted devices found:${NC}")"
 for mount_point in "${MOUNT_POINTS[@]}"; do
     echo -e "${BLUE}  - ${mount_point}${NC}"
 done
@@ -178,16 +178,16 @@ done
 # --- 2. Demontage de chaque peripherique ---
 for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     echo ""
-    echo -e "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}"
+    echo -e "$(vigil_text "${BLUE}--- Traitement de $MOUNT_POINT ---${NC}" "${BLUE}--- Processing $MOUNT_POINT ---${NC}")"
 
     DEVICE=$(findmnt --noheadings --output SOURCE --mountpoint "$MOUNT_POINT" || true)
 
     if [ -z "$DEVICE" ]; then
-        echo -e "${YELLOW}\u26a0\ufe0f  Impossible de determiner le peripherique monte sur $MOUNT_POINT.${NC}"
+        echo -e "$(vigil_text "${YELLOW}\u26a0\ufe0f  Impossible de determiner le peripherique monte sur $MOUNT_POINT.${NC}" "${YELLOW}⚠️  Cannot identify the device mounted at $MOUNT_POINT.${NC}")"
         log_action "umount_attempt_stockage" "" "$MOUNT_POINT" "warning" "Peripherique monte introuvable"
     fi
 
-    echo -e "${YELLOW}Demontage de $MOUNT_POINT...${NC}"
+    echo -e "$(vigil_text "${YELLOW}Demontage de $MOUNT_POINT...${NC}" "${YELLOW}Unmounting $MOUNT_POINT...${NC}")"
     UMOUNT_OK=0
 
     if vigil_unmount_target /stockage "$MOUNT_POINT"; then
@@ -198,7 +198,7 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     fi
 
     if [ "$UMOUNT_OK" -eq 1 ]; then
-        echo -e "${GREEN}\u2705 Peripherique $DEVICE demonte avec succes.${NC}"
+        echo -e "$(vigil_text "${GREEN}\u2705 Peripherique $DEVICE demonte avec succes.${NC}" "${GREEN}✅ Device $DEVICE unmounted successfully.${NC}")"
         log_action "umount_stockage" "$DEVICE" "$MOUNT_POINT" "success" "Peripherique demonte"
 
 
@@ -208,14 +208,14 @@ for MOUNT_POINT in "${MOUNT_POINTS[@]}"; do
     if [ "$UMOUNT_OK" -eq 1 ] && [ "$MOUNT_POINT" != "$STOCKAGE_DIR" ] && [ -d "$MOUNT_POINT" ]; then
         if [ -z "$(ls -A "$MOUNT_POINT" 2>/dev/null)" ]; then
             sudo rmdir "$MOUNT_POINT" 2>/dev/null && {
-                echo -e "${GREEN}\ud83e\uddf9 Dossier de montage supprime : $MOUNT_POINT${NC}"
+                echo -e "$(vigil_text "${GREEN}\ud83e\uddf9 Dossier de montage supprime : $MOUNT_POINT${NC}" "${GREEN}🧹 Mount directory removed: $MOUNT_POINT${NC}")"
                 log_action "cleanup_stockage" "$DEVICE" "$MOUNT_POINT" "success" "Repertoire de montage supprime"
             } || {
-                echo -e "${YELLOW}\u26a0\ufe0f  Impossible de supprimer $MOUNT_POINT (toujours occupe ?).${NC}"
+                echo -e "$(vigil_text "${YELLOW}\u26a0\ufe0f  Impossible de supprimer $MOUNT_POINT (toujours occupe ?).${NC}" "${YELLOW}⚠️  Cannot remove $MOUNT_POINT (still busy?).${NC}")"
                 log_action "cleanup_stockage" "$DEVICE" "$MOUNT_POINT" "warning" "Repertoire non supprime (occupe)"
             }
         else
-            echo -e "${YELLOW}\u26a0\ufe0f  $MOUNT_POINT n'est pas vide, non supprime.${NC}"
+            echo -e "$(vigil_text "${YELLOW}\u26a0\ufe0f  $MOUNT_POINT n'est pas vide, non supprime.${NC}" "${YELLOW}⚠️  $MOUNT_POINT is not empty; not removed.${NC}")"
             log_action "cleanup_stockage" "$DEVICE" "$MOUNT_POINT" "warning" "Repertoire non vide"
         fi
     fi
@@ -223,17 +223,17 @@ done
 
 # --- 3. Verification finale ---
 echo ""
-echo -e "${BLUE}=== Verification finale ===${NC}"
+echo -e "$(vigil_text "${BLUE}=== Verification finale ===${NC}" "${BLUE}=== Final verification ===${NC}")"
 REMAINING_MOUNTS=()
 while IFS= read -r dir; do
     [ -n "$dir" ] && REMAINING_MOUNTS+=("$dir")
 done < <(list_mounts_under_stockage)
 
 if [ ${#REMAINING_MOUNTS[@]} -eq 0 ]; then
-    echo -e "${GREEN}\u2705 Tous les peripheriques ont ete demontes avec succes.${NC}"
+    echo -e "$(vigil_text "${GREEN}\u2705 Tous les peripheriques ont ete demontes avec succes.${NC}" "${GREEN}✅ All devices were unmounted successfully.${NC}")"
     log_action "umount_all_stockage" "" "$STOCKAGE_DIR" "success" "Tous les peripheriques demontes"
 else
-    echo -e "${RED}\u274c Certains peripheriques n'ont pas pu etre demontes :${NC}"
+    echo -e "$(vigil_text "${RED}\u274c Certains peripheriques n'ont pas pu etre demontes :${NC}" "${RED}❌ Some devices could not be unmounted:${NC}")"
     for mount_point in "${REMAINING_MOUNTS[@]}"; do
         echo -e "${RED}  - ${mount_point}${NC}"
     done
@@ -247,7 +247,7 @@ CLEANED=0
 while IFS= read -r -d '' dir; do
     if [ -d "$dir" ] && [ -z "$(ls -A "$dir" 2>/dev/null)" ]; then
         sudo rmdir "$dir" 2>/dev/null && {
-            echo -e "${GREEN}\ud83e\uddf9 Dossier residuel supprime : $dir${NC}"
+            echo -e "$(vigil_text "${GREEN}\ud83e\uddf9 Dossier residuel supprime : $dir${NC}" "${GREEN}🧹 Leftover directory removed: $dir${NC}")"
             CLEANED=$((CLEANED + 1))
         }
     fi
