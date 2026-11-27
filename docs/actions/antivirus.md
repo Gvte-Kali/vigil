@@ -4,6 +4,7 @@ parent: Analyse
 title: Antivirus
 nav_order: 265
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Antivirus ClamAV
