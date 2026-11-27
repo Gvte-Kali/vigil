@@ -4,6 +4,7 @@ parent: Analyse
 title: Images
 nav_order: 266
 grand_parent: Actions
+grand_parent: Français
 ---
 
 # Images
