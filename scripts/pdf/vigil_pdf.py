@@ -575,6 +575,7 @@ def _display(text):
     dynamic = (
         (r"^Cette analyse n'a pas pu être exécutée correctement \(statut : (.*?)\)\. Les résultats ne sont pas disponibles\.$",
          r"This analysis could not be completed (status: \1). Results are unavailable."),
+        (r"^Généré le (.*?) à (.*)$", r"Generated on \1 at \2"),
         (r"^Généré le (.*)$", r"Generated on \1"),
         (r"^([0-9]+) analyse\(s\) effectuée\(s\) sur le périphérique :$",
          r"\1 analysis section(s) completed on the device:"),
