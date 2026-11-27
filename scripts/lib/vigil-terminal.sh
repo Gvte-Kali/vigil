@@ -47,10 +47,29 @@ vigil_progress_frame() {
 }
 
 # Bash maintenance UI.
+vigil_maintenance_choose_language() {
+    local choice
+    if [ -t 0 ]; then
+        printf '1. Français (FR)\n2. English (EN)\n'
+        while :; do
+            read -r -p 'Votre choix / Your choice: ' choice || return 1
+            case "$choice" in
+                1|fr|FR) VIGIL_LANG=fr; break ;;
+                2|en|EN) VIGIL_LANG=en; break ;;
+                *) printf 'Choix invalide / Invalid choice\n' ;;
+            esac
+        done
+    else
+        vigil_maintenance_language
+    fi
+    export VIGIL_LANG
+}
+
 vigil_maintenance_language() {
     case "${VIGIL_LANG:-${LC_ALL:-${LC_MESSAGES:-${LANG:-en}}}}" in
         fr*) VIGIL_LANG=fr ;; *) VIGIL_LANG=en ;;
     esac
+    export VIGIL_LANG
 }
 vigil_maintenance_start() {
     vigil_maintenance_language
@@ -69,6 +88,7 @@ vigil_maintenance_step() {
         vigil_style 32 "[ OK ] $VIGIL_STAGE ($((SECONDS-VIGIL_STAGE_START))s)"
     fi
     VIGIL_STAGE=$1
+    printf '%s\n' "$VIGIL_STAGE" >> "$VIGIL_LOG"
     VIGIL_STAGE_START=$SECONDS
     vigil_maintenance_bar
 }
