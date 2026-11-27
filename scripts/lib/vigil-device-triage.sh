@@ -384,7 +384,7 @@ select_usb_device() {
             SELECTED_INDEX=$((10#$number - 1))
             return 0
         fi
-        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") Entrez un numéro entre 1 et $DEVICE_NUM.${NC}"
+        echo -e "${RED}❌ $(vigil_text "Numéro invalide." "Invalid number.") $(vigil_text "Entrez un numéro entre 1 et $DEVICE_NUM." "Enter a number between 1 and $DEVICE_NUM.")${NC}"
     done
 }
 
