@@ -3,6 +3,7 @@ layout: default
 parent: Actions
 title: Recherche de menaces
 nav_order: 21
+grand_parent: Français
 ---
 
 # Recherche de menaces
