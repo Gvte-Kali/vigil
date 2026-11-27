@@ -69,3 +69,53 @@ defaults:
     values:
       lang: en
       parent: English
+  - scope:
+      path: "actions"
+      type: pages
+    values:
+      grand_parent: Français
+  - scope:
+      path: "actions/README.md"
+      type: pages
+    values:
+      grand_parent: null
+  - scope:
+      path: "configuration"
+      type: pages
+    values:
+      grand_parent: Français
+  - scope:
+      path: "configuration/README.md"
+      type: pages
+    values:
+      grand_parent: null
+  - scope:
+      path: "installation"
+      type: pages
+    values:
+      grand_parent: Français
+  - scope:
+      path: "installation/README.md"
+      type: pages
+    values:
+      grand_parent: null
+  - scope:
+      path: "interface-graphique"
+      type: pages
+    values:
+      grand_parent: Français
+  - scope:
+      path: "interface-graphique/README.md"
+      type: pages
+    values:
+      grand_parent: null
+  - scope:
+      path: "development"
+      type: pages
+    values:
+      grand_parent: Français
+  - scope:
+      path: "development/README.md"
+      type: pages
+    values:
+      grand_parent: null
