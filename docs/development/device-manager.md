@@ -3,6 +3,7 @@ layout: default
 title: Device Manager
 parent: Développement
 nav_order: 15
+grand_parent: Français
 ---
 
 # Gestion des périphériques dans Vigil Core
