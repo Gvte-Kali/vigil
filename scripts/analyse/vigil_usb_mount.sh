@@ -430,7 +430,7 @@ if [ "$DEVICE_MODE" = "usb_storage" ] || [ "$DEVICE_MODE" = "all" ]; then
     MAX_ATTEMPTS=3
     while [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; do
         ATTEMPT=$((ATTEMPT + 1))
-        detect_usb_devices || fail "Impossible de relever les périphériques de stockage."
+        detect_usb_devices || fail "$(vigil_text 'Impossible de relever les périphériques de stockage.' 'Unable to inventory storage devices.')"
         if [ "$DEVICE_NUM" -gt 0 ]; then
             break
         fi
@@ -639,10 +639,10 @@ fi
             select_usb_device "à monter" && break
             case $? in
                 2)
-                    detect_usb_devices || fail "Impossible de relever les périphériques de stockage."
+                    detect_usb_devices || fail "$(vigil_text 'Impossible de relever les périphériques de stockage.' 'Unable to inventory storage devices.')"
                     if [ "$DEVICE_NUM" -eq 0 ]; then
                         authorize_blocked_usb
-                        detect_usb_devices || fail "Impossible de relever les périphériques de stockage."
+                        detect_usb_devices || fail "$(vigil_text 'Impossible de relever les périphériques de stockage.' 'Unable to inventory storage devices.')"
                     fi
                     ;;
                 *)
