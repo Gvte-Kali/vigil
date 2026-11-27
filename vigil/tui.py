@@ -152,14 +152,18 @@ class Workspace(App):
                 with VerticalScroll(id="dashboard"):
                     yield Static(t("Tableau de bord", "Dashboard"), classes="heading")
                     yield Static(id="resources", classes="panel")
-                    with Horizontal(id="metrics"):
-                        yield MetricCard("CPU", "cpu")
-                        yield MetricCard("RAM", "ram")
-                    yield Static(id="mount-summary", classes="panel")
-                    yield Static(id="recent-activity", classes="panel")
-                    yield Static(t("Disques et partitions", "Disks and partitions"), classes="heading")
-                    yield Tree(t("Périphériques bloc", "Block devices"), id="disk-tree")
-                    yield Static(t("Sélectionnez un disque ou une partition.", "Select a disk or partition."), id="disk-detail", classes="panel")
+                    yield Static(t("Ressources et périphériques", "Resources and devices"), classes="heading")
+                    with Horizontal(id="dashboard-columns"):
+                        with Vertical(id="dashboard-devices"):
+                            with Horizontal(id="metrics"):
+                                yield MetricCard("RAM", "ram")
+                                yield MetricCard("CPU", "cpu")
+                            yield Static(id="mount-summary", classes="panel")
+                            yield Tree(t("Disques et partitions", "Disks and partitions"), id="disk-tree")
+                            yield Static(t("Sélectionnez un disque ou une partition.", "Select a disk or partition."), id="disk-detail", classes="panel")
+                        with Vertical(id="dashboard-activity"):
+                            yield Static(t("Activité récente de l’affaire", "Recent case activity"), classes="heading")
+                            yield Static(id="recent-activity", classes="panel")
                 with Vertical(id="cases"):
                     yield Static(t("Gestionnaire d’affaires", "Case manager"), classes="heading", id="manager-title")
                     with Horizontal(id="case-tools"):
@@ -182,9 +186,9 @@ class Workspace(App):
                     with Vertical(id="case-workspace"):
                         yield Static(id="case-heading", classes="heading")
                         with Horizontal(classes="actions"):
-                            yield b("open-manager", "Gestionnaire d’affaires", "Case manager")
+                            yield b("open-manager", "Choisir l’affaire", "Choose case")
                             yield b("deactivate-case", "Désactiver l’affaire", "Deactivate case")
-                        with TabbedContent(id="workspace-tabs"):
+                        with TabbedContent(initial="explorer", id="workspace-tabs"):
                             with TabPane(t("Sources", "Sources"), id="sources"):
                                 yield DataTable(id="mount-table", cursor_type="row")
                                 with Horizontal(classes="actions"):
@@ -236,39 +240,40 @@ class Workspace(App):
                                     yield b("export-audit", "Exporter l’audit", "Export audit")
                 with VerticalScroll(id="quick"):
                     yield Static(t("Actions rapides", "Quick actions"), classes="heading")
-                    yield SectionPanel("Antivirus", CardGrid(
-                        ActionCard(t("Scan antivirus", "Antivirus scan"),
-                                   t("Analyser un support et produire un rapport.", "Scan media and produce a report."),
-                                   "scan", id="quick-scan"),
-                        ActionCard(t("Mettre à jour l’antivirus", "Update antivirus"),
-                                   t("Mettre à jour le moteur et les signatures ClamAV.", "Update the ClamAV engine and signatures."),
-                                   "update", id="quick-update", classes="blue-card"),
-                        ActionCard(t("Mettre à jour la base virale depuis un périphérique USB", "Update signatures from USB"),
-                                   t("Importer des signatures officielles hors ligne.", "Import official signatures offline."),
-                                   "mount", id="quick-update-usb", classes="green-card"),
-                        ActionCard(t("Rapports antivirus", "Antivirus reports"),
-                                   t("Retrouver les rapports de scan.", "Find previous scan reports."),
-                                   "report", id="quick-reports", classes="reports-card"),
-                    ), id="antivirus-group", classes="quick-group", glyph="scan",
-                       description=t("Analyse et mise à jour des signatures.", "Scan media and update signatures."))
-                    yield SectionPanel(t("Stockage", "Storage"), CardGrid(
-                        ActionCard(t("Monter un stockage", "Mount storage"),
-                                   t("Connecter un support de travail en RW.", "Connect a work drive read-write."),
-                                   "mount", id="storage-mount"),
-                        ActionCard(t("Démonter le stockage", "Unmount storage"),
-                                   t("Libérer le support de travail.", "Release the work drive."),
-                                   "unmount", id="storage-unmount", classes="amber-card"),
-                    ), id="storage-group", classes="quick-group", glyph="cases",
-                       description=t("Supports de travail en lecture-écriture.", "Read-write work drives."))
-                    yield SectionPanel("Acquisition", CardGrid(
-                        ActionCard(t("Cloner un disque", "Clone a disk"),
-                                   t("Copier bit à bit vers un disque cible.", "Copy bit for bit to a target disk."),
-                                   "clone", id="clone", classes="amber-card"),
-                        ActionCard(t("Créer une image RAW", "Create a RAW image"),
-                                   t("Enregistrer une image vérifiée.", "Save a verified disk image."),
-                                   "raw", id="raw", classes="violet-card"),
-                    ), id="acquisition-group", classes="quick-group", glyph="raw",
-                       description=t("Clonage et images forensiques vérifiées.", "Verified disk clones and forensic images."))
+                    with Horizontal(id="quick-columns"):
+                        yield SectionPanel(t("Antivirus", "Antivirus"), Vertical(
+                            ActionCard(t("Scan antivirus", "Antivirus scan"),
+                                       t("Analyser un support et produire un rapport.", "Scan media and produce a report."),
+                                       "scan", id="quick-scan"),
+                            ActionCard(t("Mettre à jour l’antivirus", "Update antivirus"),
+                                       t("Mettre à jour le moteur et les signatures ClamAV.", "Update the ClamAV engine and signatures."),
+                                       "update", id="quick-update", classes="blue-card"),
+                            ActionCard(t("Mettre à jour la base virale depuis un périphérique USB", "Update signatures from USB"),
+                                       t("Importer des signatures officielles hors ligne.", "Import official signatures offline."),
+                                       "mount", id="quick-update-usb", classes="green-card"),
+                            ActionCard(t("Rapports antivirus", "Antivirus reports"),
+                                       t("Retrouver les rapports de scan.", "Find previous scan reports."),
+                                       "report", id="quick-reports", classes="reports-card"),
+                        ), id="antivirus-group", classes="quick-group", glyph="scan",
+                           description=t("Analyse et mise à jour des signatures.", "Scan media and update signatures."))
+                        yield SectionPanel(t("Stockage", "Storage"), Vertical(
+                            ActionCard(t("Monter un stockage", "Mount storage"),
+                                       t("Connecter un support de travail en RW.", "Connect a work drive read-write."),
+                                       "mount", id="storage-mount"),
+                            ActionCard(t("Démonter le stockage", "Unmount storage"),
+                                       t("Libérer le support de travail.", "Release the work drive."),
+                                       "unmount", id="storage-unmount", classes="amber-card"),
+                        ), id="storage-group", classes="quick-group", glyph="cases",
+                           description=t("Supports de travail en lecture-écriture.", "Read-write work drives."))
+                        yield SectionPanel("Acquisition", Vertical(
+                            ActionCard(t("Cloner un disque", "Clone a disk"),
+                                       t("Copier bit à bit vers un disque cible.", "Copy bit for bit to a target disk."),
+                                       "clone", id="clone", classes="amber-card"),
+                            ActionCard(t("Créer une image RAW", "Create a RAW image"),
+                                       t("Enregistrer une image vérifiée.", "Save a verified disk image."),
+                                       "raw", id="raw", classes="violet-card"),
+                        ), id="acquisition-group", classes="quick-group", glyph="raw",
+                           description=t("Clonage et images forensiques vérifiées.", "Verified disk clones and forensic images."))
                 with Vertical(id="configuration"):
                     yield Static(t("Configuration", "Configuration"), classes="heading")
                     with TabbedContent(initial=self.current_configuration_tab, id="configuration-tabs"):
@@ -772,6 +777,9 @@ class Workspace(App):
 
     def adjust_sidebar(self):
         sidebars = self.query("#sidebar")
+        for selector in ("#dashboard-columns", "#quick-columns"):
+            for panel in self.query(selector):
+                panel.set_class(self.size.width < 110, "stacked")
         if sidebars and not self.sidebar_manual:
             sidebars.first().set_class(self.size.width < 72, "compact")
 
