@@ -96,3 +96,7 @@ Have the administrator preserve any required privileges and revalidate the compl
 ## Next steps
 
 [Your first investigation](getting-started.md) · [ClamAV](clamav.md) · [Compatibility](compatibility.md).
+
+## Language selection
+
+At launch, the installer and uninstaller prompt for **Français** or **English** for Vigil's progress messages, confirmations and errors. If there is no interactive terminal, they use `VIGIL_LANG` or the system locale. Raw APT and other third-party diagnostics are preserved unchanged. The GUI and TUI each have their own language selection; the language of launched mounting and analysis operations follows the currently selected interface language.
