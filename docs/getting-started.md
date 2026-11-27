@@ -16,7 +16,7 @@ Ce tutoriel suit **la GUI Qt de la branche `main`**. Utilisez un support de test
 
 ## Étapes
 
-1. **Lancer l'application.** Ouvrir `vigil gui` ou `vigil-gui` ; vérifier l'état affiché dans l'en-tête et la barre d'état.
+1. **Lancer l'application.** Double-cliquer sur le raccourci Vigil du bureau ou lancer `vigil gui` ou `vigil-gui` ; vérifier l'état affiché dans l'en-tête et la barre d'état.
 2. **Configurer l'entité.** Dans **Système → Configuration → Entité**, renseigner l'organisation et éventuellement son logo.
 3. **Choisir l'opérateur.** Sélectionner l'identité utilisée pour les actions journalisées ; un opérateur n'est pas une protection d'accès.
 4. **Créer une affaire.** Ouvrir **Investigation → Affaire en cours**, créer l'affaire puis l'activer explicitement.
