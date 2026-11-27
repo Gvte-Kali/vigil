@@ -3,6 +3,7 @@ layout: default
 title: Développement
 nav_order: 60
 has_children: true
+parent: Français
 ---
 
 # Développement et contribution
